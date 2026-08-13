@@ -1,0 +1,27 @@
+name: 🐛 Bug
+description: Algo não está funcionando como deveria
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: descricao
+    attributes:
+      label: O que está acontecendo?
+      placeholder: Descreva o problema com suas palavras.
+    validations:
+      required: true
+
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como chegar nesse erro?
+      placeholder: "Ex: entrei na tela de login, cliquei em 'Entrar' e apareceu uma tela em branco."
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidencias
+    attributes:
+      label: Print ou imagem (se tiver)
+    validations:
+      required: false

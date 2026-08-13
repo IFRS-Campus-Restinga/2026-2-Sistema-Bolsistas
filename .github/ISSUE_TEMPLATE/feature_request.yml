@@ -1,0 +1,20 @@
+name: ✨ Ideia / melhoria
+description: Sugerir algo novo ou uma melhoria
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: ideia
+    attributes:
+      label: Qual a ideia?
+      placeholder: Descreva o que você gostaria que o sistema fizesse.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivo
+    attributes:
+      label: Por que isso é importante?
+      placeholder: Que problema isso resolve ou que necessidade atende?
+    validations:
+      required: false
