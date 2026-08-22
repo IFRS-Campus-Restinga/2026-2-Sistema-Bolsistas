@@ -223,3 +223,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# client/dist é o build do React servido pelo Django (server/server/settings.py)
+# e é versionado de propósito, apesar da regra "dist/" do template Python acima.
+!client/dist/
+!client/dist/**

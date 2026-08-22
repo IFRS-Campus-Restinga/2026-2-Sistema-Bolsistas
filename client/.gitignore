@@ -8,7 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist é versionado de propósito: o Django serve os arquivos estáticos direto
+# dessa pasta (veja server/server/settings.py). É gerado automaticamente pelo
+# hook de pre-commit "build-client", ninguém deve editar à mão.
 dist-ssr
 *.local
 

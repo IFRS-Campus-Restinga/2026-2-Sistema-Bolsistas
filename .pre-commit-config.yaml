@@ -2,23 +2,25 @@ default_language_version:
   python: python3
 
 repos:
-  # Checagens genéricas de higiene de arquivo
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^client/dist/
         stages: [pre-commit]
       - id: end-of-file-fixer
+        exclude: ^client/dist/
         stages: [pre-commit]
       - id: check-merge-conflict
         stages: [pre-commit]
       - id: check-added-large-files
         args: [--maxkb=1000]
+        exclude: ^client/dist/
         stages: [pre-commit]
       - id: check-yaml
         stages: [pre-commit]
       - id: check-json
-        exclude: ^client/package-lock\.json$
+        exclude: ^client/(package-lock\.json|dist/)
         stages: [pre-commit]
 
   # Lint + format do backend (Django) com Ruff
@@ -54,7 +56,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-      # Roda só no pre-push: suíte completa, mais lenta
+      - id: build-client
+        name: Build client (dist)
+        entry: bash -c "npm --prefix client run build && git add client/dist"
+        language: system
+        files: ^client/(src|public|index\.html|package(-lock)?\.json|vite\.config\.js)
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: django-tests
         name: Django tests (server)
         entry: python server/manage.py test

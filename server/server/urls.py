@@ -16,8 +16,12 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
+
+from server.views.index_view import index_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    ## Catch-all route for the client-side application. This should be the last route in the list.
+    re_path(r"^.*$", index_view),
 ]
