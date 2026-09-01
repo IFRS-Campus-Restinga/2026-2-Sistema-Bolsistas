@@ -1,50 +1,45 @@
-# 2026-2-Sistema-Bolsistas
+# Sistema de Bolsistas
 
-Client em React (Vite) + servidor em Django.
+Sistema web para gestão de bolsistas, com frontend em React e backend em Django, servidos juntos como uma única aplicação.
 
-## Setup do ambiente de desenvolvimento
+## Como rodar o projeto
 
-### Backend (`server/`)
+### 1. Backend (`server/`)
 
 ```bash
 cd server
 python -m venv venv
 venv\Scripts\activate        # Windows
 pip install -r requirements-dev.txt
+python manage.py runserver
 ```
 
-### Frontend (`client/`)
+Isso já sobe o servidor Django, que também serve as páginas do React.
+
+### 2. Frontend (`client/`)
 
 ```bash
 cd client
 npm install
 ```
 
-### Hooks de git (lint automático)
+Para desenvolvimento local do frontend, use o modo dev do Vite normalmente:
 
-O projeto usa [pre-commit](https://pre-commit.com) para rodar lint/formatação antes de cada commit e testes antes de cada push. Depois de instalar as dependências acima, rode uma vez na raiz do repositório:
+```bash
+npm run dev
+```
+
+Isso te dá hot-reload rápido enquanto mexe no React. **Não é necessário** rodar `npm run build` manualmente no dia a dia: o Django, em produção/para quem só quer rodar o projeto pronto, serve os arquivos já buildados da pasta `client/dist`. Essa pasta é versionada e atualizada automaticamente antes de cada push (veja a seção abaixo), então ela fica sempre sincronizada com o código mais recente do `client/`.
+
+### 3. Regras de commit e push
+
+Antes de instalar as dependências acima, é preciso rodar uma vez na raiz do repositório:
 
 ```bash
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-O que roda em cada etapa:
-
-- **pre-commit** (rápido, a cada commit): limpeza de arquivos (espaços em branco, EOF, conflitos de merge), Ruff (lint + format do backend), ESLint + Prettier (frontend) e o build do client (veja abaixo). Corrige automaticamente o que for possível — se algum arquivo for modificado, é só rodar `git add` de novo e commitar.
-- **pre-push** (mais lento, a cada push): suíte de testes do Django (`manage.py test`) e lint completo do client.
-
-### Como o front é servido (sem `npm run dev`)
-
-Por orientação do professor, não rodamos o Vite em modo dev: o Django serve os arquivos estáticos direto da pasta `client/dist` (veja `server/server/settings.py` e `server/server/views/index_view.py`). Isso significa que sempre que algo em `client/` muda, a pasta `dist` precisa ser reconstruída — e isso é feito automaticamente pelo hook `build-client` do pre-commit, que roda `npm run build` e já inclui o resultado no commit. Ou seja: **ninguém precisa rodar `npm run build` manualmente**, só é preciso ter o `pre-commit install` feito (ver acima). `client/dist` é versionado de propósito, não é para editar esses arquivos à mão.
-
-Pra rodar o projeto: `python server/manage.py runserver` e acessar a URL do Django — ele já serve as páginas do React.
-
-Para rodar manualmente em todos os arquivos:
-
-```bash
-pre-commit run --all-files                    # hooks de commit
-pre-commit run --all-files --hook-stage pre-push   # hooks de push
-```
+O projeto usa checagens automáticas de lint, formatação e testes a cada commit/push. A ideia é garantir que o código que chega no repositório siga um padrão mínimo de qualidade e que a pasta `client/dist` nunca fique desatualizada em relação ao código do frontend — evitando que alguém suba uma mudança no React e esqueça de atualizar a versão buildada que o Django realmente serve. Essas checagens rodam automaticamente nos comandos normais de `git commit` e `git push`, então não é preciso executá-las manualmente.
 
 ## Branch protection
 
