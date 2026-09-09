@@ -16,12 +16,13 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 
 from server.views.index_view import index_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    ## Catch-all route for the client-side application. This should be the last route in the list.
+    path("api/hub/", include("hub_integration.urls")),
+    ## Pega todas as URLs que não foram tratadas por outras rotas, por isso deve ser a ultima SEMPRE.
     re_path(r"^.*$", index_view),
 ]
