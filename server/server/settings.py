@@ -12,20 +12,31 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+import environ
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env()
+
+environ.Env.read_env(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-onb0*x7&16w0+)tldac95s2m#j=adu1cs(^2^xqr8+o4d(*(%e"
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = []
+# SECURITY WARNING: keep the secret key used in production secret!
+# Tem que ser igual a SECRET_KEY definida no HUB, é ela que
+# assina/verifica o JWT usado pelo fs_auth_middleware
+SECRET_KEY = env("SECRET_KEY", default="django-insecure-!@#%$^&*()_+1234567890" if DEBUG else None)
+if not SECRET_KEY:
+    raise ImproperlyConfigured("Defina SECRET_KEY no .env quando DEBUG=False.")
+
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 
 # Application definition
@@ -39,6 +50,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "accounts",
+    "hub_integration",
 ]
 
 MIDDLEWARE = [
@@ -52,10 +65,44 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+AUTH_USER_MODEL = "accounts.Usuario"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.HubJWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
+# integração com o HUB (fs_auth_middleware)
+AUTH_COOKIE_NAME = env("AUTH_COOKIE_NAME", default="access_token")
+REFRESH_COOKIE_NAME = env("REFRESH_COOKIE_NAME", default="refresh_token")
+FS_AUTH_SYSTEM_MODEL = "hub_integration.System"
+
+# base da API do HUB, para chamadas servidor-a-servidor
+HUB_BASE_URL = env("HUB_BASE_URL", default="http://localhost:8000")
+
+# dados do registro deste sistema no HUB (usados por `seed_hub_system`).
+HUB_SYSTEM_ID = env("HUB_SYSTEM_ID", default=None)
+HUB_SYSTEM_NAME = env("HUB_SYSTEM_NAME", default="Sistema-de-Bolsistas")
+HUB_SYSTEM_URL = env("HUB_SYSTEM_URL", default="http://localhost:8001")
+HUB_SYSTEM_API_KEY = env("HUB_SYSTEM_API_KEY", default=None)
+HUB_SYSTEM_SECRET_KEY = env("HUB_SYSTEM_SECRET_KEY", default=None)
+
+# email dos coordenadores da area, por enquanto definidos no .env mas futuramente teremos uma funcionalidade para isso
+COORDENADOR_AREA_EMAILS = {
+    "ENSINO": env("COORDENADOR_ENSINO_EMAIL", default=""),
+    "PESQUISA": env("COORDENADOR_PESQUISA_EMAIL", default=""),
+    "EXTENSAO": env("COORDENADOR_EXTENSAO_EMAIL", default=""),
+}
+
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=["http://localhost:5173", "http://127.0.0.1:5173"],
+)
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = "server.urls"
 
