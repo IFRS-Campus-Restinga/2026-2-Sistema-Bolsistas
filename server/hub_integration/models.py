@@ -3,8 +3,10 @@ from django.db import models
 
 
 class System(models.Model):
-    """réplica local do registro do HUB para este sistema
-    os nomes de campo presisam ser iguais ao do HUB para que o fs_auth_middleware funcione (is_valid_system_model)
+    """Réplica local do registro do HUB para este sistema.
+
+    Os nomes de campo precisam ser iguais aos do HUB, pois é isso que o
+    fs_auth_middleware confere em `is_valid_system_model`.
     """
 
     class CurrentState(models.TextChoices):

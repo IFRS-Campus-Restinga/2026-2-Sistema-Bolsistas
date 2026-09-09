@@ -73,6 +73,7 @@ def dev_login(request, role):
     response.set_cookie(
         settings.AUTH_COOKIE_NAME,
         _make_token(role),
+        httponly=True,
         samesite="Lax",
         path="/",
     )

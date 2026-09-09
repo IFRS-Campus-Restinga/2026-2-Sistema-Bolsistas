@@ -45,7 +45,6 @@ class HubJWTAuthentication(BaseAuthentication):
 
         return (usuario, None)
 
-    @transaction.atomic
     def _sync_usuario(self, user_id: str, hub_groups: list[str], token: str) -> Usuario:
         usuario = Usuario.objects.filter(pk=user_id).first()
         dados_hub = fetch_hub_user_data(str(user_id), token)
@@ -60,15 +59,17 @@ class HubJWTAuthentication(BaseAuthentication):
 
         role, tipo_area = self._resolve_role(hub_groups, access_profile, email)
 
-        if usuario is None:
-            usuario = Usuario.objects.create(
-                id=user_id, username=str(user_id), email=email, nome=nome, role=role
-            )
-        elif usuario.role != role or usuario.email != email or usuario.nome != nome:
-            usuario.role, usuario.email, usuario.nome = role, email, nome
-            usuario.save(update_fields=["role", "email", "nome"])
+        with transaction.atomic():
+            if usuario is None:
+                usuario = Usuario.objects.create(
+                    id=user_id, username=str(user_id), email=email, nome=nome, role=role
+                )
+            elif usuario.role != role or usuario.email != email or usuario.nome != nome:
+                usuario.role, usuario.email, usuario.nome = role, email, nome
+                usuario.save(update_fields=["role", "email", "nome"])
 
-        self._sync_perfil(usuario, role, tipo_area)
+            self._sync_perfil(usuario, role, tipo_area)
+
         return usuario
 
     @staticmethod

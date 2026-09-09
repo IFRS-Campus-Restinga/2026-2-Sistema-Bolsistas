@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,12 +26,15 @@ environ.Env.read_env(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# a SECRET_KEY tem que ser igual a definida no HB é ela que assina/verifica o JWT usado pelo fs_auth_middleware
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-!@#%$^&*()_+1234567890")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=False)
+
+# SECURITY WARNING: keep the secret key used in production secret!
+# Tem que ser igual a SECRET_KEY definida no HUB, é ela que
+# assina/verifica o JWT usado pelo fs_auth_middleware
+SECRET_KEY = env("SECRET_KEY", default="django-insecure-!@#%$^&*()_+1234567890" if DEBUG else None)
+if not SECRET_KEY:
+    raise ImproperlyConfigured("Defina SECRET_KEY no .env quando DEBUG=False.")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 

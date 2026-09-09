@@ -18,4 +18,7 @@ def fetch_hub_user_data(user_id: str, access_token: str) -> dict | None:
     if response.status_code != 200:
         return None
 
-    return response.json()
+    try:
+        return response.json()
+    except ValueError:
+        return None
