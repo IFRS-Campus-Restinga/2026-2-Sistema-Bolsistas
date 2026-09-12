@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle erros
+    "F",   # pyflakes
+    "I",   # isort (organização de imports)
+    "UP",  # pyupgrade (sintaxe moderna)
+    "B",   # bugbear (bugs comuns)
+    "DJ",  # regras específicas do Django
+]
+ignore = [
+    "E501", # linha longa (ruff-format já cuida da formatação)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*/migrations/*.py" = ["E", "F401"]
+
+[tool.ruff.format]
+quote-style = "double"

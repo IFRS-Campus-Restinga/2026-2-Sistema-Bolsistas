@@ -1,0 +1,31 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+# dist é versionado de propósito: o Django serve os arquivos estáticos direto
+# dessa pasta (veja server/server/settings.py). É gerado automaticamente pelo
+# hook de pre-commit "build-client", ninguém deve editar à mão.
+dist-ssr
+*.local
+
+# Vite env files (podem conter URLs/chaves sensíveis)
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

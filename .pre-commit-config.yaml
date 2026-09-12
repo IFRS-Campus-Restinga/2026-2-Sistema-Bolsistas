@@ -1,0 +1,81 @@
+default_language_version:
+  python: python3
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^client/dist/
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        exclude: ^client/dist/
+        stages: [pre-commit]
+      - id: check-merge-conflict
+        stages: [pre-commit]
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        exclude: ^client/dist/
+        stages: [pre-commit]
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-json
+        exclude: ^client/(package-lock\.json|dist/)
+        stages: [pre-commit]
+
+  # Lint + format do backend (Django) com Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff-check
+        name: Ruff lint (server)
+        args: [--fix]
+        files: ^server/
+        stages: [pre-commit]
+      - id: ruff-format
+        name: Ruff format (server)
+        files: ^server/
+        stages: [pre-commit]
+
+  # Lint + format do frontend (React)
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint (client)
+        entry: npm --prefix client run lint
+        language: system
+        files: ^client/src/.*\.(js|jsx)$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: prettier
+        name: Prettier (client)
+        entry: npm --prefix client run format
+        language: system
+        files: ^client/(src|public)/.*\.(js|jsx|css|json|html)$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: build-client
+        name: Build client (dist)
+        entry: bash -c "npm --prefix client run build && git add client/dist"
+        language: system
+        files: ^client/(src|public|index\.html|package(-lock)?\.json|vite\.config\.js)
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: django-tests
+        name: Django tests (server)
+        entry: python server/manage.py test
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: client-lint-full
+        name: ESLint completo (client, pre-push)
+        entry: npm --prefix client run lint
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
