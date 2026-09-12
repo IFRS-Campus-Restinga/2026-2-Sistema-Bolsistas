@@ -9,8 +9,8 @@ from hub_integration.client import fetch_hub_user_data
 from .models import Administrador, Aluno, CoordenadorArea, CoordenadorProjeto, Usuario
 
 HUB_GROUP_ADMIN = "admin"
-HUB_GROUP_COORD = "coord"
 HUB_ACCESS_PROFILE_ALUNO = "aluno"
+HUB_ACCESS_PROFILE_SERVIDOR = "servidor"
 
 PERFIL_MODEL_POR_ROLE = {
     Usuario.Role.ALUNO: Aluno,
@@ -82,7 +82,7 @@ class HubJWTAuthentication(BaseAuthentication):
         if access_profile == HUB_ACCESS_PROFILE_ALUNO:
             return Usuario.Role.ALUNO, None
 
-        if HUB_GROUP_COORD in hub_groups:
+        if access_profile == HUB_ACCESS_PROFILE_SERVIDOR:
             tipo_area = HubJWTAuthentication._tipo_area_por_email(email)
             if tipo_area:
                 return Usuario.Role.COORDENADOR_AREA, tipo_area
