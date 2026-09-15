@@ -9,8 +9,7 @@
   --shadow-modal: 0 20px 60px -12px rgba(0, 0, 0, 0.25);
 
   /* Tipografia */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
-    sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --radius-xl: 12px;
   --radius-2xl: 16px;

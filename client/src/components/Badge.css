@@ -9,8 +9,23 @@
   white-space: nowrap;
 }
 
-.badge--green  { background: #dcfce7; color: #15803d; }
-.badge--red    { background: #fee2e2; color: #b91c1c; }
-.badge--yellow { background: #fef9c3; color: #a16207; }
-.badge--blue   { background: #dbeafe; color: #1d4ed8; }
-.badge--gray   { background: #f3f4f6; color: #4b5563; }
+.badge--green {
+  background: #dcfce7;
+  color: #15803d;
+}
+.badge--red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.badge--yellow {
+  background: #fef9c3;
+  color: #a16207;
+}
+.badge--blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.badge--gray {
+  background: #f3f4f6;
+  color: #4b5563;
+}

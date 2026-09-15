@@ -1,6 +1,6 @@
-import { IFLogo } from './IFLogo';
-import { IconLogOut } from './Icons';
-import './Sidebar.css';
+import { IFLogo } from './IFLogo'
+import { IconLogOut } from './Icons'
+import './Sidebar.css'
 
 /**
  * Barra lateral de navegação.
@@ -29,7 +29,7 @@ export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
         <p className="sidebar__section-label">Menu Principal</p>
         <ul className="sidebar__list">
           {menuItems.map((item) => {
-            const isActive = active === item.id;
+            const isActive = active === item.id
             return (
               <li key={item.id}>
                 <button
@@ -42,7 +42,7 @@ export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
                   {item.label}
                 </button>
               </li>
-            );
+            )
           })}
         </ul>
       </nav>
@@ -55,5 +55,5 @@ export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
         </button>
       </div>
     </aside>
-  );
+  )
 }

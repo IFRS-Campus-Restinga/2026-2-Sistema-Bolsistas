@@ -1,6 +1,6 @@
-import { Sidebar } from './Sidebar';
-import { TopHeader } from './TopHeader';
-import './Layout.css';
+import { Sidebar } from './Sidebar'
+import { TopHeader } from './TopHeader'
+import './Layout.css'
 
 /**
  * Layout principal da aplicação: Sidebar + TopHeader + área de conteúdo.
@@ -37,14 +37,9 @@ export function Layout({
         onLogout={onLogout}
       />
       <div className="layout__main">
-        <TopHeader
-          campus={campus}
-          name={userName}
-          role={role}
-          initials={initials}
-        />
+        <TopHeader campus={campus} name={userName} role={role} initials={initials} />
         <main className="layout__content">{children}</main>
       </div>
     </div>
-  );
+  )
 }

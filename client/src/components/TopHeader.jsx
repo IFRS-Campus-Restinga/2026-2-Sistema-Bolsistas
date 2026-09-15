@@ -1,4 +1,4 @@
-import './TopHeader.css';
+import './TopHeader.css'
 
 /**
  * Cabeçalho superior com campus + dados do usuário logado.
@@ -25,5 +25,5 @@ export function TopHeader({ campus, name, role, initials }) {
         <div className="top-header__avatar">{initials}</div>
       </div>
     </header>
-  );
+  )
 }

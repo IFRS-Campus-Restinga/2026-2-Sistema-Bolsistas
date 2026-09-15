@@ -1,4 +1,4 @@
-import './Badge.css';
+import './Badge.css'
 
 /**
  * Badge de status — aplica estilo automático pelo nome do status.
@@ -27,7 +27,7 @@ const STATUS_STYLE = {
   SUPLENTE: 'badge--yellow',
   DESCLASSIFICADO: 'badge--red',
   EM_ANALISE: 'badge--blue',
-};
+}
 
 const STATUS_LABEL = {
   RASCUNHO: 'Rascunho',
@@ -50,13 +50,13 @@ const STATUS_LABEL = {
   SUPLENTE: 'Suplente',
   DESCLASSIFICADO: 'Desclassificado',
   EM_ANALISE: 'Em Análise',
-};
+}
 
 export function Badge({ status }) {
   if (!status) {
-    return <span className="badge badge--gray">—</span>;
+    return <span className="badge badge--gray">—</span>
   }
-  const cls = STATUS_STYLE[status] ?? 'badge--gray';
-  const label = STATUS_LABEL[status] ?? status;
-  return <span className={`badge ${cls}`}>{label}</span>;
+  const cls = STATUS_STYLE[status] ?? 'badge--gray'
+  const label = STATUS_LABEL[status] ?? status
+  return <span className={`badge ${cls}`}>{label}</span>
 }
