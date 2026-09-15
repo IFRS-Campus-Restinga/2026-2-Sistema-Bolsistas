@@ -1,77 +1,19 @@
 import { useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Button, FormActions, FormField, Modal, TextInput, useConfirm } from '../components'
+import { Alert, Button, FormActions, FormField, TextInput } from '../components'
 
-const campos = [
-  { name: 'nome', label: 'Nome', minLength: 3, maxLength: 200 },
-  {
-    name: 'ano_codigo',
-    label: 'Ano/código',
-    pattern: '[0-9]{4}-[0-9]{3}',
-    placeholder: '2026-005',
-    title: 'Use AAAA-NNN, como 2026-005.',
-    maxLength: 8,
-  },
-  {
-    name: 'link_documento_oficial',
-    label: 'Link do documento oficial',
-    type: 'url',
-    maxLength: 500,
-  },
-]
-
-const datas = [
-  ['data_abertura_inscricoes', 'Abertura das inscrições'],
-  ['data_fechamento_inscricoes', 'Fechamento das inscrições'],
-  ['data_homologacao', 'Homologação'],
-  ['data_recurso_homologacao_inicio', 'Início dos recursos'],
-  ['data_recurso_homologacao_fim', 'Fim dos recursos'],
-  ['data_resultado', 'Resultado'],
-  ['data_maxima_preenchimento_vagas', 'Preenchimento das vagas'],
-  ['data_entrega_relatorios', 'Entrega de relatórios'],
-]
-
-const nomesCampos = [...campos.map((campo) => campo.name), ...datas.map(([nome]) => nome)]
-
-export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
-  const confirmar = useConfirm()
-  const [iniciais] = useState(() =>
-    Object.fromEntries(nomesCampos.map((nome) => [nome, edital?.[nome] ?? '']))
-  )
-  const [dados, setDados] = useState(iniciais)
+export default function EditalForm({ onSalvar, onCancelar }) {
+  const [dados, setDados] = useState({
+    nome: '',
+    ano_semestre: '',
+    link_documento_oficial: '',
+  })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
-  const [errosCampos, setErrosCampos] = useState({})
-
-  const emVigor = edital?.status === 'EM_VIGOR'
-  const alterado = nomesCampos.some((nome) => dados[nome] !== iniciais[nome])
-
-  function solicitarFechamento() {
-    if (salvando) return
-
-    if (!alterado) {
-      onCancelar()
-      return
-    }
-
-    confirmar({
-      title: 'Descartar alterações?',
-      message: 'As alterações não salvas serão perdidas.',
-      confirmLabel: 'Descartar',
-      tone: 'danger',
-      onConfirm: onCancelar,
-    })
-  }
 
   function alterarCampo(event) {
     const { name, value } = event.target
-    setDados((atuais) => ({ ...atuais, [name]: value }))
-    setErrosCampos((atuais) => ({ ...atuais, [name]: null }))
-  }
-
-  function mensagemCampo(nome) {
-    const mensagens = errosCampos[nome]
-    return Array.isArray(mensagens) ? mensagens.join(' ') : mensagens
+    setDados((atual) => ({ ...atual, [name]: value }))
   }
 
   async function enviar(event) {
@@ -80,34 +22,27 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
 
     setSalvando(true)
     setErro('')
-    setErrosCampos({})
-
-    const corpo = { ...dados }
-    for (const [nome] of datas) {
-      corpo[nome] = corpo[nome] || null
-    }
 
     try {
-      const response = await editaisFetch(edital ? `/${edital.id}/` : '/', {
-        method: edital ? 'PATCH' : 'POST',
+      const response = await editaisFetch('/', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(corpo),
+        body: JSON.stringify(dados),
       })
       const resultado = await response.json().catch(() => null)
 
       if (!response.ok) {
-        if (response.status === 400 && resultado) {
-          setErrosCampos(resultado)
-          const mensagens = resultado.non_field_errors
-          setErro(
-            Array.isArray(mensagens)
-              ? mensagens.join(' ')
-              : mensagens || 'Confira os campos informados.'
-          )
-          return
-        }
+        const mensagem =
+          resultado && typeof resultado === 'object'
+            ? Object.entries(resultado)
+                .map(([campo, mensagens]) => {
+                  const texto = Array.isArray(mensagens) ? mensagens.join(' ') : String(mensagens)
+                  return `${campo}: ${texto}`
+                })
+                .join(' ')
+            : 'Não foi possível cadastrar o edital.'
 
-        throw new Error(resultado?.detail || 'Não foi possível salvar o edital.')
+        throw new Error(mensagem)
       }
 
       onSalvar(resultado)
@@ -119,74 +54,61 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
   }
 
   return (
-    <Modal
-      title={edital ? 'Editar edital' : 'Novo edital'}
-      onClose={solicitarFechamento}
-      width={720}
-    >
-      <form onSubmit={enviar} aria-label="Dados e cronograma do edital">
-        <div style={{ maxHeight: '65vh', overflowY: 'auto', padding: 4 }}>
-          {erro && <Alert tone="error">{erro}</Alert>}
+    <form onSubmit={enviar} aria-label="Cadastro de edital">
+      {erro && <Alert tone="error">{erro}</Alert>}
 
-          {campos.map(({ label, ...props }) => (
-            <FormField key={props.name} label={label}>
-              <TextInput
-                {...props}
-                aria-label={label}
-                value={dados[props.name]}
-                onChange={alterarCampo}
-                required
-                disabled={salvando}
-                aria-invalid={Boolean(mensagemCampo(props.name))}
-                aria-describedby={mensagemCampo(props.name) ? `${props.name}-erro` : undefined}
-              />
-              {mensagemCampo(props.name) && (
-                <p id={`${props.name}-erro`} role="alert">
-                  {mensagemCampo(props.name)}
-                </p>
-              )}
-            </FormField>
-          ))}
+      <FormField label="Nome">
+        <TextInput
+          aria-label="Nome"
+          name="nome"
+          value={dados.nome}
+          onChange={alterarCampo}
+          minLength={3}
+          maxLength={200}
+          required
+          disabled={salvando}
+        />
+      </FormField>
 
-          <h3>Cronograma</h3>
+      <FormField label="Ano/semestre">
+        <TextInput
+          aria-label="Ano/semestre"
+          name="ano_semestre"
+          value={dados.ano_semestre}
+          onChange={alterarCampo}
+          placeholder="2026/2"
+          pattern="[0-9]{4}/[12]"
+          title="Use o formato AAAA/1 ou AAAA/2."
+          maxLength={6}
+          required
+          disabled={salvando}
+        />
+      </FormField>
 
-          {datas.map(([nome, label]) => (
-            <FormField key={nome} label={label}>
-              <TextInput
-                type="date"
-                name={nome}
-                aria-label={label}
-                value={dados[nome]}
-                onChange={alterarCampo}
-                required={emVigor}
-                disabled={salvando}
-                aria-invalid={Boolean(mensagemCampo(nome))}
-                aria-describedby={mensagemCampo(nome) ? `${nome}-erro` : undefined}
-              />
-              {emVigor && edital?.datas_originais?.[nome] && (
-                <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                  Prazo original:{' '}
-                  {new Date(edital.datas_originais[nome]).toLocaleDateString('pt-BR')}
-                </p>
-              )}
-              {mensagemCampo(nome) && (
-                <div id={`${nome}-erro`} role="alert">
-                  <Alert tone="error">{mensagemCampo(nome)}</Alert>
-                </div>
-              )}
-            </FormField>
-          ))}
-        </div>
+      <FormField label="Link do documento oficial">
+        <TextInput
+          aria-label="Link do documento oficial"
+          type="url"
+          name="link_documento_oficial"
+          value={dados.link_documento_oficial}
+          onChange={alterarCampo}
+          placeholder="https://..."
+          maxLength={500}
+          required
+          disabled={salvando}
+        />
+      </FormField>
 
-        <FormActions>
-          <Button onClick={solicitarFechamento} disabled={salvando}>
-            Descartar
-          </Button>
-          <Button type="submit" variant="accent" disabled={salvando}>
-            {salvando ? 'Salvando...' : emVigor ? 'Salvar alterações' : 'Salvar Rascunho'}
-          </Button>
-        </FormActions>
-      </form>
-    </Modal>
+      <p>O edital será cadastrado como Rascunho.</p>
+
+      <FormActions>
+        <Button onClick={onCancelar} disabled={salvando}>
+          Cancelar
+        </Button>
+        <Button type="submit" variant="accent" disabled={salvando}>
+          {salvando ? 'Salvando...' : 'Salvar edital'}
+        </Button>
+      </FormActions>
+    </form>
   )
 }

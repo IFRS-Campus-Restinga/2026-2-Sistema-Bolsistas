@@ -27,6 +27,8 @@ const STATUS_STYLE = {
   SUPLENTE: 'badge--yellow',
   DESCLASSIFICADO: 'badge--red',
   EM_ANALISE: 'badge--blue',
+  EM_VIGOR: 'badge--green',
+  ARQUIVADO: 'badge--gray',
 }
 
 const STATUS_LABEL = {
@@ -50,6 +52,8 @@ const STATUS_LABEL = {
   SUPLENTE: 'Suplente',
   DESCLASSIFICADO: 'Desclassificado',
   EM_ANALISE: 'Em Análise',
+  EM_VIGOR: 'Em vigor',
+  ARQUIVADO: 'Arquivado',
 }
 
 export function Badge({ status }) {

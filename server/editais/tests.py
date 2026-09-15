@@ -287,3 +287,17 @@ class CronogramaEditalAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_coordenador_pode_consultar_cronograma(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["data_abertura_inscricoes"],
+            "2026-09-01",
+        )
+        self.assertEqual(
+            response.data["data_fechamento_inscricoes"],
+            "2026-09-10",
+        )
+        self.assertIsNone(response.data["data_resultado"])

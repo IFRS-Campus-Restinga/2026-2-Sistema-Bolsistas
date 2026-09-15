@@ -28,7 +28,7 @@ async function refreshHubSession() {
   return res.ok
 }
 
-async function fetchWithRefresh(base, path, options = {}) {
+export async function apiFetch(path, options = {}, base = API_BASE) {
   const doFetch = () => fetch(`${base}${path}`, { ...options, credentials: 'include' })
 
   let res = await doFetch()
@@ -42,28 +42,8 @@ async function fetchWithRefresh(base, path, options = {}) {
   return res
 }
 
-export async function apiFetch(path, options = {}) {
-  return fetchWithRefresh(API_BASE, path, options)
-}
-
-async function adminFetch(path, options = {}) {
-  return fetchWithRefresh(ADMIN_BASE, path, options)
-}
-
 export function editaisFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/editais`, path, options)
-}
-
-export function bolsasFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/bolsas`, path, options)
-}
-
-export function projetosFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/projetos`, path, options)
-}
-
-export function inscricoesFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
+  return apiFetch(path, options, `${DJANGO_HOST}/api/editais`)
 }
 
 export { SessaoExpiradaError }

@@ -13,8 +13,8 @@ class EditalListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
 
 
-class EditalCronogramaUpdateView(generics.UpdateAPIView):
+class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Edital.objects.all()
     serializer_class = CronogramaEditalSerializer
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
-    http_method_names = ["patch", "options"]
+    http_method_names = ["get", "patch", "options"]
