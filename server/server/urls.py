@@ -26,10 +26,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/hub/", include("hub_integration.urls")),
     path("api/editais/", include("editais.urls")),
-    path("api/admin/", include("accounts.urls")),
-    path("api/projetos/", include("projetos.urls")),
-    path("api/bolsas/", include("bolsas.urls")),
-    path("api/inscricoes/", include("inscricoes.urls")),
+    ## A rota que entrega o React deve permanecer por último.
+    re_path(r"^.*$", index_view),
 ]
 
 # Em dev o Django serve os uploads; precisa vir ANTES do catch-all do React,
