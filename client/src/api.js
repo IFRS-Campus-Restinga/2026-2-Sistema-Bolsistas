@@ -27,8 +27,8 @@ async function refreshHubSession() {
   return res.ok
 }
 
-export async function apiFetch(path, options = {}) {
-  const doFetch = () => fetch(`${API_BASE}${path}`, { ...options, credentials: 'include' })
+export async function apiFetch(path, options = {}, base = API_BASE) {
+  const doFetch = () => fetch(`${base}${path}`, { ...options, credentials: 'include' })
 
   let res = await doFetch()
 
@@ -40,6 +40,10 @@ export async function apiFetch(path, options = {}) {
   }
 
   return res
+}
+
+export function editaisFetch(path = '/', options = {}) {
+  return apiFetch(path, options, `${DJANGO_HOST}/api/editais`)
 }
 
 export { SessaoExpiradaError }

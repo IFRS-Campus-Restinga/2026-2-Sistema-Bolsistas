@@ -8,6 +8,7 @@ import {
   IconBriefcase,
   IconUsers,
 } from '../components'
+import EditaisPage from './EditaisPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -31,11 +32,18 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       initials={initials}
     >
       <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
-        <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
-        <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
-      </div>
+      {active === 'editais' ? (
+        <EditaisPage />
+      ) : (
+        <>
+          <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
+            <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
+            <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
+          </div>
+        </>
+      )}
     </Layout>
   )
 }
