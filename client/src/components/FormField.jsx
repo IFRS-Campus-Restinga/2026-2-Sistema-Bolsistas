@@ -1,6 +1,6 @@
-import { useRef } from 'react'
-import { IconUpload, IconPaperclip, IconX } from './Icons'
-import './FormField.css'
+import { useRef } from 'react';
+import { IconUpload, IconPaperclip, IconX } from './Icons';
+import './FormField.css';
 
 /**
  * Wrapper de campo de formulário com label.
@@ -11,35 +11,50 @@ export function FormField({ label, children }) {
       <label className="form-field__label">{label}</label>
       {children}
     </div>
-  )
+  );
 }
 
 /**
  * Ações de rodapé de formulário (Cancelar / Salvar).
  */
 export function FormActions({ children }) {
-  return <div className="form-actions">{children}</div>
+  return <div className="form-actions">{children}</div>;
 }
 
 /**
  * Input de texto.
  */
 export function TextInput(props) {
-  return <input {...props} className={`form-input ${props.className ?? ''}`} />
+  return (
+    <input
+      {...props}
+      className={`form-input ${props.className ?? ''}`}
+    />
+  );
 }
 
 /**
  * Textarea.
  */
 export function TextArea(props) {
-  return <textarea {...props} className={`form-input ${props.className ?? ''}`} />
+  return (
+    <textarea
+      {...props}
+      className={`form-input ${props.className ?? ''}`}
+    />
+  );
 }
 
 /**
  * Select / dropdown.
  */
 export function Select(props) {
-  return <select {...props} className={`form-input ${props.className ?? ''}`} />
+  return (
+    <select
+      {...props}
+      className={`form-input ${props.className ?? ''}`}
+    />
+  );
 }
 
 /**
@@ -51,8 +66,8 @@ export function Select(props) {
  *   accept   — tipos aceitos (ex: ".pdf,.doc")
  *   required
  */
-export function FileField({ value, onChange, accept, required, disabled }) {
-  const inputRef = useRef(null)
+export function FileField({ value, onChange, accept, required }) {
+  const inputRef = useRef(null);
 
   return (
     <div>
@@ -61,9 +76,8 @@ export function FileField({ value, onChange, accept, required, disabled }) {
         type="file"
         accept={accept}
         required={required && !value}
-        disabled={disabled}
         className="form-file__hidden"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        onChange={(e) => onChange(e.target.files?.[0]?.name ?? '')}
       />
 
       {value ? (
@@ -75,11 +89,10 @@ export function FileField({ value, onChange, accept, required, disabled }) {
           <button
             type="button"
             onClick={() => {
-              onChange(null)
-              if (inputRef.current) inputRef.current.value = ''
+              onChange('');
+              if (inputRef.current) inputRef.current.value = '';
             }}
             className="form-file__remove"
-            disabled={disabled}
           >
             <IconX size={14} />
           </button>
@@ -89,12 +102,11 @@ export function FileField({ value, onChange, accept, required, disabled }) {
           type="button"
           onClick={() => inputRef.current?.click()}
           className="form-file__trigger"
-          disabled={disabled}
         >
           <IconUpload size={16} />
           Selecionar arquivo
         </button>
       )}
     </div>
-  )
+  );
 }
