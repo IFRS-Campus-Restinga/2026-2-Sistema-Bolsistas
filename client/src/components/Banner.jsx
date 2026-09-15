@@ -1,4 +1,4 @@
-import './Banner.css';
+import './Banner.css'
 
 /**
  * Banner decorativo com gradiente verde (para boas-vindas, CTAs, etc.)
@@ -14,5 +14,5 @@ export function Banner({ title, description, action }) {
       </div>
       {action && <div className="banner__action">{action}</div>}
     </div>
-  );
+  )
 }

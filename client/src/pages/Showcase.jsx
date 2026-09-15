@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   Layout,
   Button,
@@ -24,14 +24,14 @@ import {
   IconCheck,
   IconPlus,
   IconSearch,
-} from '../components';
-import './Showcase.css';
+} from '../components'
+import './Showcase.css'
 
 /* ── Conteúdo interno do showcase ──────────────────────────── */
 function ShowcaseContent() {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [fileName, setFileName] = useState('');
-  const confirm = useConfirm();
+  const [modalOpen, setModalOpen] = useState(false)
+  const [fileName, setFileName] = useState('')
+  const confirm = useConfirm()
 
   return (
     <div className="showcase">
@@ -56,26 +56,44 @@ function ShowcaseContent() {
 
         <p className="showcase__label">Variantes (sm)</p>
         <div className="showcase__row">
-          <Button variant="primary" size="sm">Primary</Button>
-          <Button variant="accent" size="sm">Accent</Button>
-          <Button variant="outline" size="sm">Outline</Button>
-          <Button variant="danger" size="sm">Danger</Button>
-          <Button variant="ghost" size="sm">Ghost</Button>
+          <Button variant="primary" size="sm">
+            Primary
+          </Button>
+          <Button variant="accent" size="sm">
+            Accent
+          </Button>
+          <Button variant="outline" size="sm">
+            Outline
+          </Button>
+          <Button variant="danger" size="sm">
+            Danger
+          </Button>
+          <Button variant="ghost" size="sm">
+            Ghost
+          </Button>
         </div>
 
         <p className="showcase__label">Desabilitado</p>
         <div className="showcase__row">
-          <Button variant="primary" disabled>Primary</Button>
-          <Button variant="accent" disabled>Accent</Button>
-          <Button variant="danger" disabled>Danger</Button>
+          <Button variant="primary" disabled>
+            Primary
+          </Button>
+          <Button variant="accent" disabled>
+            Accent
+          </Button>
+          <Button variant="danger" disabled>
+            Danger
+          </Button>
         </div>
 
         <p className="showcase__label">Com ícone</p>
         <div className="showcase__row">
-          <Button variant="accent"><IconPlus /> Novo Edital</Button>
-          <Button variant="outline"><IconSearch /> Buscar</Button>
-          <Button variant="danger" size="sm">Desativar</Button>
-          <Button variant="outline" size="sm">Editar</Button>
+          <Button variant="accent">
+            <IconPlus /> Novo Edital
+          </Button>
+          <Button variant="outline">
+            <IconSearch /> Buscar
+          </Button>
         </div>
       </section>
 
@@ -108,13 +126,21 @@ function ShowcaseContent() {
         <Banner
           title="Bem-vindo ao Sistema de Bolsistas"
           description="Gerencie editais, projetos e bolsistas do IFRS Campus Restinga."
-          action={<Button variant="outline" className="showcase__banner-btn">Ver Editais</Button>}
+          action={
+            <Button variant="outline" className="showcase__banner-btn">
+              Ver Editais
+            </Button>
+          }
         />
 
         <p className="showcase__label">Page Header</p>
         <PageHeader
           title="Usuários do Sistema"
-          action={<Button variant="accent"><IconPlus /> Novo Usuário</Button>}
+          action={
+            <Button variant="accent">
+              <IconPlus /> Novo Usuário
+            </Button>
+          }
         />
 
         <p className="showcase__label">Data Table</p>
@@ -127,8 +153,12 @@ function ShowcaseContent() {
               'Administrador',
               <Badge status="ATIVO" />,
               <div className="showcase__row-actions">
-                <Button variant="outline" size="sm">Editar</Button>
-                <Button variant="danger" size="sm">Desativar</Button>
+                <Button variant="outline" size="sm">
+                  Editar
+                </Button>
+                <Button variant="danger" size="sm">
+                  Desativar
+                </Button>
               </div>,
             ],
             [
@@ -137,8 +167,12 @@ function ShowcaseContent() {
               'Coordenador de Área',
               <Badge status="ATIVO" />,
               <div className="showcase__row-actions">
-                <Button variant="outline" size="sm">Editar</Button>
-                <Button variant="danger" size="sm">Desativar</Button>
+                <Button variant="outline" size="sm">
+                  Editar
+                </Button>
+                <Button variant="danger" size="sm">
+                  Desativar
+                </Button>
               </div>,
             ],
             [
@@ -147,8 +181,12 @@ function ShowcaseContent() {
               'Aluno',
               <Badge status="ATIVO" />,
               <div className="showcase__row-actions">
-                <Button variant="outline" size="sm">Editar</Button>
-                <Button variant="danger" size="sm">Desativar</Button>
+                <Button variant="outline" size="sm">
+                  Editar
+                </Button>
+                <Button variant="danger" size="sm">
+                  Desativar
+                </Button>
               </div>,
             ],
             [
@@ -157,8 +195,12 @@ function ShowcaseContent() {
               'Aluno',
               <Badge status="DESLIGADO" />,
               <div className="showcase__row-actions">
-                <Button variant="outline" size="sm">Editar</Button>
-                <Button variant="accent" size="sm">Ativar</Button>
+                <Button variant="outline" size="sm">
+                  Editar
+                </Button>
+                <Button variant="accent" size="sm">
+                  Ativar
+                </Button>
               </div>,
             ],
           ]}
@@ -247,14 +289,18 @@ function ShowcaseContent() {
               <TextInput type="email" defaultValue="admin@if.edu.br" />
             </FormField>
             <FormActions>
-              <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-              <Button variant="accent" onClick={() => setModalOpen(false)}>Salvar</Button>
+              <Button variant="outline" onClick={() => setModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="accent" onClick={() => setModalOpen(false)}>
+                Salvar
+              </Button>
             </FormActions>
           </Modal>
         )}
       </section>
     </div>
-  );
+  )
 }
 
 /* ── Layout wrapper do showcase (usa o Layout real) ────────── */
@@ -263,10 +309,10 @@ const menuItems = [
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
   { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
-];
+]
 
 export default function Showcase() {
-  const [active, setActive] = useState('dashboard');
+  const [active, setActive] = useState('dashboard')
 
   return (
     <ConfirmProvider>
@@ -283,5 +329,5 @@ export default function Showcase() {
         <ShowcaseContent />
       </Layout>
     </ConfirmProvider>
-  );
+  )
 }

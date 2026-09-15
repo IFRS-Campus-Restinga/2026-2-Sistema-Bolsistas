@@ -1,4 +1,4 @@
-import './Button.css';
+import './Button.css'
 
 /**
  * Botão reutilizável com variantes de estilo.
@@ -26,5 +26,5 @@ export function Button({
     >
       {children}
     </button>
-  );
+  )
 }

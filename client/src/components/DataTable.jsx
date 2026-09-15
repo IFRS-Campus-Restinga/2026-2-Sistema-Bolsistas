@@ -1,4 +1,4 @@
-import './DataTable.css';
+import './DataTable.css'
 
 /**
  * Tabela de dados genérica — suporta ReactNode nas células (badges, botões).
@@ -29,7 +29,7 @@ export function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encon
         </div>
         <p className="data-table__empty-text">{emptyMessage}</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -57,5 +57,5 @@ export function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encon
         </tbody>
       </table>
     </div>
-  );
+  )
 }

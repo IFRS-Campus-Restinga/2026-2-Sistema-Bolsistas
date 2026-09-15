@@ -1,5 +1,4 @@
 import { Button } from '../components'
-import { HUB_FRONTEND } from '../api'
 import './AcessoNegado.css'
 
 export default function AcessoNegado({ mensagem }) {
@@ -8,13 +7,16 @@ export default function AcessoNegado({ mensagem }) {
       <div className="acesso-negado__card">
         <h1 className="acesso-negado__title">Acesso negado</h1>
         <p className="acesso-negado__message">
-          {mensagem
-            ? mensagem
-            : 'Você não está logado ou sua sessão expirou, por favor, faça login novamente via HUB.'}
+          {mensagem}
+          <br />
+          Acesse este sistema a partir do HUB ou tente novamente.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-          <Button variant="accent" onClick={() => (window.location.href = HUB_FRONTEND)}>
+          <Button variant="accent" onClick={() => (window.location.href = 'http://localhost:3000')}>
             Ir ao HUB
+          </Button>
+          <Button variant="outline" onClick={() => window.history.back()}>
+            Voltar
           </Button>
         </div>
       </div>

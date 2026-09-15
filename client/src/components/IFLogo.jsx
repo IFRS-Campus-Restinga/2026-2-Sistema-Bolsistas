@@ -5,8 +5,8 @@
  * Uso: <IFLogo size={48} />
  */
 export function IFLogo({ size = 48 }) {
-  const height = size;
-  const width = size * (34 / 46);
+  const height = size
+  const width = size * (34 / 46)
 
   return (
     <svg
@@ -27,5 +27,5 @@ export function IFLogo({ size = 48 }) {
       <rect x="0" y="36" width="10" height="10" rx="1" fill="var(--if-green)" />
       <rect x="12" y="36" width="10" height="10" rx="1" fill="var(--if-green)" />
     </svg>
-  );
+  )
 }

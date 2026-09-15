@@ -1,4 +1,4 @@
-import './PageHeader.css';
+import './PageHeader.css'
 
 /**
  * Cabeçalho de página com título, badge opcional e ação.
@@ -14,5 +14,5 @@ export function PageHeader({ title, action, badge }) {
       </div>
       {action}
     </div>
-  );
+  )
 }

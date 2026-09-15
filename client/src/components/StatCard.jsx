@@ -1,4 +1,4 @@
-import './StatCard.css';
+import './StatCard.css'
 
 /**
  * Card de estatística para dashboards.
@@ -20,5 +20,5 @@ export function StatCard({ label, value, icon, color = 'green', clickable = fals
       <div className={`stat-card__icon stat-card__icon--${color}`}>{icon}</div>
       {clickable && <span className="stat-card__link">Ir para →</span>}
     </div>
-  );
+  )
 }
