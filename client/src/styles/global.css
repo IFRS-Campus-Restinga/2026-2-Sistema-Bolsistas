@@ -1,0 +1,43 @@
+:root {
+  /* Instituto Federal */
+  --if-red: #cd191e;
+  --if-green: #2f9e41;
+  --if-green-dark: #1a6b2c;
+
+  /* Sombreamento */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-modal: 0 20px 60px -12px rgba(0, 0, 0, 0.25);
+
+  /* Tipografia */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+  background: #f8f9fa;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
