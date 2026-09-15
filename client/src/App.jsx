@@ -21,6 +21,11 @@ function MainApp() {
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
+    // Limpa a URL longa do HUB imediatamente
+    if (window.location.pathname !== '/' || window.location.search) {
+      window.history.replaceState(null, '', '/')
+    }
+
     apiFetch('/whoami/')
       .then(async (res) => {
         if (!res.ok) {
@@ -29,7 +34,15 @@ function MainApp() {
         }
         setMe(await res.json())
       })
-      .catch((e) => setErro(e.message))
+      .catch((e) => {
+        if (e.message === 'Failed to fetch') {
+          setErro('Não foi possível conectar ao servidor. Verifique se o sistema está online.')
+        } else if (e.name === 'SessaoExpiradaError') {
+          setErro('Sua sessão expirou. Faça login novamente pelo HUB.')
+        } else {
+          setErro(e.message)
+        }
+      })
       .finally(() => setCarregando(false))
   }, [])
 

@@ -17,7 +17,12 @@ const menuItems = [
 
 export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
-  const areaLabel = me.tipo_area || 'Área'
+  const AREA_LABELS = {
+    EXTENSAO: 'Extensão',
+    PESQUISA: 'Pesquisa',
+    ENSINO: 'Ensino',
+  }
+  const areaLabel = AREA_LABELS[me.tipo_area] || me.tipo_area || 'Área'
 
   return (
     <Layout
