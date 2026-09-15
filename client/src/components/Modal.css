@@ -1,0 +1,66 @@
+/* ── Modal ──────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: #fff;
+  border-radius: var(--radius-2xl);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  width: 100%;
+  box-shadow: var(--shadow-modal);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f4f4f4;
+}
+
+.modal__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.modal__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal__close:hover {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.modal__body {
+  padding: 20px 24px;
+}
+
+/* Confirm dialog */
+.confirm__message {
+  font-size: 14px;
+  color: #4b5563;
+  margin-bottom: 20px;
+}
