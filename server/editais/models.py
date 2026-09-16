@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.db import models
 
@@ -14,7 +15,11 @@ class Edital(models.Model):
         validators=[MinLengthValidator(3)],
         help_text="Nome do edital (mínimo de 3 caracteres)",
     )
-    ano_semestre = models.CharField(max_length=6, help_text="Ano e semestre (ex: 2022/1)")
+    ano_codigo = models.CharField(
+        max_length=8,
+        unique=True,
+        help_text="Ano e código do edital (ex: 2026-005)",
+    )
     link_documento_oficial = models.URLField(
         max_length=500, help_text="Link para o documento oficial do edital"
     )
@@ -63,4 +68,27 @@ class Edital(models.Model):
     )
 
     def __str__(self):
-        return f"{self.nome} ({self.ano_semestre})"
+        return f"{self.nome} ({self.ano_codigo})"
+
+
+class AlteracaoCronograma(models.Model):
+    edital = models.ForeignKey(
+        Edital,
+        on_delete=models.PROTECT,
+        related_name="historico_cronograma",
+    )
+    campo = models.CharField(max_length=50)
+    data_anterior = models.DateField(null=True, blank=True)
+    data_nova = models.DateField(null=True, blank=True)
+    responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="alteracoes_cronograma",
+    )
+    alterado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-alterado_em", "-id"]
+
+    def __str__(self):
+        return f"{self.edital_id}: {self.campo}"
