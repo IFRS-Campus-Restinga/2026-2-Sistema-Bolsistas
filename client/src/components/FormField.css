@@ -1,0 +1,118 @@
+/* ── Form Field ─────────────────────────────────────────────── */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* Shared input style */
+.form-input {
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-xl);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1f2937;
+  background: #fff;
+  width: 100%;
+  transition: box-shadow 0.15s ease;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #86efac;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25);
+}
+
+.form-input:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* File field */
+.form-file__hidden {
+  display: none;
+}
+
+.form-file__selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 8px 8px 12px;
+  background: #f9fafb;
+}
+
+.form-file__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+  min-width: 0;
+}
+
+.form-file__icon {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.form-file__name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-file__remove {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+.form-file__remove:hover {
+  color: #4b5563;
+}
+
+.form-file__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #6b7280;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.form-file__trigger:hover {
+  border-color: var(--if-green);
+  color: var(--if-green);
+  background: rgba(240, 253, 244, 0.5);
+}

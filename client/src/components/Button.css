@@ -1,0 +1,81 @@
+/* ── Button ─────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  border-radius: var(--radius-xl);
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sizes */
+.btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn--md {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+/* Variants */
+.btn--primary {
+  background: #111827;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+.btn--accent {
+  background: linear-gradient(135deg, var(--if-green-dark), var(--if-green));
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(47, 158, 65, 0.25);
+}
+
+.btn--accent:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.btn--outline {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn--outline:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn--danger {
+  background: var(--if-red);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(205, 25, 30, 0.25);
+}
+
+.btn--danger:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: #4b5563;
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: #f3f4f6;
+}
