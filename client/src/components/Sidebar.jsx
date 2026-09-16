@@ -1,35 +1,58 @@
-const menuItems = [
-  { label: 'Dashboard', icon: '⊞' },
-  { label: 'Editais', icon: '📄' },
-  { label: 'Projetos', icon: '📁' },
-  { label: 'Usuários', icon: '👥' },
-]
+import { IFLogo } from './IFLogo'
+import { IconLogOut } from './Icons'
+import './Sidebar.css'
 
-export default function Sidebar({ activeItem = 'Usuários' }) {
+/**
+ * Barra lateral de navegação.
+ *
+ * Props:
+ *   role       — papel do usuário exibido sob o título ("Administrador", etc.)
+ *   menuItems  — [{ id, label, icon }]
+ *   active     — id do item ativo
+ *   onNav      — callback(id) ao clicar num item
+ *   onLogout   — callback ao clicar em "Sair do Sistema"
+ */
+export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
   return (
-    <aside className="flex flex-col w-56 min-h-screen bg-white border-r border-gray-200">
-      <div className="px-6 py-5 border-b border-gray-200">
-        <span className="text-lg font-bold text-green-700">SIGAA-ME</span>
+    <aside className="sidebar">
+      {/* Brand */}
+      <div className="sidebar__brand">
+        <IFLogo size={38} />
+        <div>
+          <div className="sidebar__title">Sistema de Bolsistas</div>
+          <div className="sidebar__role">{role}</div>
+        </div>
       </div>
 
-      <nav className="flex-1 py-4">
-        {menuItems.map((item) => (
-          <div
-            key={item.label}
-            className={`flex items-center gap-3 px-6 py-3 text-sm cursor-pointer transition-colors ${
-              activeItem === item.label
-                ? 'bg-green-50 text-green-700 font-semibold border-r-2 border-green-600'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </div>
-        ))}
+      {/* Nav */}
+      <nav className="sidebar__nav">
+        <p className="sidebar__section-label">Menu Principal</p>
+        <ul className="sidebar__list">
+          {menuItems.map((item) => {
+            const isActive = active === item.id
+            return (
+              <li key={item.id}>
+                <button
+                  onClick={() => onNav(item.id)}
+                  className={`sidebar__item ${isActive ? 'sidebar__item--active' : ''}`}
+                >
+                  <span className={`sidebar__icon ${isActive ? 'sidebar__icon--active' : ''}`}>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       </nav>
 
-      <div className="px-6 py-4 border-t border-gray-200">
-        <span className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Sair</span>
+      {/* Logout */}
+      <div className="sidebar__footer">
+        <button onClick={onLogout} className="sidebar__logout">
+          <IconLogOut />
+          Voltar ao HUB
+        </button>
       </div>
     </aside>
   )

@@ -7,9 +7,9 @@ export const HUB_BASE = HUB_HOST
 export const HUB_FRONTEND = HUB_FRONTEND_HOST
 
 export function hubHomeUrlPara(role) {
-  return role === 'ALUNO'
-    ? `${HUB_FRONTEND}/session/user/home`
-    : `${HUB_FRONTEND}/session/admin/home/`
+  return role === 'ADMIN'
+    ? `${HUB_FRONTEND}/session/admin/home/`
+    : `${HUB_FRONTEND}/session/user/home`
 }
 
 class SessaoExpiradaError extends Error {

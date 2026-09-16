@@ -1,35 +1,30 @@
-import { useEffect } from 'react'
+import './Modal.css'
 
-export default function Modal({ isOpen, onClose, title, children }) {
-  useEffect(() => {
-    const handleKey = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    if (isOpen) document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
-
+/**
+ * Modal genérico com overlay e cabeçalho.
+ */
+export function Modal({ title, onClose, children, width = 440 }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-800">{title}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-          >
-            ×
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal__header">
+          <h3 className="modal__title">{title}</h3>
+          <button onClick={onClose} className="modal__close">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="modal__body">{children}</div>
       </div>
     </div>
   )

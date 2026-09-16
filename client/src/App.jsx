@@ -1,79 +1,31 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, hubHomeUrlPara } from './api'
-import Header from './components/Header'
-import Sidebar from './components/Sidebar'
-import UsuariosPage from './pages/admin/UsuariosPage'
+import Showcase from './pages/Showcase'
+import AdministradorPage from './pages/AdministradorPage'
+import AlunoPage from './pages/AlunoPage'
+import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
+import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
+import AcessoNegado from './pages/AcessoNegado'
+import './styles/global.css'
 
-function AdminLayout({ me, onVoltarHub, children }) {
-  return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar activeItem="Usuários" />
-      <div className="flex flex-col flex-1">
-        <Header usuario={me} onVoltarHub={onVoltarHub} />
-        <main className="flex-1">{children}</main>
-      </div>
-    </div>
-  )
+function iniciais(nome) {
+  if (!nome) return '?'
+  const partes = nome.trim().split(' ')
+  if (partes.length === 1) return partes[0][0].toUpperCase()
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
 }
 
-function AdministradorPage({ me, onVoltarHub }) {
-  return (
-    <AdminLayout me={me} onVoltarHub={onVoltarHub}>
-      <UsuariosPage />
-    </AdminLayout>
-  )
-}
-
-function AlunoPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>Hello Aluno {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
-}
-
-function CoordenadorProjetoPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>Hello Coordenador de Projeto {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
-}
-
-function CoordenadorAreaPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>
-        Hello Coordenador de {me.tipo_area || 'Área'} {me.nome || '(sem nome)'}
-      </h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
-}
-
-function AcessoNegado({ mensagem }) {
-  return (
-    <div>
-      <h1>Acesso negado</h1>
-      <p>{mensagem}</p>
-    </div>
-  )
-}
-
-export default function App() {
+function MainApp() {
   const [me, setMe] = useState(null)
   const [erro, setErro] = useState(null)
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
+    // Limpa a URL longa do HUB imediatamente
+    if (window.location.pathname !== '/' || window.location.search) {
+      window.history.replaceState(null, '', '/')
+    }
+
     apiFetch('/whoami/')
       .then(async (res) => {
         if (!res.ok) {
@@ -82,7 +34,15 @@ export default function App() {
         }
         setMe(await res.json())
       })
-      .catch((e) => setErro(e.message))
+      .catch((e) => {
+        if (e.message === 'Failed to fetch') {
+          setErro('Não foi possível conectar ao servidor. Verifique se o sistema está online.')
+        } else if (e.name === 'SessaoExpiradaError') {
+          setErro('Sua sessão expirou. Faça login novamente pelo HUB.')
+        } else {
+          setErro(e.message)
+        }
+      })
       .finally(() => setCarregando(false))
   }, [])
 
@@ -92,9 +52,19 @@ export default function App() {
 
   if (carregando) return null
   if (!me) return <AcessoNegado mensagem={erro} />
-  if (me.role === 'ADMINISTRADOR') return <AdministradorPage me={me} onVoltarHub={voltarAoHub} />
-  if (me.role === 'ALUNO') return <AlunoPage me={me} onVoltarHub={voltarAoHub} />
-  if (me.role === 'COORDENADOR_AREA')
-    return <CoordenadorAreaPage me={me} onVoltarHub={voltarAoHub} />
-  return <CoordenadorProjetoPage me={me} onVoltarHub={voltarAoHub} />
+
+  const props = { me, initials: iniciais(me.nome), onVoltarHub: voltarAoHub }
+
+  if (me.role === 'ADMINISTRADOR') return <AdministradorPage {...props} />
+  if (me.role === 'ALUNO') return <AlunoPage {...props} />
+  if (me.role === 'COORDENADOR_AREA') return <CoordenadorAreaPage {...props} />
+  return <CoordenadorProjetoPage {...props} />
+}
+
+export default function App() {
+  const path = window.location.pathname
+  if (path === '/showcase' || path === '/showcase/') {
+    return <Showcase />
+  }
+  return <MainApp />
 }
