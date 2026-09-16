@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import Modal from '../../components/Modal'
+import {
+  Modal,
+  Button,
+  FormField,
+  TextInput,
+  Select,
+  FormActions,
+  DataTable,
+  PageHeader,
+} from '../../components'
 import {
   deleteEmailCoordenador,
   getEmailsCoordenadores,
@@ -28,124 +37,11 @@ function tipoAreaLabel(value) {
   return TIPO_AREA_OPTIONS.find((o) => o.value === value)?.label || value
 }
 
-// ─── seção: tabela de usuários ────────────────────────────────────────────────
-
-function TabelaUsuarios({ usuarios, onEditar, onAtivarDesativar }) {
+function StatusBadge({ ativo }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Nome</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">E-mail</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Grupo / Perfil</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {usuarios.map((u) => (
-            <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-4 py-3 text-gray-800">{u.nome || '—'}</td>
-              <td className="px-4 py-3 text-gray-600">{u.email || '—'}</td>
-              <td className="px-4 py-3 text-gray-600">
-                {ROLE_LABEL[u.role] || u.role}
-                {u.tipo_area && (
-                  <span className="ml-1 text-xs text-gray-400">({tipoAreaLabel(u.tipo_area)})</span>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                    u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}
-                >
-                  {u.is_active ? 'Ativo' : 'Inativo'}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex gap-2">
-                  {u.role === 'COORDENADOR_AREA' && (
-                    <button
-                      onClick={() => onEditar(u)}
-                      className="px-3 py-1 text-xs rounded border border-green-600 text-green-700 hover:bg-green-50 transition-colors"
-                    >
-                      Editar
-                    </button>
-                  )}
-                  <button
-                    onClick={() => onAtivarDesativar(u)}
-                    className={`px-3 py-1 text-xs rounded border transition-colors ${
-                      u.is_active
-                        ? 'border-red-400 text-red-500 hover:bg-red-50'
-                        : 'border-green-600 text-green-700 hover:bg-green-50'
-                    }`}
-                  >
-                    {u.is_active ? 'Desativar' : 'Ativar'}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {usuarios.length === 0 && (
-            <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">
-                Nenhum usuário encontrado.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ─── seção: tabela de e-mails de coordenadores ────────────────────────────────
-
-function TabelaEmailsCoordenadores({ emails, onEditar, onRemover }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">E-mail</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Tipo de Área</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {emails.map((e) => (
-            <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-4 py-3 text-gray-800">{e.email}</td>
-              <td className="px-4 py-3 text-gray-600">{tipoAreaLabel(e.tipo_area)}</td>
-              <td className="px-4 py-3">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onEditar(e)}
-                    className="px-3 py-1 text-xs rounded border border-green-600 text-green-700 hover:bg-green-50 transition-colors"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => onRemover(e)}
-                    className="px-3 py-1 text-xs rounded border border-red-400 text-red-500 hover:bg-red-50 transition-colors"
-                  >
-                    Remover
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {emails.length === 0 && (
-            <tr>
-              <td colSpan={3} className="px-4 py-6 text-center text-gray-400 text-sm">
-                Nenhum e-mail cadastrado.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <span className={`badge ${ativo ? 'badge--green' : 'badge--red'}`}>
+      {ativo ? 'Ativo' : 'Inativo'}
+    </span>
   )
 }
 
@@ -239,7 +135,6 @@ export default function UsuariosPage() {
       }
       const atualizado = await res.json()
       setUsuarios((prev) => prev.map((u) => (u.id === atualizado.id ? atualizado : u)))
-      // Reflete a mudança na tabela de e-mails se o registro já existir
       setEmails((prev) =>
         prev.map((e) =>
           e.email?.toLowerCase() === usuarioSelecionado.email?.toLowerCase()
@@ -317,166 +212,153 @@ export default function UsuariosPage() {
     }
   }
 
+  const rowsUsuarios = usuarios.map((u) => [
+    u.nome || '—',
+    u.email || '—',
+    <span key="role">
+      {ROLE_LABEL[u.role] || u.role}
+      {u.tipo_area && (
+        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>
+          ({tipoAreaLabel(u.tipo_area)})
+        </span>
+      )}
+    </span>,
+    <StatusBadge key="status" ativo={u.is_active} />,
+    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
+      {u.role === 'COORDENADOR_AREA' && (
+        <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(u)}>
+          Editar
+        </Button>
+      )}
+      <Button
+        variant={u.is_active ? 'danger' : 'accent'}
+        size="sm"
+        onClick={() => alternarStatus(u)}
+      >
+        {u.is_active ? 'Desativar' : 'Ativar'}
+      </Button>
+    </div>,
+  ])
+
+  const rowsEmails = emails.map((e) => [
+    e.email,
+    tipoAreaLabel(e.tipo_area),
+    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
+      <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(e)}>
+        Editar
+      </Button>
+      <Button variant="danger" size="sm" onClick={() => removerEmail(e)}>
+        Remover
+      </Button>
+    </div>,
+  ])
+
   return (
     <>
-      <div className="p-6 space-y-10">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
         {/* ── Usuários ── */}
         <section>
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Usuários</h2>
-          {carregandoUsuarios && <p className="text-gray-500 text-sm">Carregando usuários...</p>}
-          {!carregandoUsuarios && erroUsuarios && (
-            <p className="text-red-600 text-sm">{erroUsuarios}</p>
-          )}
+          <PageHeader title="Usuários" />
+          {carregandoUsuarios && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
+          {erroUsuarios && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroUsuarios}</p>}
           {!carregandoUsuarios && !erroUsuarios && (
-            <TabelaUsuarios
-              usuarios={usuarios}
-              onEditar={abrirModalUsuario}
-              onAtivarDesativar={alternarStatus}
+            <DataTable
+              columns={['Nome', 'E-mail', 'Grupo / Perfil', 'Status', 'Ações']}
+              rows={rowsUsuarios}
+              emptyMessage="Nenhum usuário encontrado."
             />
           )}
         </section>
 
         {/* ── E-mails de Coordenadores de Área ── */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800">
-                E-mails de Coordenadores de Área
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Servidores cujo e-mail estiver nesta lista serão reconhecidos como Coordenadores de
-                Área ao fazer login.
-              </p>
-            </div>
-            <button
-              onClick={abrirModalNovoEmail}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-            >
-              + Adicionar
-            </button>
-          </div>
-
-          {carregandoEmails && <p className="text-gray-500 text-sm">Carregando...</p>}
-          {!carregandoEmails && erroEmails && <p className="text-red-600 text-sm">{erroEmails}</p>}
+          <PageHeader
+            title="E-mails de Coordenadores de Área"
+            action={
+              <Button variant="primary" onClick={abrirModalNovoEmail}>
+                + Adicionar
+              </Button>
+            }
+          />
+          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -16, marginBottom: 16 }}>
+            Servidores cujo e-mail estiver nesta lista serão reconhecidos como Coordenadores de Área
+            ao fazer login.
+          </p>
+          {carregandoEmails && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
+          {erroEmails && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroEmails}</p>}
           {!carregandoEmails && !erroEmails && (
-            <TabelaEmailsCoordenadores
-              emails={emails}
-              onEditar={abrirModalEditarEmail}
-              onRemover={removerEmail}
+            <DataTable
+              columns={['E-mail', 'Tipo de Área', 'Ações']}
+              rows={rowsEmails}
+              emptyMessage="Nenhum e-mail cadastrado."
             />
           )}
         </section>
       </div>
 
       {/* ── Modal editar usuário ── */}
-      <Modal
-        isOpen={modalUsuarioAberto}
-        onClose={fecharModalUsuario}
-        title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado?.role] || ''}`}
-      >
-        {usuarioSelecionado && (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="edit-nome" className="block text-xs font-medium text-gray-500 mb-1">
-                Nome
-              </label>
-              <input
-                id="edit-nome"
-                readOnly
-                value={usuarioSelecionado.nome || ''}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded bg-gray-50 text-gray-600 cursor-not-allowed"
-              />
-            </div>
-            <div>
-              <label htmlFor="edit-email" className="block text-xs font-medium text-gray-500 mb-1">
-                E-mail
-              </label>
-              <input
-                id="edit-email"
-                readOnly
-                value={usuarioSelecionado.email || ''}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded bg-gray-50 text-gray-600 cursor-not-allowed"
-              />
-            </div>
+      {modalUsuarioAberto && usuarioSelecionado && (
+        <Modal
+          onClose={fecharModalUsuario}
+          title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
+        >
+          <FormField label="Nome">
+            <TextInput readOnly disabled value={usuarioSelecionado.nome || ''} />
+          </FormField>
+          <FormField label="E-mail">
+            <TextInput readOnly disabled value={usuarioSelecionado.email || ''} />
+          </FormField>
+          {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
+            <FormField label="Tipo de Área">
+              <Select value={tipoAreaEditado} onChange={(e) => setTipoAreaEditado(e.target.value)}>
+                <option value="">Selecione...</option>
+                {TIPO_AREA_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
+          {erroSalvarUsuario && (
+            <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarUsuario}</p>
+          )}
+          <FormActions>
+            <Button variant="outline" onClick={fecharModalUsuario}>
+              Cancelar
+            </Button>
             {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
-              <div>
-                <label
-                  htmlFor="edit-tipo-area"
-                  className="block text-xs font-medium text-gray-500 mb-1"
-                >
-                  Tipo de Área
-                </label>
-                <select
-                  id="edit-tipo-area"
-                  value={tipoAreaEditado}
-                  onChange={(e) => setTipoAreaEditado(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                >
-                  <option value="">Selecione...</option>
-                  {TIPO_AREA_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {erroSalvarUsuario && <p className="text-xs text-red-600">{erroSalvarUsuario}</p>}
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={fecharModalUsuario}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              <Button
+                variant="primary"
+                onClick={salvarUsuario}
+                disabled={salvandoUsuario || !tipoAreaEditado}
               >
-                Cancelar
-              </button>
-              {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
-                <button
-                  onClick={salvarUsuario}
-                  disabled={salvandoUsuario || !tipoAreaEditado}
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {salvandoUsuario ? 'Salvando...' : 'Salvar'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
+                {salvandoUsuario ? 'Salvando...' : 'Salvar'}
+              </Button>
+            )}
+          </FormActions>
+        </Modal>
+      )}
 
-      {/* ── Modal add/editar e-mail ── */}
-      <Modal
-        isOpen={modalEmailAberto}
-        onClose={fecharModalEmail}
-        title={
-          emailSelecionado ? 'Editar E-mail de Coordenador' : 'Adicionar E-mail de Coordenador'
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="email-coord" className="block text-xs font-medium text-gray-500 mb-1">
-              E-mail
-            </label>
-            <input
-              id="email-coord"
+      {modalEmailAberto && (
+        <Modal
+          onClose={fecharModalEmail}
+          title={
+            emailSelecionado ? 'Editar E-mail de Coordenador' : 'Adicionar E-mail de Coordenador'
+          }
+        >
+          <FormField label="E-mail">
+            <TextInput
               type="email"
               value={emailEditado}
               onChange={(e) => setEmailEditado(e.target.value)}
               placeholder="coordenador@ifrs.edu.br"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
             />
-          </div>
-          <div>
-            <label
-              htmlFor="tipo-area-coord"
-              className="block text-xs font-medium text-gray-500 mb-1"
-            >
-              Tipo de Área
-            </label>
-            <select
-              id="tipo-area-coord"
+          </FormField>
+          <FormField label="Tipo de Área">
+            <Select
               value={tipoAreaEmailEditado}
               onChange={(e) => setTipoAreaEmailEditado(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
             >
               <option value="">Selecione...</option>
               {TIPO_AREA_OPTIONS.map((o) => (
@@ -484,26 +366,23 @@ export default function UsuariosPage() {
                   {o.label}
                 </option>
               ))}
-            </select>
-          </div>
-          {erroSalvarEmail && <p className="text-xs text-red-600">{erroSalvarEmail}</p>}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              onClick={fecharModalEmail}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-            >
+            </Select>
+          </FormField>
+          {erroSalvarEmail && <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarEmail}</p>}
+          <FormActions>
+            <Button variant="outline" onClick={fecharModalEmail}>
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={salvarEmail}
               disabled={salvandoEmail || !emailEditado || !tipoAreaEmailEditado}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {salvandoEmail ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+            </Button>
+          </FormActions>
+        </Modal>
+      )}
     </>
   )
 }
