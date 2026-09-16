@@ -21,6 +21,8 @@ urlpatterns = [
         email_coordenador_detalhe,
         name="hub-email-coordenador-detalhe",
     ),
-    path("dev/login/<str:role>/", dev_login, name="dev-login"),
+    path(
+        "dev/login/<str:role>/", dev_login, name="dev-login"
+    ),  # login de teste — só existe com DEBUG=True, ver hub_integration/dev_auth.py.
     path("dev/logout/", dev_logout, name="dev-logout"),
 ]

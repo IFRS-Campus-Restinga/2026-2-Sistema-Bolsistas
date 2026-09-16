@@ -16,6 +16,7 @@ from accounts.serializers import (
 
 @api_view(["GET"])
 def whoami(request):
+    # identifica o usuário logado e seu papel
     user = request.user
     perfil = {}
     if user.role == user.Role.COORDENADOR_AREA:
