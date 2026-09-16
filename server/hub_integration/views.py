@@ -103,8 +103,16 @@ def email_coordenador_detalhe(request, entrada_id):
     serializer.save()
 
     novo_email = serializer.validated_data.get("email")
+    novo_tipo_area = serializer.validated_data.get("tipo_area")
+    email_vigente = novo_email if novo_email else email_antigo
+
     if novo_email and novo_email.lower() != email_antigo.lower():
         remover_coordenador_por_email(email_antigo)
+    elif novo_tipo_area:
+        # Sincroniza o tipo_area no CoordenadorArea do usuário correspondente.
+        CoordenadorArea.objects.filter(usuario__email__iexact=email_vigente.strip()).update(
+            tipo_area=novo_tipo_area
+        )
 
     return Response(serializer.data)
 
