@@ -30,7 +30,6 @@ const TIPO_AREA_OPTIONS = [
   { value: 'ENSINO', label: 'Ensino' },
   { value: 'PESQUISA', label: 'Pesquisa' },
   { value: 'EXTENSAO', label: 'Extensão' },
-  { value: 'INDISSOCIAVEL', label: 'Indissociável' },
 ]
 
 function tipoAreaLabel(value) {

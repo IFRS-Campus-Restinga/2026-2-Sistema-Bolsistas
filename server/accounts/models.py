@@ -24,7 +24,6 @@ class TipoArea(models.TextChoices):
     ENSINO = "ENSINO", "Ensino"
     PESQUISA = "PESQUISA", "Pesquisa"
     EXTENSAO = "EXTENSAO", "Extensão"
-    INDISSOCIAVEL = "INDISSOCIAVEL", "Indissociável"
 
 
 class Aluno(models.Model):
