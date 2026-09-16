@@ -4,7 +4,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import Usuario
 
-from .models import Edital
+from .models import AlteracaoCronograma, Edital
 
 
 class EditalAPITests(APITestCase):
@@ -17,7 +17,7 @@ class EditalAPITests(APITestCase):
         )
         self.dados = {
             "nome": "Edital de Bolsas 2026",
-            "ano_semestre": "2026/2",
+            "ano_codigo": "2026-001",
             "link_documento_oficial": "https://example.com/edital.pdf",
         }
 
@@ -46,7 +46,13 @@ class EditalAPITests(APITestCase):
     def test_coordenador_pode_listar_editais(self):
         self.client.force_authenticate(user=self.coordenador)
         primeiro = Edital.objects.create(**self.dados)
-        segundo = Edital.objects.create(**{**self.dados, "nome": "Outro edital"})
+        segundo = Edital.objects.create(
+            **{
+                **self.dados,
+                "nome": "Outro edital",
+                "ano_codigo": "2026-002",
+            }
+        )
 
         response = self.client.get(self.url)
 
@@ -59,7 +65,7 @@ class EditalAPITests(APITestCase):
     def test_cadastro_rejeita_dados_invalidos(self):
         self.client.force_authenticate(user=self.coordenador)
         casos = [
-            ("ano_semestre", "2026/3"),
+            ("ano_codigo", "2026/3"),
             ("link_documento_oficial", "nao-e-uma-url"),
             ("nome", ""),
         ]
@@ -130,6 +136,20 @@ class EditalAPITests(APITestCase):
         )
         self.assertFalse(Edital.objects.exists())
 
+    def test_rejeita_codigo_repetido(self):
+        self.client.force_authenticate(user=self.coordenador)
+        Edital.objects.create(**self.dados)
+
+        response = self.client.post(
+            self.url,
+            self.dados,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ano_codigo", response.data)
+        self.assertEqual(Edital.objects.count(), 1)
+
 
 class CronogramaEditalAPITests(APITestCase):
     def setUp(self):
@@ -140,7 +160,7 @@ class CronogramaEditalAPITests(APITestCase):
         )
         self.edital = Edital.objects.create(
             nome="Edital de Bolsas 2026",
-            ano_semestre="2026/2",
+            ano_codigo="2026-001",
             link_documento_oficial="https://example.com/edital.pdf",
             data_abertura_inscricoes="2026-09-01",
             data_fechamento_inscricoes="2026-09-10",
@@ -200,9 +220,8 @@ class CronogramaEditalAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_bloqueia_edital_fora_de_rascunho(self):
+    def test_bloqueia_edital_encerrado_ou_arquivado(self):
         estados = [
-            Edital.Status.EM_VIGOR,
             Edital.Status.ENCERRADO,
             Edital.Status.ARQUIVADO,
         ]
@@ -301,3 +320,165 @@ class CronogramaEditalAPITests(APITestCase):
             "2026-09-10",
         )
         self.assertIsNone(response.data["data_resultado"])
+
+
+class EdicaoEditalAPITests(APITestCase):
+    def setUp(self):
+        self.coordenador = Usuario.objects.create_user(
+            username="coordenador_edicao",
+            email="edicao@example.com",
+            role=Usuario.Role.COORDENADOR_AREA,
+        )
+        self.client.force_authenticate(user=self.coordenador)
+
+        self.edital = Edital.objects.create(
+            nome="Edital original",
+            ano_codigo="2026-001",
+            link_documento_oficial="https://example.com/edital.pdf",
+            status=Edital.Status.EM_VIGOR,
+            data_abertura_inscricoes="2026-09-01",
+            data_fechamento_inscricoes="2026-09-10",
+            data_homologacao="2026-09-15",
+            data_recurso_homologacao_inicio="2026-09-16",
+            data_recurso_homologacao_fim="2026-09-18",
+            data_resultado="2026-09-20",
+            data_entrega_relatorios="2026-12-01",
+        )
+        self.url = reverse(
+            "editais:detalhe",
+            kwargs={"pk": self.edital.pk},
+        )
+
+    def test_edita_dados_e_datas_com_historico(self):
+        response = self.client.patch(
+            self.url,
+            {
+                "nome": "Edital atualizado",
+                "data_fechamento_inscricoes": "2026-09-12",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.nome, "Edital atualizado")
+        self.assertEqual(
+            self.edital.data_fechamento_inscricoes.isoformat(),
+            "2026-09-12",
+        )
+
+        historico = AlteracaoCronograma.objects.get(edital=self.edital)
+        self.assertEqual(historico.campo, "data_fechamento_inscricoes")
+        self.assertEqual(historico.data_anterior.isoformat(), "2026-09-10")
+        self.assertEqual(historico.data_nova.isoformat(), "2026-09-12")
+        self.assertEqual(historico.responsavel, self.coordenador)
+        self.assertIsNotNone(historico.alterado_em)
+
+    def test_nao_registra_historico_para_data_igual(self):
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-09-10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(AlteracaoCronograma.objects.exists())
+
+    def test_nao_permite_apagar_data_em_vigor(self):
+        response = self.client.patch(
+            self.url,
+            {"data_resultado": None},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_resultado", response.data)
+
+        self.edital.refresh_from_db()
+        self.assertEqual(
+            self.edital.data_resultado.isoformat(),
+            "2026-09-20",
+        )
+        self.assertFalse(AlteracaoCronograma.objects.exists())
+
+    def test_cronograma_invalido_impede_toda_a_edicao(self):
+        response = self.client.patch(
+            self.url,
+            {
+                "nome": "Nome que não deve ser salvo",
+                "data_fechamento_inscricoes": "2026-09-21",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.nome, "Edital original")
+        self.assertEqual(
+            self.edital.data_fechamento_inscricoes.isoformat(),
+            "2026-09-10",
+        )
+        self.assertFalse(AlteracaoCronograma.objects.exists())
+
+    def test_publica_rascunho_com_cronograma_completo(self):
+        self.edital.status = Edital.Status.RASCUNHO
+        self.edital.save(update_fields=["status"])
+
+        url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.EM_VIGOR)
+
+    def test_nao_publica_com_data_ausente(self):
+        self.edital.status = Edital.Status.RASCUNHO
+        self.edital.data_resultado = None
+        self.edital.save(update_fields=["status", "data_resultado"])
+
+        url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_resultado", response.data)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.RASCUNHO)
+
+    def test_nao_publica_cronograma_fora_de_ordem(self):
+        self.edital.status = Edital.Status.RASCUNHO
+        self.edital.data_fechamento_inscricoes = "2026-09-21"
+        self.edital.save(update_fields=["status", "data_fechamento_inscricoes"])
+
+        url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.RASCUNHO)
+
+    def test_nao_publica_edital_ja_em_vigor(self):
+        url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_encerra_edital_em_vigor(self):
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)
+
+    def test_nao_encerra_rascunho(self):
+        self.edital.status = Edital.Status.RASCUNHO
+        self.edital.save(update_fields=["status"])
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.RASCUNHO)
