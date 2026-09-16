@@ -5,7 +5,7 @@ import jwt
 from django.conf import settings
 from django.test import TestCase
 
-from .models import Aluno
+from .models import Aluno, EmailCoordenadorArea
 
 ALUNO_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 SERVIDOR_ID = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -59,14 +59,11 @@ class WhoamiTests(TestCase):
             "access_profile": "servidor",
         }
 
-        with self.settings(
-            COORDENADOR_AREA_EMAILS={
-                "ENSINO": "coord.ensino@ifrs.edu.br",
-                "PESQUISA": "",
-                "EXTENSAO": "",
-            }
-        ):
-            response = self._whoami(SERVIDOR_ID, groups=["user"])
+        EmailCoordenadorArea.objects.create(
+            email="coord.ensino@ifrs.edu.br",
+            tipo_area="ENSINO",
+        )
+        response = self._whoami(SERVIDOR_ID, groups=["user"])
 
         self.assertEqual(response.json()["role"], "COORDENADOR_AREA")
         self.assertEqual(response.json()["tipo_area"], "ENSINO")

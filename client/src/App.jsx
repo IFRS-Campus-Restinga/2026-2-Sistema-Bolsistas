@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, hubHomeUrlPara } from './api'
+import Header from './components/Header'
+import Sidebar from './components/Sidebar'
+import UsuariosPage from './pages/admin/UsuariosPage'
+
+function AdminLayout({ me, onVoltarHub, children }) {
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar activeItem="Usuários" />
+      <div className="flex flex-col flex-1">
+        <Header usuario={me} onVoltarHub={onVoltarHub} />
+        <main className="flex-1">{children}</main>
+      </div>
+    </div>
+  )
+}
 
 function AdministradorPage({ me, onVoltarHub }) {
   return (
-    <div>
-      <h1>Hello Administrador {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
+    <AdminLayout me={me} onVoltarHub={onVoltarHub}>
+      <UsuariosPage />
+    </AdminLayout>
   )
 }
 

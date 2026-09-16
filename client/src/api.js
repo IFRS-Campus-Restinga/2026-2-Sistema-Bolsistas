@@ -43,3 +43,47 @@ export async function apiFetch(path, options = {}) {
 }
 
 export { SessaoExpiradaError }
+
+export async function getUsuarios() {
+  return apiFetch('/usuarios/')
+}
+
+export async function patchTipoArea(usuarioId, tipoArea) {
+  return apiFetch(`/usuarios/${usuarioId}/tipo-area/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tipo_area: tipoArea }),
+  })
+}
+
+export async function patchStatusUsuario(usuarioId, isActive) {
+  return apiFetch(`/usuarios/${usuarioId}/status/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: isActive }),
+  })
+}
+
+export async function getEmailsCoordenadores() {
+  return apiFetch('/emails-coordenadores/')
+}
+
+export async function postEmailCoordenador(email, tipoArea) {
+  return apiFetch('/emails-coordenadores/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, tipo_area: tipoArea }),
+  })
+}
+
+export async function patchEmailCoordenador(id, email, tipoArea) {
+  return apiFetch(`/emails-coordenadores/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, tipo_area: tipoArea }),
+  })
+}
+
+export async function deleteEmailCoordenador(id) {
+  return apiFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
+}
