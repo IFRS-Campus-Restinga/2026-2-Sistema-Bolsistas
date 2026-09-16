@@ -32,7 +32,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
       initials={initials}
     >
       <PageHeader
-        title="Dashboard Administrativo"
+        title="Painel Administrativo"
         action={
           <Button variant="outline" size="sm" onClick={() => (window.location.href = '/showcase')}>
             Ver Showcase

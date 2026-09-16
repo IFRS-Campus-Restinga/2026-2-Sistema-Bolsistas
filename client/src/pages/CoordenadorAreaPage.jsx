@@ -16,9 +16,15 @@ const menuItems = [
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
 ]
 
+const AREA_LABELS = {
+  EXTENSAO: 'Extensão',
+  PESQUISA: 'Pesquisa',
+  ENSINO: 'Ensino',
+}
+
 export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
-  const areaLabel = me.tipo_area || 'Área'
+  const areaLabel = AREA_LABELS[me.tipo_area] || me.tipo_area || 'Área'
 
   return (
     <Layout
@@ -31,10 +37,9 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
-      {active === 'editais' ? (
-        <EditaisPage />
-      ) : (
+      {active === 'editais' && <EditaisPage />}
+
+      {active === 'dashboard' && (
         <>
           <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -42,6 +47,13 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
             <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
             <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
           </div>
+        </>
+      )}
+
+      {active === 'projetos' && (
+        <>
+          <PageHeader title="Projetos" />
+          <p>Página ainda não implementada.</p>
         </>
       )}
     </Layout>
