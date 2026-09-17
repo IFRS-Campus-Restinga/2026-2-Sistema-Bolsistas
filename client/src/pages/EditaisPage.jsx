@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Badge, Button, DataTable, PageHeader, useConfirm, useToast } from '../components'
+import {
+  AcoesCell,
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  PageHeader,
+  useConfirm,
+  useToast,
+} from '../components'
 import EditalForm from './EditalForm'
 
 export default function EditaisPage() {
@@ -150,29 +159,26 @@ export default function EditaisPage() {
     >
       Documento oficial
     </a>,
-    <div key={`acoes-${edital.id}`} style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {['RASCUNHO', 'EM_VIGOR'].includes(edital.status) ? (
-        <>
-          <Button
-            size="sm"
-            disabled={processando || mostrarFormulario}
-            onClick={() => abrirEdicao(edital)}
-          >
-            Editar
-          </Button>
-          <Button
-            size="sm"
-            variant={edital.status === 'RASCUNHO' ? 'accent' : 'danger'}
-            disabled={processando || mostrarFormulario}
-            onClick={() => confirmarStatus(edital)}
-          >
-            {edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar'}
-          </Button>
-        </>
-      ) : (
-        'Sem ações disponíveis'
-      )}
-    </div>,
+    <AcoesCell
+      key={`acoes-${edital.id}`}
+      mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
+    >
+      <Button
+        size="sm"
+        disabled={processando || mostrarFormulario}
+        onClick={() => abrirEdicao(edital)}
+      >
+        Editar
+      </Button>
+      <Button
+        size="sm"
+        variant={edital.status === 'RASCUNHO' ? 'accent' : 'danger'}
+        disabled={processando || mostrarFormulario}
+        onClick={() => confirmarStatus(edital)}
+      >
+        {edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar'}
+      </Button>
+    </AcoesCell>,
   ])
 
   return (

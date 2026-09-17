@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
 import {
+  AcoesCell,
   Alert,
   Badge,
   Button,
@@ -168,19 +169,14 @@ function ListaProjetos({ onGerenciar }) {
   const linhas = projetos.map((projeto) => [
     projeto.titulo,
     <Badge key="status" status={projeto.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {projeto.status === 'ATIVO' && (
-        <div>
-          <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
-            Desligar
-          </Button>
-          <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
-            Gerenciar
-          </Button>
-        </div>
-      )}
-      {projeto.status === 'DESLIGADO' && <span> Sem ações </span>}
-    </div>,
+    <AcoesCell key="acoes" mostrar={projeto.status === 'ATIVO'}>
+      <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
+        Desligar
+      </Button>
+      <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
+        Gerenciar
+      </Button>
+    </AcoesCell>,
   ])
 
   return (
@@ -259,6 +255,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [form, setForm] = useState(BOLSA_INICIAL)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
+  const [avisoSemEditais, setAvisoSemEditais] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -296,6 +293,11 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   }, [projetoId])
 
   function abrirModalSolicitarBolsa() {
+    if (editais.length === 0) {
+      setAvisoSemEditais(true)
+      return
+    }
+    setAvisoSemEditais(false)
     setForm(BOLSA_INICIAL)
     setErroSalvar('')
     setModalAberto(true)
@@ -392,13 +394,11 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {podeCancelar(bolsa) && (
-        <Button size="sm" variant="danger" onClick={() => confirmarCancelarBolsa(bolsa)}>
-          Cancelar Bolsa
-        </Button>
-      )}
-    </div>,
+    <AcoesCell key="acoes" mostrar={podeCancelar(bolsa)}>
+      <Button size="sm" variant="danger" onClick={() => confirmarCancelarBolsa(bolsa)}>
+        Cancelar Bolsa
+      </Button>
+    </AcoesCell>,
   ])
 
   return (
@@ -428,6 +428,13 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
           </Button>
         }
       />
+
+      {avisoSemEditais && (
+        <Alert tone="warning">
+          Não há editais em vigor no momento — não é possível solicitar uma nova bolsa até que um
+          edital seja publicado.
+        </Alert>
+      )}
 
       <DataTable
         columns={['Edital', 'Tipo', 'Modalidade', 'Valor', 'Status', 'Ações']}

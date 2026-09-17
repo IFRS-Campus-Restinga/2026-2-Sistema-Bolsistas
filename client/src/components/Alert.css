@@ -28,3 +28,9 @@
   color: #15803d;
   border-color: #bbf7d0;
 }
+
+.alert--warning {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
