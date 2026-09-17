@@ -80,8 +80,10 @@ class AprovarBolsaView(APIView):
 
         if bolsa.status != StatusBolsa.SOLICITADA:
             raise ValidationError(
-                f'Esta bolsa está com status "{bolsa.get_status_display()}" e só pode ser '
-                'aprovada enquanto estiver "Solicitada".'
+                {
+                    "detail": f'Esta bolsa está com status "{bolsa.get_status_display()}" e só '
+                    'pode ser aprovada enquanto estiver "Solicitada".'
+                }
             )
 
         bolsa.status = StatusBolsa.ABERTA
@@ -107,8 +109,10 @@ class RejeitarBolsaView(APIView):
 
         if bolsa.status != StatusBolsa.SOLICITADA:
             raise ValidationError(
-                f'Esta bolsa está com status "{bolsa.get_status_display()}" e só pode ser '
-                'rejeitada enquanto estiver "Solicitada".'
+                {
+                    "detail": f'Esta bolsa está com status "{bolsa.get_status_display()}" e só '
+                    'pode ser rejeitada enquanto estiver "Solicitada".'
+                }
             )
 
         justificativa = (request.data.get("justificativa") or "").strip()
@@ -138,7 +142,7 @@ class CancelarBolsaView(APIView):
 
         if bolsa.status in STATUS_BLOQUEIAM_CANCELAMENTO:
             raise ValidationError(
-                f'Uma bolsa "{bolsa.get_status_display()}" não pode mais ser cancelada.'
+                {"detail": f'Uma bolsa "{bolsa.get_status_display()}" não pode mais ser cancelada.'}
             )
 
         bolsa.status = StatusBolsa.CANCELADA

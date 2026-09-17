@@ -258,7 +258,7 @@ export default function UsuariosPage() {
       )}
     </span>,
     <StatusBadge key="status" ativo={usuario.is_active} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       {usuario.role === 'COORDENADOR_AREA' && (
         <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(usuario)}>
           Editar
@@ -277,7 +277,7 @@ export default function UsuariosPage() {
   const rowsEmails = emails.map((entrada) => [
     entrada.email,
     tipoAreaLabel(entrada.tipo_area),
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(entrada)}>
         Editar
       </Button>

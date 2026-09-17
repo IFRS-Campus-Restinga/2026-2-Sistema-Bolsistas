@@ -142,9 +142,23 @@ function ListaProjetos({ onGerenciar }) {
           toast({ message: 'Projeto desligado com sucesso.', tone: 'success' })
         } else {
           const corpo = await res.json().catch(() => null)
+          const statusBloqueantes = corpo?.status_bloqueantes || []
+
           toast({
-            message: corpo?.detail || corpo?.non_field_errors?.[0] || 'Erro ao desligar projeto.',
+            message:
+              statusBloqueantes.length > 0 ? (
+                <span>
+                  Não é possível desligar: o projeto possui bolsa(s) com status{' '}
+                  {statusBloqueantes.map((s) => (
+                    <Badge key={s} status={s} />
+                  ))}
+                  .
+                </span>
+              ) : (
+                corpo?.detail || corpo?.non_field_errors?.[0] || 'Erro ao desligar projeto.'
+              ),
             tone: 'error',
+            duration: 6000,
           })
         }
       },
@@ -154,15 +168,18 @@ function ListaProjetos({ onGerenciar }) {
   const linhas = projetos.map((projeto) => [
     projeto.titulo,
     <Badge key="status" status={projeto.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
-      <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
-        Gerenciar
-      </Button>
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       {projeto.status === 'ATIVO' && (
-        <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
-          Desligar
-        </Button>
+        <div>
+          <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
+            Desligar
+          </Button>
+          <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
+            Gerenciar
+          </Button>
+        </div>
       )}
+      {projeto.status === 'DESLIGADO' && <span> Sem ações </span>}
     </div>,
   ])
 
@@ -355,8 +372,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   }
 
   if (carregando) return <p role="status">Carregando projeto...</p>
-  if (erro) return <Alert tone="error">{erro}</Alert>
-  if (!projeto) return null
+
+  if (erro || !projeto) {
+    return (
+      <>
+        <Button variant="outline" size="sm" onClick={onVoltar}>
+          <IconArrowLeft /> Voltar
+        </Button>
+        <Alert tone="error">{erro || 'Projeto não encontrado.'}</Alert>
+      </>
+    )
+  }
 
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
 
@@ -366,7 +392,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <div key="acoes">
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       {podeCancelar(bolsa) && (
         <Button size="sm" variant="danger" onClick={() => confirmarCancelarBolsa(bolsa)}>
           Cancelar Bolsa

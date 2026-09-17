@@ -53,10 +53,18 @@ class DesligarProjetoView(APIView):
         if projeto.coordenador_projeto.usuario_id != request.user.id:
             raise PermissionDenied("Você não é o coordenador deste projeto.")
 
-        if projeto.bolsas.filter(status__in=BOLSA_STATUS_BLOQUEIAM_DESLIGAMENTO).exists():
+        status_bloqueantes = list(
+            projeto.bolsas.filter(status__in=BOLSA_STATUS_BLOQUEIAM_DESLIGAMENTO)
+            .values_list("status", flat=True)
+            .distinct()
+        )
+        if status_bloqueantes:
             raise ValidationError(
-                "Só é possível desligar o projeto quando nenhuma bolsa estiver Aberta, "
-                "Em Seleção ou Preenchida."
+                {
+                    "detail": "Só é possível desligar o projeto quando nenhuma bolsa estiver "
+                    "Aberta, Em Seleção ou Preenchida.",
+                    "status_bloqueantes": status_bloqueantes,
+                }
             )
 
         projeto.status = StatusProjeto.DESLIGADO

@@ -47,7 +47,7 @@ class PublicarEditalView(APIView):
         )
 
         if edital.status != Edital.Status.RASCUNHO:
-            raise ValidationError("Somente editais em rascunho podem ser publicados.")
+            raise ValidationError({"detail": "Somente editais em rascunho podem ser publicados."})
 
         validar_cronograma({}, instance=edital, obrigatorio=True)
 
@@ -68,7 +68,7 @@ class EncerrarEditalView(APIView):
         )
 
         if edital.status != Edital.Status.EM_VIGOR:
-            raise ValidationError("Somente editais em vigor podem ser encerrados.")
+            raise ValidationError({"detail": "Somente editais em vigor podem ser encerrados."})
 
         edital.status = Edital.Status.ENCERRADO
         edital.save(update_fields=["status"])

@@ -116,7 +116,7 @@ export default function SolicitacoesBolsaPage() {
     bolsa.edital_nome,
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       {bolsa.status === 'SOLICITADA' && (
         <>
           <Button size="sm" variant="accent" onClick={() => confirmarAprovar(bolsa)}>
