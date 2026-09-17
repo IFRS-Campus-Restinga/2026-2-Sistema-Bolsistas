@@ -23,6 +23,7 @@ from server.views.index_view import index_view
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/hub/", include("hub_integration.urls")),
+    path("api/admin/", include("accounts.urls")),
     ## Pega todas as URLs que não foram tratadas por outras rotas, por isso deve ser a ultima SEMPRE.
     re_path(r"^.*$", index_view),
 ]
