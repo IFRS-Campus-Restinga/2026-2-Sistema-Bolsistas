@@ -570,7 +570,16 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       )}
 
       <DataTable
-        columns={['Edital', 'Tipo', 'Modalidade', 'Vagas', 'Valor', 'Status', 'Ações']}
+        columns={[
+          'Edital',
+          'Prazo para preenchimento de vagas',
+          'Tipo',
+          'Modalidade',
+          'Vagas',
+          'Valor',
+          'Status',
+          'Ações',
+        ]}
         rows={linhasBolsas}
         emptyMessage="Nenhuma bolsa solicitada para este projeto."
       />

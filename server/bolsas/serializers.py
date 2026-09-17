@@ -21,6 +21,9 @@ class BolsaSerializer(serializers.ModelSerializer):
     edital_link_documento_oficial = serializers.URLField(
         source="edital.link_documento_oficial", read_only=True
     )
+    edital_data_maxima_preenchimento_vagas = serializers.DateField(
+        source="edital.data_maxima_preenchimento_vagas", read_only=True
+    )
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
     minha_inscricao_status = serializers.SerializerMethodField()
     pode_editar = serializers.SerializerMethodField()
@@ -42,6 +45,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "edital",
             "edital_nome",
             "edital_link_documento_oficial",
+            "edital_data_maxima_preenchimento_vagas",
             "minha_inscricao_status",
             "pode_editar",
             "pode_editar_etapas",
