@@ -149,11 +149,7 @@ export default function SolicitarBolsaPage({ me, initials, onVoltarHub }) {
 
           <div className="solicitar-bolsa__row">
             <FormField label="Modalidade">
-              <Select
-                value={modalidade}
-                onChange={(e) => setModalidade(e.target.value)}
-                required
-              >
+              <Select value={modalidade} onChange={(e) => setModalidade(e.target.value)} required>
                 <option value="">Selecione a modalidade</option>
                 {MODALIDADES.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -220,7 +216,11 @@ export default function SolicitarBolsaPage({ me, initials, onVoltarHub }) {
           </div>
 
           <FormActions>
-            <Button variant="outline" onClick={() => navigate('/coordenador-projeto')} disabled={enviando}>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/coordenador-projeto')}
+              disabled={enviando}
+            >
               Cancelar
             </Button>
             <Button variant="accent" type="submit" disabled={enviando}>

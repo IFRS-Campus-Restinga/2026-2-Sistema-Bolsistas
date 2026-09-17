@@ -33,6 +33,8 @@ export { FormField, FormActions, TextInput, TextArea, Select, FileField } from '
 export { Modal } from './Modal'
 export { ConfirmProvider } from './Confirm'
 export { useConfirm } from './useConfirm'
+export { ToastProvider } from './Toast'
+export { useToast } from './useToast'
 
 // Rotas (#182)
 export { default as ProtectedRoute } from './ProtectedRoute'

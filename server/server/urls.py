@@ -23,6 +23,8 @@ from server.views.index_view import index_view
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/hub/", include("hub_integration.urls")),
+    path("api/admin/", include("accounts.urls")),
+    ## Pega todas as URLs que não foram tratadas por outras rotas, por isso deve ser a ultima SEMPRE.
     path("api/editais/", include("editais.urls")),
     path("api/bolsas/", include("bolsas.urls")),
     ## A rota que entrega o React deve permanecer por último.
