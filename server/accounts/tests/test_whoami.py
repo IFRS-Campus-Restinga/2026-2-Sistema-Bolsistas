@@ -14,8 +14,8 @@ class WhoamiTests(TestCase):
         return self.client.get("/api/hub/whoami/")
 
     def test_sem_cookie_nao_autentica(self):
-        resposta = self.client.get("/api/hub/whoami/")
-        self.assertEqual(resposta.status_code, 401)
+        response = self.client.get("/api/hub/whoami/")
+        self.assertEqual(response.status_code, 401)
 
     @patch("accounts.authentication.fetch_hub_user_data")
     def test_primeiro_acesso_aluno_cria_usuario_e_perfil(self, mock_fetch):
@@ -25,10 +25,10 @@ class WhoamiTests(TestCase):
             "access_profile": "aluno",
         }
 
-        resposta = self._whoami(ALUNO_ID, groups=["user"])
+        response = self._whoami(ALUNO_ID, groups=["user"])
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json()["role"], "ALUNO")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["role"], "ALUNO")
         self.assertTrue(Aluno.objects.filter(usuario_id=ALUNO_ID).exists())
 
     @patch("accounts.authentication.fetch_hub_user_data")
@@ -39,9 +39,9 @@ class WhoamiTests(TestCase):
             "access_profile": "servidor",
         }
 
-        resposta = self._whoami(SERVIDOR_ID, groups=["user"])
+        response = self._whoami(SERVIDOR_ID, groups=["user"])
 
-        self.assertEqual(resposta.json()["role"], "COORDENADOR_PROJETO")
+        self.assertEqual(response.json()["role"], "COORDENADOR_PROJETO")
 
     @patch("accounts.authentication.fetch_hub_user_data")
     def test_servidor_com_email_configurado_vira_coordenador_area(self, mock_fetch):
@@ -52,10 +52,10 @@ class WhoamiTests(TestCase):
         }
 
         EmailCoordenadorArea.objects.create(email="coord.ensino@ifrs.edu.br", tipo_area="ENSINO")
-        resposta = self._whoami(SERVIDOR_ID, groups=["user"])
+        response = self._whoami(SERVIDOR_ID, groups=["user"])
 
-        self.assertEqual(resposta.json()["role"], "COORDENADOR_AREA")
-        self.assertEqual(resposta.json()["tipo_area"], "ENSINO")
+        self.assertEqual(response.json()["role"], "COORDENADOR_AREA")
+        self.assertEqual(response.json()["tipo_area"], "ENSINO")
 
     @patch("accounts.authentication.fetch_hub_user_data")
     def test_convidado_nao_tem_papel(self, mock_fetch):
@@ -63,9 +63,9 @@ class WhoamiTests(TestCase):
 
         mock_fetch.return_value = {"email": None, "username": "", "access_profile": "convidado"}
 
-        resposta = self._whoami(uuid.uuid4(), groups=[])
+        response = self._whoami(uuid.uuid4(), groups=[])
 
-        self.assertEqual(resposta.status_code, 401)
+        self.assertEqual(response.status_code, 401)
 
     @patch("accounts.authentication.fetch_hub_user_data")
     def test_hub_fora_do_ar_mantem_role_ja_conhecido(self, mock_fetch):
@@ -77,7 +77,7 @@ class WhoamiTests(TestCase):
         self._whoami(ALUNO_ID, groups=["user"])
 
         mock_fetch.return_value = None
-        resposta = self._whoami(ALUNO_ID, groups=["user"])
+        response = self._whoami(ALUNO_ID, groups=["user"])
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json()["role"], "ALUNO")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["role"], "ALUNO")
