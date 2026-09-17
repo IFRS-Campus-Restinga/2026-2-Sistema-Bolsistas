@@ -58,6 +58,10 @@ export function bolsasFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/bolsas`, path, options)
 }
 
+export function projetosFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/projetos`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

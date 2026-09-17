@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsCoordenadorArea
+from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 
 from .models import Edital
 from .serializers import CronogramaEditalSerializer, EditalSerializer, validar_cronograma
@@ -15,7 +15,11 @@ from .serializers import CronogramaEditalSerializer, EditalSerializer, validar_c
 class EditalListCreateView(generics.ListCreateAPIView):
     queryset = Edital.objects.order_by("-id")
     serializer_class = EditalSerializer
-    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), IsCoordenadorArea()]
+        return [IsAuthenticated(), (IsCoordenadorProjeto | IsCoordenadorArea)()]
 
 
 class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):

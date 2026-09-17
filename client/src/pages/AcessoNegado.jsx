@@ -8,9 +8,9 @@ export default function AcessoNegado({ mensagem }) {
       <div className="acesso-negado__card">
         <h1 className="acesso-negado__title">Acesso negado</h1>
         <p className="acesso-negado__message">
-          {mensagem}
-          <br />
-          Você não está logado ou sua sessão expirou, por favor, faça login novamente via HUB.
+          {mensagem
+            ? mensagem
+            : 'Você não está logado ou sua sessão expirou, por favor, faça login novamente via HUB.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
           <Button variant="accent" onClick={() => (window.location.href = HUB_FRONTEND)}>

@@ -27,11 +27,19 @@ export function AuthProvider({ children }) {
       .then(async (res) => {
         if (!res.ok) {
           const corpo = await res.json().catch(() => null)
-          throw new Error(corpo?.detail || '')
+          throw new Error(corpo?.detail || 'Não autenticado — acesse este sistema a partir do HUB.')
         }
         setMe(await res.json())
       })
-      .catch(() => setErro(''))
+      .catch((e) => {
+        if (e.message === 'Failed to fetch') {
+          setErro('Não foi possível conectar ao servidor. Verifique se o sistema está online.')
+        } else if (e.name === 'SessaoExpiradaError') {
+          setErro('Sua sessão expirou. Faça login novamente pelo HUB.')
+        } else {
+          setErro(e.message)
+        }
+      })
       .finally(() => setCarregando(false))
   }, [])
 

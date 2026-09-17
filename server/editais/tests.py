@@ -84,7 +84,7 @@ class EditalAPITests(APITestCase):
 
         self.assertFalse(Edital.objects.exists())
 
-    def test_outros_perfis_nao_podem_listar_nem_cadastrar(self):
+    def test_outros_perfis_nao_podem_cadastrar(self):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
@@ -100,7 +100,6 @@ class EditalAPITests(APITestCase):
                 )
                 self.client.force_authenticate(user=usuario)
 
-                resposta_get = self.client.get(self.url)
                 resposta_post = self.client.post(
                     self.url,
                     self.dados,
@@ -108,15 +107,38 @@ class EditalAPITests(APITestCase):
                 )
 
                 self.assertEqual(
-                    resposta_get.status_code,
-                    status.HTTP_403_FORBIDDEN,
-                )
-                self.assertEqual(
                     resposta_post.status_code,
                     status.HTTP_403_FORBIDDEN,
                 )
 
         self.assertFalse(Edital.objects.exists())
+
+    def test_aluno_e_administrador_nao_podem_listar(self):
+        for perfil in [Usuario.Role.ALUNO, Usuario.Role.ADMINISTRADOR]:
+            with self.subTest(perfil=perfil):
+                usuario = Usuario.objects.create_user(
+                    username=f"teste_{perfil}",
+                    email=f"teste_{perfil.lower()}@example.com",
+                    role=perfil,
+                )
+                self.client.force_authenticate(user=usuario)
+
+                resposta_get = self.client.get(self.url)
+
+                self.assertEqual(resposta_get.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_coordenador_projeto_pode_listar_para_escolher_edital_ao_solicitar_bolsa(self):
+        Edital.objects.create(**self.dados, status=Edital.Status.EM_VIGOR)
+        coordenador_projeto = Usuario.objects.create_user(
+            username="coord_projeto_teste",
+            email="coord.projeto.teste@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        self.client.force_authenticate(user=coordenador_projeto)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
 
     def test_visitante_nao_pode_listar_nem_cadastrar(self):
         resposta_get = self.client.get(self.url)

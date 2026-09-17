@@ -9,11 +9,12 @@ import {
   IconUsers,
 } from '../components'
 import EditaisPage from './EditaisPage'
+import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
+  { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
 ]
 
 const AREA_LABELS = {
@@ -50,12 +51,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
         </>
       )}
 
-      {active === 'projetos' && (
-        <>
-          <PageHeader title="Projetos" />
-          <p>Página ainda não implementada.</p>
-        </>
-      )}
+      {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
     </Layout>
   )
 }

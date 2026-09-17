@@ -11,7 +11,6 @@ import AdministradorPage from './pages/AdministradorPage'
 import AlunoPage from './pages/AlunoPage'
 import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
 import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
-import SolicitarBolsaPage from './pages/SolicitarBolsaPage'
 
 import './styles/global.css'
 
@@ -93,15 +92,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/coordenador-projeto/solicitar-bolsa"
-        element={
-          <ProtectedRoute roles={['COORDENADOR_PROJETO']}>
-            <PageWrapper Component={SolicitarBolsaPage} />
-          </ProtectedRoute>
-        }
-      />
-
       {/* Qualquer outra rota → redireciona por role */}
       <Route path="*" element={<RedirecionaPorRole />} />
     </Routes>
