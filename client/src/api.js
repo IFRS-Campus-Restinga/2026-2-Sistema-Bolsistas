@@ -3,6 +3,7 @@ const HUB_HOST = import.meta.env.VITE_HUB_HOST
 const HUB_FRONTEND_HOST = import.meta.env.VITE_HUB_FRONTEND_HOST
 
 export const API_BASE = `${DJANGO_HOST}/api/hub`
+export const ADMIN_BASE = `${DJANGO_HOST}/api/admin`
 export const HUB_BASE = HUB_HOST
 export const HUB_FRONTEND = HUB_FRONTEND_HOST
 
@@ -27,8 +28,8 @@ async function refreshHubSession() {
   return res.ok
 }
 
-export async function apiFetch(path, options = {}) {
-  const doFetch = () => fetch(`${API_BASE}${path}`, { ...options, credentials: 'include' })
+async function fetchWithRefresh(base, path, options = {}) {
+  const doFetch = () => fetch(`${base}${path}`, { ...options, credentials: 'include' })
 
   let res = await doFetch()
 
@@ -42,14 +43,22 @@ export async function apiFetch(path, options = {}) {
   return res
 }
 
+export async function apiFetch(path, options = {}) {
+  return fetchWithRefresh(API_BASE, path, options)
+}
+
+async function adminFetch(path, options = {}) {
+  return fetchWithRefresh(ADMIN_BASE, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {
-  return apiFetch('/usuarios/')
+  return adminFetch('/usuarios/')
 }
 
 export async function patchTipoArea(usuarioId, tipoArea) {
-  return apiFetch(`/usuarios/${usuarioId}/tipo-area/`, {
+  return adminFetch(`/usuarios/${usuarioId}/tipo-area/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tipo_area: tipoArea }),
@@ -57,7 +66,7 @@ export async function patchTipoArea(usuarioId, tipoArea) {
 }
 
 export async function patchStatusUsuario(usuarioId, isActive) {
-  return apiFetch(`/usuarios/${usuarioId}/status/`, {
+  return adminFetch(`/usuarios/${usuarioId}/status/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ is_active: isActive }),
@@ -65,11 +74,11 @@ export async function patchStatusUsuario(usuarioId, isActive) {
 }
 
 export async function getEmailsCoordenadores() {
-  return apiFetch('/emails-coordenadores/')
+  return adminFetch('/emails-coordenadores/')
 }
 
 export async function postEmailCoordenador(email, tipoArea) {
-  return apiFetch('/emails-coordenadores/', {
+  return adminFetch('/emails-coordenadores/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, tipo_area: tipoArea }),
@@ -77,7 +86,7 @@ export async function postEmailCoordenador(email, tipoArea) {
 }
 
 export async function patchEmailCoordenador(id, email, tipoArea) {
-  return apiFetch(`/emails-coordenadores/${id}/`, {
+  return adminFetch(`/emails-coordenadores/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, tipo_area: tipoArea }),
@@ -85,5 +94,5 @@ export async function patchEmailCoordenador(id, email, tipoArea) {
 }
 
 export async function deleteEmailCoordenador(id) {
-  return apiFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
+  return adminFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
 }

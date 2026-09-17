@@ -9,6 +9,8 @@ import {
   DataTable,
   PageHeader,
 } from '../../components'
+import { useConfirm } from '../../components/useConfirm'
+import { useToast } from '../../components/useToast'
 import {
   deleteEmailCoordenador,
   getEmailsCoordenadores,
@@ -47,6 +49,8 @@ function StatusBadge({ ativo }) {
 // ─── página principal ─────────────────────────────────────────────────────────
 
 export default function UsuariosPage() {
+  const confirm = useConfirm()
+  const toast = useToast()
   // usuários
   const [usuarios, setUsuarios] = useState([])
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(true)
@@ -112,15 +116,29 @@ export default function UsuariosPage() {
     setUsuarioSelecionado(null)
   }
 
-  const alternarStatus = async (usuario) => {
+  const alternarStatus = (usuario) => {
     const novoStatus = !usuario.is_active
-    const acao = novoStatus ? 'ativar' : 'desativar'
-    if (!confirm(`Deseja ${acao} ${usuario.nome || usuario.email}?`)) return
-    const res = await patchStatusUsuario(usuario.id, novoStatus)
-    if (res.ok) {
-      const atualizado = await res.json()
-      setUsuarios((prev) => prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual)))
-    }
+    confirm({
+      title: novoStatus ? 'Ativar usuário' : 'Desativar usuário',
+      message: `Deseja ${novoStatus ? 'ativar' : 'desativar'} ${usuario.nome || usuario.email}?`,
+      tone: novoStatus ? 'accent' : 'danger',
+      confirmLabel: novoStatus ? 'Ativar' : 'Desativar',
+      onConfirm: async () => {
+        const res = await patchStatusUsuario(usuario.id, novoStatus)
+        if (res.ok) {
+          const atualizado = await res.json()
+          setUsuarios((prev) =>
+            prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual))
+          )
+          toast({
+            message: `Usuário ${novoStatus ? 'ativado' : 'desativado'} com sucesso.`,
+            tone: 'success',
+          })
+        } else {
+          toast({ message: 'Erro ao alterar status do usuário.', tone: 'error' })
+        }
+      },
+    })
   }
 
   const salvarUsuario = async () => {
@@ -142,6 +160,7 @@ export default function UsuariosPage() {
         )
       )
       fecharModalUsuario()
+      toast({ message: 'Tipo de área atualizado com sucesso.', tone: 'success' })
     } catch (erro) {
       setErroSalvarUsuario(erro.message)
     } finally {
@@ -194,6 +213,12 @@ export default function UsuariosPage() {
       )
       carregarUsuarios()
       fecharModalEmail()
+      toast({
+        message: emailSelecionado
+          ? 'E-mail atualizado com sucesso.'
+          : 'E-mail adicionado com sucesso.',
+        tone: 'success',
+      })
     } catch (erro) {
       setErroSalvarEmail(erro.message)
     } finally {
@@ -201,16 +226,24 @@ export default function UsuariosPage() {
     }
   }
 
-  const removerEmail = async (entrada) => {
-    if (!confirm(`Remover ${entrada.email}?`)) return
-    const res = await deleteEmailCoordenador(entrada.id)
-    if (res.ok) {
-      setEmails((prev) => prev.filter((item) => item.id !== entrada.id))
-      carregarUsuarios()
-    } else {
-      const body = await res.json().catch(() => null)
-      alert(body?.detail || 'Erro ao remover e-mail.')
-    }
+  const removerEmail = (entrada) => {
+    confirm({
+      title: 'Remover e-mail',
+      message: `Remover ${entrada.email} da lista de coordenadores?`,
+      tone: 'danger',
+      confirmLabel: 'Remover',
+      onConfirm: async () => {
+        const res = await deleteEmailCoordenador(entrada.id)
+        if (res.ok) {
+          setEmails((prev) => prev.filter((item) => item.id !== entrada.id))
+          carregarUsuarios()
+          toast({ message: 'E-mail removido com sucesso.', tone: 'success' })
+        } else {
+          const body = await res.json().catch(() => null)
+          toast({ message: body?.detail || 'Erro ao remover e-mail.', tone: 'error' })
+        }
+      },
+    })
   }
 
   const rowsUsuarios = usuarios.map((usuario) => [

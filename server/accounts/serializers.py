@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 
 from .models import CoordenadorArea, EmailCoordenadorArea, TipoArea, Usuario
 
@@ -29,6 +30,16 @@ class CoordenadorAreaTipoSerializer(serializers.ModelSerializer):
 
 
 class EmailCoordenadorAreaSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        validators=[
+            UniqueValidator(
+                queryset=EmailCoordenadorArea.objects.all(),
+                lookup="iexact",
+                message="Este e-mail já está cadastrado como Coordenador de Área.",
+            )
+        ]
+    )
+
     class Meta:
         model = EmailCoordenadorArea
         fields = ["id", "email", "tipo_area"]

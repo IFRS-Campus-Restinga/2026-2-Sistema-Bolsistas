@@ -1,56 +1,90 @@
-# Integração com o HUB
+# Setup local — integração com o HUB
 
-O Sistema de Bolsistas não tem login próprio — a autenticação é delegada ao HUB de Sistemas. Esta página explica como a integração funciona e como configurar o ambiente.
+Guia pra rodar o backend do Sistema de Bolsistas localmente já autenticando via HUB. Não cobre a lógica/arquitetura da integração (isso está no código, em `server/accounts` e `server/hub_integrations`), só os passos pra deixar o ambiente funcionando.
 
-## Como funciona
+## 1. Suba o HUB localmente primeiro
 
-1. O usuário acessa o Sistema de Bolsistas a partir do HUB, que injeta um cookie JWT assinado (`access_token`).
-2. A cada requisição, `HubJWTAuthentication` (em `accounts/authentication.py`) decodifica o JWT usando a mesma `SECRET_KEY` configurada no HUB.
-3. O token contém `user_id` e `groups`. Com isso, o sistema:
-   - Busca dados complementares do usuário na API do HUB (`/api/users/get/<id>/`) — e-mail, nome, `access_profile`.
-   - Resolve a `role` local (`ADMINISTRADOR`, `ALUNO`, `COORDENADOR_PROJETO`, `COORDENADOR_AREA`).
-   - Cria ou atualiza o registro `Usuario` e o perfil correspondente no banco local.
-4. A `role` é determinada assim:
+O Sistema de Bolsistas depende do HUB rodando (é ele quem cuida do login). Siga o setup do repositório `sistemas` (branch `staging`), via Dev Containers do VS Code,  backend em `http://localhost:8000`, front em `http://localhost:3000`.
 
-   | Condição no HUB                            | Role local          |
-   |--------------------------------------------|---------------------|
-   | grupo `admin`                              | `ADMINISTRADOR`     |
-   | `access_profile = aluno`                   | `ALUNO`             |
-   | `access_profile = servidor` + e-mail na lista `EmailCoordenadorArea` | `COORDENADOR_AREA` |
-   | `access_profile = servidor` (sem e-mail na lista) | `COORDENADOR_PROJETO` |
+### Credencial do Google OAuth (necessária pra logar no HUB)
 
-## Variáveis de ambiente
+O login do HUB é só via Google, cada pessoa rodando o HUB localmente precisa da própria credencial (o Client ID de produção só libera o domínio real, não `localhost`):
 
-Copie `server/.env.example` para `server/.env` e preencha:
+1. Copie `sistemas/backend/.env.example` para `sistemas/backend/.env`, e `sistemas/frontend/.env.example` para `sistemas/frontend/.env`
+2. Acesse [console.cloud.google.com](https://console.cloud.google.com) → **APIs e Serviços → Credenciais**.
+3. **Criar credenciais → ID do cliente OAuth** → tipo **Aplicativo da Web**.
+4. Em **Origens JavaScript autorizadas**, adicione:
+   - `http://localhost:3000` (HUB rodando via Dev Containers)
+   - `http://localhost:5173` (se algum dia rodar o front do HUB com `npm run dev` em vez de Dev Containers)
+5. Em **URIs de redirecionamento autorizados**, adicione:
+   - `http://localhost:8000/django-admin/google-callback/`
+6. Copie o **Client ID** gerado (formato `algo.apps.googleusercontent.com`) — não precisa do Client Secret pro login normal.
+7. Cole esse Client ID em **dois lugares** do HUB: `sistemas/backend/.env` (`GOOGLE_OAUTH2_CLIENT_ID`) e `sistemas/frontend/.env` (`VITE_GOOGLE_OAUTH2_CLIENT_ID`).
 
-| Variável | Descrição |
-|---|---|
-| `SECRET_KEY` | **Deve ser igual** à `SECRET_KEY` do HUB — é usada para assinar/verificar o JWT |
-| `HUB_BASE_URL` | URL base do HUB (ex: `http://localhost:8000`) |
-| `HUB_SYSTEM_ID` | ID deste sistema registrado no HUB |
-| `HUB_SYSTEM_API_KEY` | Chave de API para chamadas servidor-a-servidor |
-| `HUB_SYSTEM_SECRET_KEY` | Chave secreta do sistema no HUB |
-| `AUTH_COOKIE_NAME` | Nome do cookie JWT (padrão: `access_token`) |
+Confirme que subiu antes de continuar: acesse `http://localhost:3000` e logue com sua conta Google.
 
-## Login de teste (só em desenvolvimento)
+## 2. Instale as dependências do backend
 
-Com `DEBUG=True`, estão disponíveis endpoints para simular login sem o HUB:
-
-```
-POST /api/hub/dev/login/admin/
-POST /api/hub/dev/login/aluno/
-POST /api/hub/dev/login/coordenador-projeto/
-POST /api/hub/dev/login/coordenador-area/
-
-POST /api/hub/dev/logout/
+```powershell
+cd server
+pip install -r requirements-dev.txt
 ```
 
-Cada chamada cria um usuário fictício no banco e seta o cookie `access_token`. O coordenador de área de teste recebe `tipo_area = EXTENSAO` por padrão (definido em `hub_integration/dev_auth.py`).
+## 3. Configure o `.env`
 
-> Esses endpoints retornam 404 em produção (`DEBUG=False`).
+Copie `server/.env.example` pra `servers/.env` e preencha:
 
-## Coordenadores de Área
+### `SECRET_KEY`
 
-A lista de e-mails que concede a role `COORDENADOR_AREA` é gerenciada pelo administrador no painel em **Usuários → E-mails de Coordenadores de Área**. Qualquer servidor cujo e-mail conste nessa lista receberá a role e o `tipo_area` correspondente automaticamente no login.
+Essa é a chave que assina/valida o JWT, **precisa ser exatamente igual nos dois lados** (`.env` do HUB e `.env` do Sistema de Bolsistas). Não é uma chave que cada sistema gera a sua; é uma única chave, compartilhada, copiada nos dois arquivos.
 
-Se o e-mail for removido da lista, o usuário é rebaixado para `COORDENADOR_PROJETO` imediatamente (sem precisar fazer logout/login).
+Passo a passo:
+
+1. O `.env.example` do HUB só traz um texto de exemplo tipo `your-secret-key-here-change-in-production`, não uma chave de verdade → você precisa gerar uma chave nova e colocar **nos dois `.env`** (HUB e Sistema de Bolsistas, o mesmo valor nos dois).
+
+2. **Como gerar uma chave nova.** Duas opções, tanto faz qual:
+
+   **Opção A: deixar o Django gerar uma aleatória de verdade** (recomendado, já sai no formato que o Django espera):
+   ```powershell
+   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   ```
+   Isso imprime uma string tipo `k9x!2mz8...`. Copie ela inteira.
+
+   **Opção B: digitar algo aleatório na mão**, se não quiser rodar comando nenhum: qualquer string longa, misturando letras, números e símbolos, serve. Não existe validação de formato pois em dev local não tem tanto risco.
+
+3. **Cole o mesmo valor gerado (Opção A ou B) em `SECRET_KEY` nos dois arquivos**: `sistemas/backend/.env` e `server/.env` (deste projeto).
+
+### Resto das variáveis
+
+- **`AUTH_COOKIE_NAME`, `REFRESH_COOKIE_NAME`**, mesmos valores do `.env` do HUB (os defaults do `.env.example` já batem com o padrão do HUB, normalmente não precisa mudar nada aqui).
+- **`HUB_BASE_URL`**: `http://localhost:8000` em dev local.
+- **`HUB_SYSTEM_API_KEY`**: só se consegue depois do passo 4 (mais abaixo).
+
+## 4. Cadastre o Sistema de Bolsistas no seu HUB local
+
+Cada pessoa que rodar o HUB localmente precisa cadastrar o sistema de novo (o `api_key` não é compartilhado entre ambientes).
+
+1. Logado como admin no front do HUB (`localhost:3000`), abra o menu **Sistemas** → **+**.
+2. Preencha: Nome = `Sistema de Bolsistas`, URL do sistema = `http://localhost:8001`, Secret Key = qualquer valor, Estado atual = `Em desenvolvimento`, Ativo.
+3. **Equipe de desenvolvimento**: exige pelo menos 1 usuário com perfil `aluno`. Se não tiver nenhum, crie um rapidinho pelo shell do HUB:
+   ```powershell
+   docker exec -it hub-sistemas-ifrs-backend-1 python manage.py shell -c "
+   from hub_users.services.user_service import UserService
+   u, _ = UserService.create_user({'email': 'aluno.teste@example.com', 'first_name': 'Aluno', 'last_name': 'Teste', 'access_profile': 'aluno'})
+   u.is_active = True; u.save()
+   "
+   ```
+4. Depois de cadastrar, clique nos "..." do card do sistema criado e selecione "detalhes", ele mostra **ID do sistema** e **Chave de API do sistema**. Copie a Chave de API pra `HUB_SYSTEM_API_KEY` no `.env` do Sistema de Bolsistas.
+
+## 5. Rode as migrations e suba o servidor
+
+```powershell
+python manage.py migrate
+python manage.py runserver 8001
+```
+
+Acesse sempre como **`http://localhost:8001`**, nunca `127.0.0.1:8001` — os cookies do HUB são host-only e ficam presos ao host exato usado no login (`localhost`). Usar `127.0.0.1` faz o navegador não mandar o cookie, e a autenticação parece simplesmente não funcionar.
+
+## 6. Teste o fluxo completo
+
+1. Já logado no HUB (`localhost:3000`), vá em **Sistemas** e clique no card do **Sistema de Bolsistas**.
