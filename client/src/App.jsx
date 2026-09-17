@@ -1,102 +1,109 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthProvider'
+import { useAuth } from './contexts/useAuth'
+import { hubHomeUrlPara } from './api'
+import ProtectedRoute from './components/ProtectedRoute'
 
-function App() {
-  const [count, setCount] = useState(0)
+import Showcase from './pages/Showcase'
+import AcessoNegado from './pages/AcessoNegado'
+import SemPermissao from './pages/SemPermissao'
+import AdministradorPage from './pages/AdministradorPage'
+import AlunoPage from './pages/AlunoPage'
+import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
+import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
+
+import './styles/global.css'
+
+function RedirecionaPorRole() {
+  const { me, carregando } = useAuth()
+
+  if (carregando) return null
+  if (!me) return <Navigate to="/acesso-negado" replace />
+
+  const rotas = {
+    ADMINISTRADOR: '/administrador',
+    ALUNO: '/aluno',
+    COORDENADOR_AREA: '/coordenador-area',
+    COORDENADOR_PROJETO: '/coordenador-projeto',
+  }
+
+  return <Navigate to={rotas[me.role] || '/acesso-negado'} replace />
+}
+
+function PageWrapper({ Component }) {
+  const { me, initials } = useAuth()
+
+  const onVoltarHub = () => {
+    window.location.href = hubHomeUrlPara(me.role)
+  }
+
+  return <Component me={me} initials={initials} onVoltarHub={onVoltarHub} />
+}
+
+function AppRoutes() {
+  const { erro } = useAuth()
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button type="button" className="counter" onClick={() => setCount((count) => count + 1)}>
-          Count is {count}
-        </button>
-      </section>
+    <Routes>
+      {/* Públicas */}
+      <Route path="/showcase" element={<Showcase />} />
+      <Route path="/acesso-negado" element={<AcessoNegado mensagem={erro} />} />
+      <Route path="/sem-permissao" element={<SemPermissao />} />
 
-      <div className="ticks"></div>
+      {/* Raiz → redireciona por role */}
+      <Route path="/" element={<RedirecionaPorRole />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg className="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg className="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg className="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg className="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {/* Administrador */}
+      <Route
+        path="/administrador"
+        element={
+          <ProtectedRoute roles={['ADMINISTRADOR']}>
+            <PageWrapper Component={AdministradorPage} />
+          </ProtectedRoute>
+        }
+      />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {/* Aluno */}
+      <Route
+        path="/aluno"
+        element={
+          <ProtectedRoute roles={['ALUNO']}>
+            <PageWrapper Component={AlunoPage} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Coordenador de Área */}
+      <Route
+        path="/coordenador-area"
+        element={
+          <ProtectedRoute roles={['COORDENADOR_AREA']}>
+            <PageWrapper Component={CoordenadorAreaPage} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Coordenador de Projeto */}
+      <Route
+        path="/coordenador-projeto"
+        element={
+          <ProtectedRoute roles={['COORDENADOR_PROJETO']}>
+            <PageWrapper Component={CoordenadorProjetoPage} />
+          </ProtectedRoute>
+        }
+      />
+      {/* Qualquer outra rota → redireciona por role */}
+      <Route path="*" element={<RedirecionaPorRole />} />
+    </Routes>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}

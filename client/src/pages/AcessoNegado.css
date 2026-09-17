@@ -1,0 +1,39 @@
+/* ── Acesso Negado ──────────────────────────────────────────── */
+
+.acesso-negado {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #f8f9fa;
+}
+
+.acesso-negado__card {
+  text-align: center;
+  background: #fff;
+  padding: 48px 40px;
+  border-radius: 16px;
+  border: 1px solid #f3f4f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  max-width: 400px;
+  width: 100%;
+}
+
+.acesso-negado__icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.acesso-negado__title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.acesso-negado__message {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}

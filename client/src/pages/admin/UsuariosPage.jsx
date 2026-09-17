@@ -1,0 +1,424 @@
+import { useEffect, useState } from 'react'
+import {
+  Alert,
+  Modal,
+  Button,
+  FormField,
+  TextInput,
+  Select,
+  FormActions,
+  DataTable,
+  PageHeader,
+} from '../../components'
+import { useConfirm } from '../../components/useConfirm'
+import { useToast } from '../../components/useToast'
+import {
+  deleteEmailCoordenador,
+  getEmailsCoordenadores,
+  getUsuarios,
+  patchEmailCoordenador,
+  patchStatusUsuario,
+  patchTipoArea,
+  postEmailCoordenador,
+} from '../../api'
+
+const ROLE_LABEL = {
+  ADMINISTRADOR: 'Administrador',
+  COORDENADOR_AREA: 'Coordenador de Área',
+  COORDENADOR_PROJETO: 'Coordenador de Projeto',
+  ALUNO: 'Aluno',
+}
+
+const TIPO_AREA_OPTIONS = [
+  { value: 'ENSINO', label: 'Ensino' },
+  { value: 'PESQUISA', label: 'Pesquisa' },
+  { value: 'EXTENSAO', label: 'Extensão' },
+]
+
+function tipoAreaLabel(value) {
+  return TIPO_AREA_OPTIONS.find((opcao) => opcao.value === value)?.label || value
+}
+
+function StatusBadge({ ativo }) {
+  return (
+    <span className={`badge ${ativo ? 'badge--green' : 'badge--red'}`}>
+      {ativo ? 'Ativo' : 'Inativo'}
+    </span>
+  )
+}
+
+// ─── página principal ─────────────────────────────────────────────────────────
+
+export default function UsuariosPage() {
+  const confirm = useConfirm()
+  const toast = useToast()
+  // usuários
+  const [usuarios, setUsuarios] = useState([])
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState(true)
+  const [erroUsuarios, setErroUsuarios] = useState(null)
+
+  // modal editar usuário
+  const [modalUsuarioAberto, setModalUsuarioAberto] = useState(false)
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState(null)
+  const [tipoAreaEditado, setTipoAreaEditado] = useState('')
+  const [salvandoUsuario, setSalvandoUsuario] = useState(false)
+  const [erroSalvarUsuario, setErroSalvarUsuario] = useState(null)
+
+  // e-mails de coordenadores
+  const [emails, setEmails] = useState([])
+  const [carregandoEmails, setCarregandoEmails] = useState(true)
+  const [erroEmails, setErroEmails] = useState(null)
+
+  // modal add/editar e-mail
+  const [modalEmailAberto, setModalEmailAberto] = useState(false)
+  const [emailSelecionado, setEmailSelecionado] = useState(null) // null = novo
+  const [emailEditado, setEmailEditado] = useState('')
+  const [tipoAreaEmailEditado, setTipoAreaEmailEditado] = useState('')
+  const [salvandoEmail, setSalvandoEmail] = useState(false)
+  const [erroSalvarEmail, setErroSalvarEmail] = useState(null)
+
+  useEffect(() => {
+    carregarUsuarios()
+    carregarEmails()
+  }, [])
+
+  function carregarUsuarios() {
+    setCarregandoUsuarios(true)
+    getUsuarios()
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Erro ao carregar usuários')
+        setUsuarios(await res.json())
+      })
+      .catch((erro) => setErroUsuarios(erro.message))
+      .finally(() => setCarregandoUsuarios(false))
+  }
+
+  function carregarEmails() {
+    setCarregandoEmails(true)
+    getEmailsCoordenadores()
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Erro ao carregar e-mails')
+        setEmails(await res.json())
+      })
+      .catch((erro) => setErroEmails(erro.message))
+      .finally(() => setCarregandoEmails(false))
+  }
+
+  // ── modal usuário ──
+  const abrirModalUsuario = (usuario) => {
+    setUsuarioSelecionado(usuario)
+    setTipoAreaEditado(usuario.tipo_area || '')
+    setErroSalvarUsuario(null)
+    setModalUsuarioAberto(true)
+  }
+
+  const fecharModalUsuario = () => {
+    setModalUsuarioAberto(false)
+    setUsuarioSelecionado(null)
+  }
+
+  const alternarStatus = (usuario) => {
+    const novoStatus = !usuario.is_active
+    confirm({
+      title: novoStatus ? 'Ativar usuário' : 'Desativar usuário',
+      message: `Deseja ${novoStatus ? 'ativar' : 'desativar'} ${usuario.nome || usuario.email}?`,
+      tone: novoStatus ? 'accent' : 'danger',
+      confirmLabel: novoStatus ? 'Ativar' : 'Desativar',
+      onConfirm: async () => {
+        const res = await patchStatusUsuario(usuario.id, novoStatus)
+        if (res.ok) {
+          const atualizado = await res.json()
+          setUsuarios((prev) =>
+            prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual))
+          )
+          toast({
+            message: `Usuário ${novoStatus ? 'ativado' : 'desativado'} com sucesso.`,
+            tone: 'success',
+          })
+        } else {
+          toast({ message: 'Erro ao alterar status do usuário.', tone: 'error' })
+        }
+      },
+    })
+  }
+
+  const salvarUsuario = async () => {
+    setSalvandoUsuario(true)
+    setErroSalvarUsuario(null)
+    try {
+      const res = await patchTipoArea(usuarioSelecionado.id, tipoAreaEditado)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.tipo_area?.[0] || body?.detail || 'Erro ao salvar')
+      }
+      const atualizado = await res.json()
+      setUsuarios((prev) => prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual)))
+      setEmails((prev) =>
+        prev.map((entrada) =>
+          entrada.email?.toLowerCase() === usuarioSelecionado.email?.toLowerCase()
+            ? { ...entrada, tipo_area: tipoAreaEditado }
+            : entrada
+        )
+      )
+      fecharModalUsuario()
+      toast({ message: 'Tipo de área atualizado com sucesso.', tone: 'success' })
+    } catch (erro) {
+      setErroSalvarUsuario(erro.message)
+    } finally {
+      setSalvandoUsuario(false)
+    }
+  }
+
+  // ── modal e-mail ──
+  const abrirModalNovoEmail = () => {
+    setEmailSelecionado(null)
+    setEmailEditado('')
+    setTipoAreaEmailEditado('')
+    setErroSalvarEmail(null)
+    setModalEmailAberto(true)
+  }
+
+  const abrirModalEditarEmail = (entrada) => {
+    setEmailSelecionado(entrada)
+    setEmailEditado(entrada.email)
+    setTipoAreaEmailEditado(entrada.tipo_area)
+    setErroSalvarEmail(null)
+    setModalEmailAberto(true)
+  }
+
+  const fecharModalEmail = () => {
+    setModalEmailAberto(false)
+    setEmailSelecionado(null)
+  }
+
+  const salvarEmail = async () => {
+    setSalvandoEmail(true)
+    setErroSalvarEmail(null)
+    try {
+      const res = emailSelecionado
+        ? await patchEmailCoordenador(emailSelecionado.id, emailEditado, tipoAreaEmailEditado)
+        : await postEmailCoordenador(emailEditado, tipoAreaEmailEditado)
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(
+          body?.email?.[0] || body?.tipo_area?.[0] || body?.detail || 'Erro ao salvar'
+        )
+      }
+
+      const salvo = await res.json()
+      setEmails((prev) =>
+        emailSelecionado
+          ? prev.map((entrada) => (entrada.id === salvo.id ? salvo : entrada))
+          : [...prev, salvo]
+      )
+      carregarUsuarios()
+      fecharModalEmail()
+      toast({
+        message: emailSelecionado
+          ? 'E-mail atualizado com sucesso.'
+          : 'E-mail adicionado com sucesso.',
+        tone: 'success',
+      })
+    } catch (erro) {
+      setErroSalvarEmail(erro.message)
+    } finally {
+      setSalvandoEmail(false)
+    }
+  }
+
+  const removerEmail = (entrada) => {
+    confirm({
+      title: 'Remover e-mail',
+      message: `Remover ${entrada.email} da lista de coordenadores?`,
+      tone: 'danger',
+      confirmLabel: 'Remover',
+      onConfirm: async () => {
+        const res = await deleteEmailCoordenador(entrada.id)
+        if (res.ok) {
+          setEmails((prev) => prev.filter((item) => item.id !== entrada.id))
+          carregarUsuarios()
+          toast({ message: 'E-mail removido com sucesso.', tone: 'success' })
+        } else {
+          const body = await res.json().catch(() => null)
+          toast({ message: body?.detail || 'Erro ao remover e-mail.', tone: 'error' })
+        }
+      },
+    })
+  }
+
+  const rowsUsuarios = usuarios.map((usuario) => [
+    usuario.nome || '—',
+    usuario.email || '—',
+    <span key="role">
+      {ROLE_LABEL[usuario.role] || usuario.role}
+      {usuario.tipo_area && (
+        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>
+          ({tipoAreaLabel(usuario.tipo_area)})
+        </span>
+      )}
+    </span>,
+    <StatusBadge key="status" ativo={usuario.is_active} />,
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+      {usuario.role === 'COORDENADOR_AREA' && (
+        <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(usuario)}>
+          Editar
+        </Button>
+      )}
+      <Button
+        variant={usuario.is_active ? 'danger' : 'accent'}
+        size="sm"
+        onClick={() => alternarStatus(usuario)}
+      >
+        {usuario.is_active ? 'Desativar' : 'Ativar'}
+      </Button>
+    </div>,
+  ])
+
+  const rowsEmails = emails.map((entrada) => [
+    entrada.email,
+    tipoAreaLabel(entrada.tipo_area),
+    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+      <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(entrada)}>
+        Editar
+      </Button>
+      <Button variant="danger" size="sm" onClick={() => removerEmail(entrada)}>
+        Remover
+      </Button>
+    </div>,
+  ])
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+        {/* ── Usuários ── */}
+        <section>
+          <PageHeader title="Usuários" />
+          {carregandoUsuarios && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
+          {erroUsuarios && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroUsuarios}</p>}
+          {!carregandoUsuarios && !erroUsuarios && (
+            <DataTable
+              columns={['Nome', 'E-mail', 'Grupo / Perfil', 'Status', 'Ações']}
+              rows={rowsUsuarios}
+              emptyMessage="Nenhum usuário encontrado."
+            />
+          )}
+        </section>
+
+        {/* ── E-mails de Coordenadores de Área ── */}
+        <section>
+          <PageHeader
+            title="E-mails de Coordenadores de Área"
+            action={
+              <Button variant="primary" onClick={abrirModalNovoEmail}>
+                + Adicionar
+              </Button>
+            }
+          />
+          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -16, marginBottom: 16 }}>
+            Servidores cujo e-mail estiver nesta lista serão reconhecidos como Coordenadores de Área
+            ao fazer login.
+          </p>
+          {carregandoEmails && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
+          {erroEmails && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroEmails}</p>}
+          {!carregandoEmails && !erroEmails && (
+            <DataTable
+              columns={['E-mail', 'Tipo de Área', 'Ações']}
+              rows={rowsEmails}
+              emptyMessage="Nenhum e-mail cadastrado."
+            />
+          )}
+        </section>
+      </div>
+
+      {/* ── Modal editar usuário ── */}
+      {modalUsuarioAberto && usuarioSelecionado && (
+        <Modal
+          onClose={fecharModalUsuario}
+          title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
+        >
+          <FormField label="Nome">
+            <TextInput readOnly disabled value={usuarioSelecionado.nome || ''} />
+          </FormField>
+          <FormField label="E-mail">
+            <TextInput readOnly disabled value={usuarioSelecionado.email || ''} />
+          </FormField>
+          {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
+            <FormField label="Tipo de Área">
+              <Select
+                value={tipoAreaEditado}
+                onChange={(evento) => setTipoAreaEditado(evento.target.value)}
+              >
+                <option value="">Selecione...</option>
+                {TIPO_AREA_OPTIONS.map((opcao) => (
+                  <option key={opcao.value} value={opcao.value}>
+                    {opcao.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
+          {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
+          <FormActions>
+            <Button variant="outline" onClick={fecharModalUsuario}>
+              Cancelar
+            </Button>
+            {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
+              <Button
+                variant="primary"
+                onClick={salvarUsuario}
+                disabled={salvandoUsuario || !tipoAreaEditado}
+              >
+                {salvandoUsuario ? 'Salvando...' : 'Salvar'}
+              </Button>
+            )}
+          </FormActions>
+        </Modal>
+      )}
+
+      {modalEmailAberto && (
+        <Modal
+          onClose={fecharModalEmail}
+          title={
+            emailSelecionado ? 'Editar E-mail de Coordenador' : 'Adicionar E-mail de Coordenador'
+          }
+        >
+          <FormField label="E-mail">
+            <TextInput
+              type="email"
+              value={emailEditado}
+              onChange={(evento) => setEmailEditado(evento.target.value)}
+              placeholder="coordenador@ifrs.edu.br"
+            />
+          </FormField>
+          <FormField label="Tipo de Área">
+            <Select
+              value={tipoAreaEmailEditado}
+              onChange={(evento) => setTipoAreaEmailEditado(evento.target.value)}
+            >
+              <option value="">Selecione...</option>
+              {TIPO_AREA_OPTIONS.map((opcao) => (
+                <option key={opcao.value} value={opcao.value}>
+                  {opcao.label}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
+          <FormActions>
+            <Button variant="outline" onClick={fecharModalEmail}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={salvarEmail}
+              disabled={salvandoEmail || !emailEditado || !tipoAreaEmailEditado}
+            >
+              {salvandoEmail ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </FormActions>
+        </Modal>
+      )}
+    </>
+  )
+}
