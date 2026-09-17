@@ -20,8 +20,7 @@ def whoami(request):
     user = request.user
     perfil = {}
     if user.role == user.Role.COORDENADOR_AREA:
-        perfil_obj = getattr(user, "perfil_coordenador_area", None)
-        perfil["tipo_area"] = perfil_obj.tipo_area if perfil_obj else None
+        perfil["tipo_area"] = user.perfil_coordenador_area.tipo_area
 
     return Response(
         {

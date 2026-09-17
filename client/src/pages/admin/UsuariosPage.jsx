@@ -33,7 +33,7 @@ const TIPO_AREA_OPTIONS = [
 ]
 
 function tipoAreaLabel(value) {
-  return TIPO_AREA_OPTIONS.find((o) => o.value === value)?.label || value
+  return TIPO_AREA_OPTIONS.find((opcao) => opcao.value === value)?.label || value
 }
 
 function StatusBadge({ ativo }) {
@@ -84,7 +84,7 @@ export default function UsuariosPage() {
         if (!res.ok) throw new Error('Erro ao carregar usuários')
         setUsuarios(await res.json())
       })
-      .catch((e) => setErroUsuarios(e.message))
+      .catch((erro) => setErroUsuarios(erro.message))
       .finally(() => setCarregandoUsuarios(false))
   }
 
@@ -95,7 +95,7 @@ export default function UsuariosPage() {
         if (!res.ok) throw new Error('Erro ao carregar e-mails')
         setEmails(await res.json())
       })
-      .catch((e) => setErroEmails(e.message))
+      .catch((erro) => setErroEmails(erro.message))
       .finally(() => setCarregandoEmails(false))
   }
 
@@ -119,7 +119,7 @@ export default function UsuariosPage() {
     const res = await patchStatusUsuario(usuario.id, novoStatus)
     if (res.ok) {
       const atualizado = await res.json()
-      setUsuarios((prev) => prev.map((u) => (u.id === atualizado.id ? atualizado : u)))
+      setUsuarios((prev) => prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual)))
     }
   }
 
@@ -133,17 +133,17 @@ export default function UsuariosPage() {
         throw new Error(body?.tipo_area?.[0] || body?.detail || 'Erro ao salvar')
       }
       const atualizado = await res.json()
-      setUsuarios((prev) => prev.map((u) => (u.id === atualizado.id ? atualizado : u)))
+      setUsuarios((prev) => prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual)))
       setEmails((prev) =>
-        prev.map((e) =>
-          e.email?.toLowerCase() === usuarioSelecionado.email?.toLowerCase()
-            ? { ...e, tipo_area: tipoAreaEditado }
-            : e
+        prev.map((entrada) =>
+          entrada.email?.toLowerCase() === usuarioSelecionado.email?.toLowerCase()
+            ? { ...entrada, tipo_area: tipoAreaEditado }
+            : entrada
         )
       )
       fecharModalUsuario()
-    } catch (e) {
-      setErroSalvarUsuario(e.message)
+    } catch (erro) {
+      setErroSalvarUsuario(erro.message)
     } finally {
       setSalvandoUsuario(false)
     }
@@ -188,12 +188,14 @@ export default function UsuariosPage() {
 
       const salvo = await res.json()
       setEmails((prev) =>
-        emailSelecionado ? prev.map((e) => (e.id === salvo.id ? salvo : e)) : [...prev, salvo]
+        emailSelecionado
+          ? prev.map((entrada) => (entrada.id === salvo.id ? salvo : entrada))
+          : [...prev, salvo]
       )
       carregarUsuarios()
       fecharModalEmail()
-    } catch (e) {
-      setErroSalvarEmail(e.message)
+    } catch (erro) {
+      setErroSalvarEmail(erro.message)
     } finally {
       setSalvandoEmail(false)
     }
@@ -203,7 +205,7 @@ export default function UsuariosPage() {
     if (!confirm(`Remover ${entrada.email}?`)) return
     const res = await deleteEmailCoordenador(entrada.id)
     if (res.ok) {
-      setEmails((prev) => prev.filter((e) => e.id !== entrada.id))
+      setEmails((prev) => prev.filter((item) => item.id !== entrada.id))
       carregarUsuarios()
     } else {
       const body = await res.json().catch(() => null)
@@ -211,42 +213,42 @@ export default function UsuariosPage() {
     }
   }
 
-  const rowsUsuarios = usuarios.map((u) => [
-    u.nome || '—',
-    u.email || '—',
+  const rowsUsuarios = usuarios.map((usuario) => [
+    usuario.nome || '—',
+    usuario.email || '—',
     <span key="role">
-      {ROLE_LABEL[u.role] || u.role}
-      {u.tipo_area && (
+      {ROLE_LABEL[usuario.role] || usuario.role}
+      {usuario.tipo_area && (
         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>
-          ({tipoAreaLabel(u.tipo_area)})
+          ({tipoAreaLabel(usuario.tipo_area)})
         </span>
       )}
     </span>,
-    <StatusBadge key="status" ativo={u.is_active} />,
+    <StatusBadge key="status" ativo={usuario.is_active} />,
     <div key="acoes" style={{ display: 'flex', gap: 8 }}>
-      {u.role === 'COORDENADOR_AREA' && (
-        <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(u)}>
+      {usuario.role === 'COORDENADOR_AREA' && (
+        <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(usuario)}>
           Editar
         </Button>
       )}
       <Button
-        variant={u.is_active ? 'danger' : 'accent'}
+        variant={usuario.is_active ? 'danger' : 'accent'}
         size="sm"
-        onClick={() => alternarStatus(u)}
+        onClick={() => alternarStatus(usuario)}
       >
-        {u.is_active ? 'Desativar' : 'Ativar'}
+        {usuario.is_active ? 'Desativar' : 'Ativar'}
       </Button>
     </div>,
   ])
 
-  const rowsEmails = emails.map((e) => [
-    e.email,
-    tipoAreaLabel(e.tipo_area),
+  const rowsEmails = emails.map((entrada) => [
+    entrada.email,
+    tipoAreaLabel(entrada.tipo_area),
     <div key="acoes" style={{ display: 'flex', gap: 8 }}>
-      <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(e)}>
+      <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(entrada)}>
         Editar
       </Button>
-      <Button variant="danger" size="sm" onClick={() => removerEmail(e)}>
+      <Button variant="danger" size="sm" onClick={() => removerEmail(entrada)}>
         Remover
       </Button>
     </div>,
@@ -309,11 +311,14 @@ export default function UsuariosPage() {
           </FormField>
           {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
             <FormField label="Tipo de Área">
-              <Select value={tipoAreaEditado} onChange={(e) => setTipoAreaEditado(e.target.value)}>
+              <Select
+                value={tipoAreaEditado}
+                onChange={(evento) => setTipoAreaEditado(evento.target.value)}
+              >
                 <option value="">Selecione...</option>
-                {TIPO_AREA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                {TIPO_AREA_OPTIONS.map((opcao) => (
+                  <option key={opcao.value} value={opcao.value}>
+                    {opcao.label}
                   </option>
                 ))}
               </Select>
@@ -350,19 +355,19 @@ export default function UsuariosPage() {
             <TextInput
               type="email"
               value={emailEditado}
-              onChange={(e) => setEmailEditado(e.target.value)}
+              onChange={(evento) => setEmailEditado(evento.target.value)}
               placeholder="coordenador@ifrs.edu.br"
             />
           </FormField>
           <FormField label="Tipo de Área">
             <Select
               value={tipoAreaEmailEditado}
-              onChange={(e) => setTipoAreaEmailEditado(e.target.value)}
+              onChange={(evento) => setTipoAreaEmailEditado(evento.target.value)}
             >
               <option value="">Selecione...</option>
-              {TIPO_AREA_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {TIPO_AREA_OPTIONS.map((opcao) => (
+                <option key={opcao.value} value={opcao.value}>
+                  {opcao.label}
                 </option>
               ))}
             </Select>

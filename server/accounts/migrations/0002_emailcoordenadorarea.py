@@ -1,11 +1,6 @@
 from django.db import migrations, models
 
-TIPO_AREA_CHOICES = [
-    ("ENSINO", "Ensino"),
-    ("PESQUISA", "Pesquisa"),
-    ("EXTENSAO", "Extensão"),
-    ("INDISSOCIAVEL", "Indissociável"),
-]
+TIPO_AREA_CHOICES = [("ENSINO", "Ensino"), ("PESQUISA", "Pesquisa"), ("EXTENSAO", "Extensão")]
 
 
 class Migration(migrations.Migration):
