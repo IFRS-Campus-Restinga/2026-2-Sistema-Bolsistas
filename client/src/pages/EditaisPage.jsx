@@ -95,10 +95,18 @@ export default function EditaisPage() {
       const dados = await response.json().catch(() => null)
 
       if (!response.ok) {
-        const mensagem =
-          acao === 'publicar' && response.status === 400 && !dados?.detail
-            ? 'Para publicar, preencha as sete datas em ordem no botão Editar.'
-            : dados?.detail || 'Não foi possível alterar o status.'
+        let mensagem = dados?.detail || 'Não foi possível alterar o status.'
+
+        if (acao === 'publicar' && response.status === 400 && !dados?.detail) {
+          const mensagens = Object.values(dados || {}).flat()
+          const camposIncompletos = mensagens.some(
+            (texto) => typeof texto === 'string' && texto.includes('obrigatória')
+          )
+
+          mensagem = camposIncompletos
+            ? 'Para publicar o edital, preencha todos os campos, incluindo as datas do cronograma. Clique em Editar para completar.'
+            : 'Para publicar o edital, corrija a ordem das datas do cronograma. Clique em Editar para revisar.'
+        }
 
         throw new Error(mensagem)
       }
