@@ -27,6 +27,7 @@ const datas = [
   ['data_recurso_homologacao_inicio', 'Início dos recursos'],
   ['data_recurso_homologacao_fim', 'Fim dos recursos'],
   ['data_resultado', 'Resultado'],
+  ['data_maxima_preenchimento_vagas', 'Preenchimento das vagas'],
   ['data_entrega_relatorios', 'Entrega de relatórios'],
 ]
 
@@ -162,6 +163,12 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
                 aria-invalid={Boolean(mensagemCampo(nome))}
                 aria-describedby={mensagemCampo(nome) ? `${nome}-erro` : undefined}
               />
+              {emVigor && edital?.datas_originais?.[nome] && (
+                <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                  Prazo original:{' '}
+                  {new Date(edital.datas_originais[nome]).toLocaleDateString('pt-BR')}
+                </p>
+              )}
               {mensagemCampo(nome) && (
                 <div id={`${nome}-erro`} role="alert">
                   <Alert tone="error">{mensagemCampo(nome)}</Alert>

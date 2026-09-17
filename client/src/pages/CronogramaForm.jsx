@@ -9,6 +9,7 @@ const campos = [
   ['data_recurso_homologacao_inicio', 'Início dos recursos'],
   ['data_recurso_homologacao_fim', 'Fim dos recursos'],
   ['data_resultado', 'Resultado'],
+  ['data_maxima_preenchimento_vagas', 'Preenchimento das vagas'],
   ['data_entrega_relatorios', 'Entrega de relatórios'],
 ]
 

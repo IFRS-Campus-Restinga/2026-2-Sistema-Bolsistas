@@ -10,7 +10,12 @@ from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 from bolsas.models import StatusBolsa
 
 from .models import Edital
-from .serializers import CronogramaEditalSerializer, EditalSerializer, validar_cronograma
+from .serializers import (
+    CronogramaEditalSerializer,
+    EditalDetalheSerializer,
+    EditalSerializer,
+    validar_cronograma,
+)
 
 STATUS_BOLSA_FINALIZADOS = {
     StatusBolsa.REJEITADA,
@@ -30,17 +35,22 @@ class EditalListCreateView(generics.ListCreateAPIView):
 
 
 class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):
-    queryset = Edital.objects.all()
+    queryset = Edital.objects.prefetch_related("historico_cronograma")
     serializer_class = CronogramaEditalSerializer
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     http_method_names = ["get", "patch", "options"]
 
 
 class EditalDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Edital.objects.all()
-    serializer_class = EditalSerializer
+    queryset = Edital.objects.prefetch_related("historico_cronograma").select_for_update()
+    serializer_class = EditalDetalheSerializer
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     http_method_names = ["get", "patch", "options"]
+
+    def get_queryset(self):
+        if self.request.method == "PATCH":
+            return Edital.objects.prefetch_related("historico_cronograma").select_for_update()
+        return Edital.objects.prefetch_related("historico_cronograma")
 
 
 class PublicarEditalView(APIView):

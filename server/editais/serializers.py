@@ -12,6 +12,7 @@ ETAPAS = [
     ("data_recurso_homologacao_inicio", "Início dos recursos"),
     ("data_recurso_homologacao_fim", "Fim dos recursos"),
     ("data_resultado", "Resultado"),
+    ("data_maxima_preenchimento_vagas", "Preenchimento das vagas"),
     ("data_entrega_relatorios", "Entrega de relatórios"),
 ]
 
@@ -112,3 +113,27 @@ class CronogramaEditalSerializer(EditalSerializer):
     class Meta:
         model = Edital
         fields = CAMPOS_CRONOGRAMA
+
+
+class EditalDetalheSerializer(EditalSerializer):
+    datas_originais = serializers.SerializerMethodField()
+
+    def get_datas_originais(self, obj):
+        resultado = {}
+        for campo in CAMPOS_CRONOGRAMA:
+            alteracao = obj.historico_cronograma.filter(campo=campo).order_by("id").first()
+            resultado[campo] = alteracao.data_anterior if alteracao else None
+        return resultado
+
+    class Meta:
+        model = Edital
+        fields = [
+            "id",
+            "nome",
+            "ano_codigo",
+            "link_documento_oficial",
+            "status",
+            *CAMPOS_CRONOGRAMA,
+            "datas_originais",
+        ]
+        read_only_fields = ["id", "status", "datas_originais"]

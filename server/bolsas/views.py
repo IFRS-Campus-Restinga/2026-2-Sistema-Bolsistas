@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -18,6 +20,20 @@ STATUS_BLOQUEIAM_CANCELAMENTO = [
     StatusBolsa.REJEITADA,
     StatusBolsa.ENCERRADA,
 ]
+
+
+def _validar_data_maxima_preenchimento(bolsa):
+    """Verifica se bolsa pode transicionar para PREENCHIDA dado o prazo do edital."""
+    if (
+        bolsa.edital.data_maxima_preenchimento_vagas
+        and date.today() > bolsa.edital.data_maxima_preenchimento_vagas
+    ):
+        raise ValidationError(
+            {
+                "detail": f"Prazo máximo para preenchimento ({bolsa.edital.data_maxima_preenchimento_vagas.strftime('%d/%m/%Y')}) foi ultrapassado. "
+                "Prorogue a data no cronograma do edital para continuar."
+            }
+        )
 
 
 def _area_permitida(bolsa, usuario):
@@ -85,6 +101,8 @@ class AprovarBolsaView(APIView):
                     'pode ser aprovada enquanto estiver "Solicitada".'
                 }
             )
+
+        _validar_data_maxima_preenchimento(bolsa)
 
         bolsa.status = StatusBolsa.ABERTA
         bolsa.coordenador_area = request.user.perfil_coordenador_area

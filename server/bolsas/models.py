@@ -1,3 +1,6 @@
+from datetime import date
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from editais.models import Edital
@@ -75,3 +78,11 @@ class Bolsa(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.carga_horaria_semanal}h ({self.get_status_display()})"
+
+    def clean(self):
+        if self.status == StatusBolsa.PREENCHIDA and self.edital.data_maxima_preenchimento_vagas:
+            if date.today() > self.edital.data_maxima_preenchimento_vagas:
+                raise ValidationError(
+                    f"Não é possível preencher bolsa após {self.edital.data_maxima_preenchimento_vagas.strftime('%d/%m/%Y')}. "
+                    "Prorogue a data no cronograma do edital."
+                )

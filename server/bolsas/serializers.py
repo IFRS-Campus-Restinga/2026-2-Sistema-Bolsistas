@@ -11,6 +11,9 @@ class BolsaSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
     modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_data_maxima_preenchimento_vagas = serializers.DateField(
+        source="edital.data_maxima_preenchimento_vagas", read_only=True
+    )
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
 
     class Meta:
@@ -21,6 +24,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "projeto_titulo",
             "edital",
             "edital_nome",
+            "edital_data_maxima_preenchimento_vagas",
             "tipo",
             "tipo_display",
             "modalidade",
@@ -46,6 +50,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "data_decisao",
             "justificativa_decisao",
             "coordenador_area",
+            "edital_data_maxima_preenchimento_vagas",
         ]
 
     def validate_projeto(self, projeto):

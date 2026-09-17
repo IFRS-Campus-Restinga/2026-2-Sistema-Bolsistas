@@ -150,6 +150,9 @@ export default function EditaisPage() {
   const linhas = editais.map((edital) => [
     edital.nome,
     edital.ano_codigo,
+    edital.data_maxima_preenchimento_vagas
+      ? new Date(edital.data_maxima_preenchimento_vagas + 'T00:00:00').toLocaleDateString('pt-BR')
+      : '—',
     <Badge key={`status-${edital.id}`} status={edital.status} />,
     <a
       key={`documento-${edital.id}`}
@@ -208,7 +211,14 @@ export default function EditaisPage() {
         <p role="status">Carregando editais...</p>
       ) : (
         <DataTable
-          columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
+          columns={[
+            'Nome',
+            'Ano-Código',
+            'Prazo para preenchimento de vagas',
+            'Status',
+            'Documento',
+            'Ações',
+          ]}
           rows={linhas}
           emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
         />

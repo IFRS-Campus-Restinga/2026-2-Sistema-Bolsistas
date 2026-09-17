@@ -61,6 +61,11 @@ class Edital(models.Model):
         blank=True,
         help_text="Data de divulgação do resultado final",
     )
+    data_maxima_preenchimento_vagas = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Data máxima para preenchimento das vagas",
+    )
     data_entrega_relatorios = models.DateField(
         null=True,
         blank=True,

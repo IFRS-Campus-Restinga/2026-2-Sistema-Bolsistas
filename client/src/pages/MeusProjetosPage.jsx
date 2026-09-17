@@ -390,6 +390,11 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
   const linhasBolsas = bolsas.map((bolsa) => [
     bolsa.edital_nome,
+    bolsa.edital_data_maxima_preenchimento_vagas
+      ? new Date(bolsa.edital_data_maxima_preenchimento_vagas + 'T00:00:00').toLocaleDateString(
+          'pt-BR'
+        )
+      : '—',
     opcaoLabel(TIPO_OPTIONS, bolsa.tipo),
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
     `R$ ${bolsa.valor_mensal}`,
@@ -437,7 +442,15 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       )}
 
       <DataTable
-        columns={['Edital', 'Tipo', 'Modalidade', 'Valor', 'Status', 'Ações']}
+        columns={[
+          'Edital',
+          'Prazo para preenchimento de vagas',
+          'Tipo',
+          'Modalidade',
+          'Valor',
+          'Status',
+          'Ações',
+        ]}
         rows={linhasBolsas}
         emptyMessage="Nenhuma bolsa solicitada para este projeto."
       />
