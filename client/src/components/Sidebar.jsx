@@ -6,13 +6,12 @@ import './Sidebar.css'
  * Barra lateral de navegação.
  *
  * Props:
- *   role       — papel do usuário exibido sob o título ("Administrador", etc.)
  *   menuItems  — [{ id, label, icon }]
  *   active     — id do item ativo
  *   onNav      — callback(id) ao clicar num item
  *   onLogout   — callback ao clicar em "Sair do Sistema"
  */
-export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
+export function Sidebar({ menuItems, active, onNav, onLogout }) {
   return (
     <aside className="sidebar">
       {/* Brand */}
@@ -20,7 +19,6 @@ export function Sidebar({ role, menuItems, active, onNav, onLogout }) {
         <IFLogo size={38} />
         <div>
           <div className="sidebar__title">Sistema de Bolsistas</div>
-          <div className="sidebar__role">{role}</div>
         </div>
       </div>
 

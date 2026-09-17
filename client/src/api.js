@@ -7,7 +7,7 @@ export const HUB_BASE = HUB_HOST
 export const HUB_FRONTEND = HUB_FRONTEND_HOST
 
 export function hubHomeUrlPara(role) {
-  return role === 'ADMIN'
+  return role === 'ADMINISTRADOR'
     ? `${HUB_FRONTEND}/session/admin/home/`
     : `${HUB_FRONTEND}/session/user/home`
 }

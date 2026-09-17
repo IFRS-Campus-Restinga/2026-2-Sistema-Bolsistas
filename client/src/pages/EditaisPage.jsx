@@ -119,9 +119,13 @@ export default function EditaisPage() {
 
     confirmar({
       title: publicar ? 'Publicar edital?' : 'Encerrar edital?',
-      message: publicar
-        ? 'O edital passará para Em vigor.'
-        : 'Após encerrar, o edital não poderá mais ser editado.',
+      message: publicar ? (
+        <>
+          O edital será publicado e passará para <Badge status="EM_VIGOR" />.
+        </>
+      ) : (
+        'Após encerrar, o edital não poderá mais ser editado.'
+      ),
       confirmLabel: publicar ? 'Publicar' : 'Encerrar',
       tone: publicar ? 'accent' : 'danger',
       onConfirm: () => alterarStatus(edital, publicar ? 'publicar' : 'encerrar'),
@@ -140,7 +144,7 @@ export default function EditaisPage() {
     >
       Documento oficial
     </a>,
-    <div key={`acoes-${edital.id}`} style={{ display: 'flex', gap: 8 }}>
+    <div key={`acoes-${edital.id}`} style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       {['RASCUNHO', 'EM_VIGOR'].includes(edital.status) ? (
         <>
           <Button
