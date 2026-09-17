@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "hub_integration",
+    "editais",
+    "bolsas",
 ]
 
 MIDDLEWARE = [

@@ -11,12 +11,10 @@ import AdministradorPage from './pages/AdministradorPage'
 import AlunoPage from './pages/AlunoPage'
 import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
 import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
+import SolicitarBolsaPage from './pages/SolicitarBolsaPage'
 
 import './styles/global.css'
 
-/**
- * Redireciona pra dashboard correta baseado na role do usuário.
- */
 function RedirecionaPorRole() {
   const { me, carregando } = useAuth()
 
@@ -24,7 +22,7 @@ function RedirecionaPorRole() {
   if (!me) return <Navigate to="/acesso-negado" replace />
 
   const rotas = {
-    ADMINISTRADOR: '/admin',
+    ADMINISTRADOR: '/administrador',
     ALUNO: '/aluno',
     COORDENADOR_AREA: '/coordenador-area',
     COORDENADOR_PROJETO: '/coordenador-projeto',
@@ -33,9 +31,6 @@ function RedirecionaPorRole() {
   return <Navigate to={rotas[me.role] || '/acesso-negado'} replace />
 }
 
-/**
- * Wrapper que injeta props comuns nas pages.
- */
 function PageWrapper({ Component }) {
   const { me, initials } = useAuth()
 
@@ -46,9 +41,6 @@ function PageWrapper({ Component }) {
   return <Component me={me} initials={initials} onVoltarHub={onVoltarHub} />
 }
 
-/**
- * Rotas da aplicação.
- */
 function AppRoutes() {
   const { erro } = useAuth()
 
@@ -64,7 +56,7 @@ function AppRoutes() {
 
       {/* Administrador */}
       <Route
-        path="/admin"
+        path="/administrador"
         element={
           <ProtectedRoute roles={['ADMINISTRADOR']}>
             <PageWrapper Component={AdministradorPage} />
@@ -98,6 +90,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['COORDENADOR_PROJETO']}>
             <PageWrapper Component={CoordenadorProjetoPage} />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/coordenador-projeto/solicitar-bolsa"
+        element={
+          <ProtectedRoute roles={['COORDENADOR_PROJETO']}>
+            <PageWrapper Component={SolicitarBolsaPage} />
           </ProtectedRoute>
         }
       />

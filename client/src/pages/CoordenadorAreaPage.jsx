@@ -8,6 +8,7 @@ import {
   IconBriefcase,
   IconUsers,
 } from '../components'
+import EditaisPage from './EditaisPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -15,13 +16,14 @@ const menuItems = [
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
 ]
 
+const AREA_LABELS = {
+  EXTENSAO: 'Extensão',
+  PESQUISA: 'Pesquisa',
+  ENSINO: 'Ensino',
+}
+
 export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
-  const AREA_LABELS = {
-    EXTENSAO: 'Extensão',
-    PESQUISA: 'Pesquisa',
-    ENSINO: 'Ensino',
-  }
   const areaLabel = AREA_LABELS[me.tipo_area] || me.tipo_area || 'Área'
 
   return (
@@ -35,12 +37,25 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
-        <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
-        <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
-      </div>
+      {active === 'editais' && <EditaisPage />}
+
+      {active === 'dashboard' && (
+        <>
+          <PageHeader title={`Painel Coordenação de ${areaLabel}`} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
+            <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
+            <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
+          </div>
+        </>
+      )}
+
+      {active === 'projetos' && (
+        <>
+          <PageHeader title="Projetos" />
+          <p>Página ainda não implementada.</p>
+        </>
+      )}
     </Layout>
   )
 }
