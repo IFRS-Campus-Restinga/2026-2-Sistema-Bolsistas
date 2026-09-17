@@ -36,7 +36,6 @@ async function fetchWithRefresh(base, path, options = {}) {
   if (res.status === 401) {
     const renovou = await refreshHubSession()
     if (!renovou) throw new SessaoExpiradaError()
-
     res = await doFetch()
   }
 
@@ -53,6 +52,14 @@ async function adminFetch(path, options = {}) {
 
 export function editaisFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/editais`, path, options)
+}
+
+export function bolsasFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/bolsas`, path, options)
+}
+
+export function projetosFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/projetos`, path, options)
 }
 
 export { SessaoExpiradaError }
