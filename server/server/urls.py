@@ -24,6 +24,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/hub/", include("hub_integration.urls")),
     path("api/editais/", include("editais.urls")),
-    ## A rota que entrega o React deve permanecer por último.
+    path("api/admin/", include("accounts.urls")),
     re_path(r"^.*$", index_view),
 ]
