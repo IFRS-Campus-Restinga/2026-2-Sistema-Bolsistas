@@ -2,6 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import CoordenadorArea, CoordenadorProjeto, EmailCoordenadorArea, Usuario
+from projetos.models import Projeto
 
 from .helpers import cria_usuario
 
@@ -108,6 +109,47 @@ class PostEmailCoordenadorTests(TestCase):
             format="json",
         )
         self.assertEqual(resposta.status_code, 400)
+
+
+class PromocaoBloqueadaComProjetoTests(TestCase):
+    """Promover um usuário que ainda é coordenador de um Projeto deve falhar
+    com 400, não crashar (Projeto.coordenador_projeto é on_delete=PROTECT)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = cria_usuario("admin", "admin@test.com", Usuario.Role.ADMINISTRADOR)
+        self.client.force_authenticate(user=self.admin)
+
+        self.usuario = cria_usuario("coord", "coord@test.com", Usuario.Role.COORDENADOR_PROJETO)
+        self.perfil = CoordenadorProjeto.objects.create(usuario=self.usuario)
+        Projeto.objects.create(titulo="Projeto do coord", coordenador_projeto=self.perfil)
+
+    def test_post_email_bloqueia_promocao_com_projeto(self):
+        resposta = self.client.post(
+            "/api/admin/emails-coordenadores/",
+            {"email": "coord@test.com", "tipo_area": "PESQUISA"},
+            format="json",
+        )
+
+        self.assertEqual(resposta.status_code, 400)
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.role, Usuario.Role.COORDENADOR_PROJETO)
+        self.assertFalse(EmailCoordenadorArea.objects.filter(email="coord@test.com").exists())
+
+    def test_patch_troca_email_bloqueia_promocao_com_projeto(self):
+        entrada = EmailCoordenadorArea.objects.create(email="outro@test.com", tipo_area="ENSINO")
+
+        resposta = self.client.patch(
+            f"/api/admin/emails-coordenadores/{entrada.id}/",
+            {"email": "coord@test.com"},
+            format="json",
+        )
+
+        self.assertEqual(resposta.status_code, 400)
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.role, Usuario.Role.COORDENADOR_PROJETO)
+        entrada.refresh_from_db()
+        self.assertEqual(entrada.email, "outro@test.com")
 
 
 class PatchEmailCoordenadorTests(TestCase):
