@@ -8,7 +8,7 @@ export const HUB_BASE = HUB_HOST
 export const HUB_FRONTEND = HUB_FRONTEND_HOST
 
 export function hubHomeUrlPara(role) {
-  return role === 'ADMIN'
+  return role === 'ADMINISTRADOR'
     ? `${HUB_FRONTEND}/session/admin/home/`
     : `${HUB_FRONTEND}/session/user/home`
 }
@@ -49,6 +49,10 @@ export async function apiFetch(path, options = {}) {
 
 async function adminFetch(path, options = {}) {
   return fetchWithRefresh(ADMIN_BASE, path, options)
+}
+
+export function editaisFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/editais`, path, options)
 }
 
 export { SessaoExpiradaError }
