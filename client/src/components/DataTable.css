@@ -21,7 +21,7 @@
 }
 
 .data-table__th {
-  text-align: left;
+  text-align: center;
   padding: 12px 20px;
   font-size: 10px;
   font-weight: 700;
@@ -48,6 +48,7 @@
   padding: 14px 20px;
   color: #374151;
   vertical-align: middle;
+  text-align: center;
 }
 
 /* Empty state */
