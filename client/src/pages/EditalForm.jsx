@@ -163,9 +163,9 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
                 aria-describedby={mensagemCampo(nome) ? `${nome}-erro` : undefined}
               />
               {mensagemCampo(nome) && (
-                <p id={`${nome}-erro`} role="alert">
-                  {mensagemCampo(nome)}
-                </p>
+                <div id={`${nome}-erro`} role="alert">
+                  <Alert tone="error">{mensagemCampo(nome)}</Alert>
+                </div>
               )}
             </FormField>
           ))}
