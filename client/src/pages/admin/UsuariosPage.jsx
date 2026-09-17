@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Alert,
   Modal,
   Button,
   FormField,
@@ -357,9 +358,7 @@ export default function UsuariosPage() {
               </Select>
             </FormField>
           )}
-          {erroSalvarUsuario && (
-            <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarUsuario}</p>
-          )}
+          {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
           <FormActions>
             <Button variant="outline" onClick={fecharModalUsuario}>
               Cancelar
@@ -405,7 +404,7 @@ export default function UsuariosPage() {
               ))}
             </Select>
           </FormField>
-          {erroSalvarEmail && <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarEmail}</p>}
+          {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>
             <Button variant="outline" onClick={fecharModalEmail}>
               Cancelar
