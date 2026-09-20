@@ -11,7 +11,11 @@ class BolsaSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
     modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_link_documento_oficial = serializers.URLField(
+        source="edital.link_documento_oficial", read_only=True
+    )
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
+    minha_inscricao_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Bolsa
@@ -21,6 +25,8 @@ class BolsaSerializer(serializers.ModelSerializer):
             "projeto_titulo",
             "edital",
             "edital_nome",
+            "edital_link_documento_oficial",
+            "minha_inscricao_status",
             "tipo",
             "tipo_display",
             "modalidade",
@@ -47,6 +53,15 @@ class BolsaSerializer(serializers.ModelSerializer):
             "justificativa_decisao",
             "coordenador_area",
         ]
+
+    def get_minha_inscricao_status(self, bolsa):
+        # Pra o Aluno saber, ao ver o detalhe da bolsa, se já tem inscrição
+        # (rascunho ou pendente) antes de tentar se inscrever de novo.
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        inscricao = bolsa.inscricoes.filter(aluno=request.user).exclude(status="CANCELADA").first()
+        return inscricao.status if inscricao else None
 
     def validate_projeto(self, projeto):
         request = self.context["request"]
