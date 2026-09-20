@@ -52,6 +52,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "hub_integration",
+    "editais",
+    "projetos",
+    "bolsas",
 ]
 
 MIDDLEWARE = [
@@ -90,13 +93,6 @@ HUB_SYSTEM_NAME = env("HUB_SYSTEM_NAME", default="Sistema-de-Bolsistas")
 HUB_SYSTEM_URL = env("HUB_SYSTEM_URL", default="http://localhost:8001")
 HUB_SYSTEM_API_KEY = env("HUB_SYSTEM_API_KEY", default=None)
 HUB_SYSTEM_SECRET_KEY = env("HUB_SYSTEM_SECRET_KEY", default=None)
-
-# email dos coordenadores da area, por enquanto definidos no .env mas futuramente teremos uma funcionalidade para isso
-COORDENADOR_AREA_EMAILS = {
-    "ENSINO": env("COORDENADOR_ENSINO_EMAIL", default=""),
-    "PESQUISA": env("COORDENADOR_PESQUISA_EMAIL", default=""),
-    "EXTENSAO": env("COORDENADOR_EXTENSAO_EMAIL", default=""),
-}
 
 CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",

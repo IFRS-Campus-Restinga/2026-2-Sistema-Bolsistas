@@ -1,0 +1,71 @@
+/* ── Top Header ─────────────────────────────────────────────── */
+
+.top-header {
+  height: 56px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #f0f0f0;
+  box-shadow: 0 1px 0 #f4f4f4;
+}
+
+.top-header__campus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-header__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--if-green);
+}
+
+.top-header__campus-name {
+  font-size: 14px;
+  color: #9ca3af;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
+.top-header__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.top-header__user-info {
+  text-align: right;
+}
+
+.top-header__user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.top-header__user-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--if-green);
+}
+
+.top-header__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--if-green-dark), var(--if-green));
+  box-shadow: 0 2px 6px rgba(47, 158, 65, 0.3);
+}

@@ -1,87 +1,109 @@
-import { useEffect, useState } from 'react'
-import { apiFetch, hubHomeUrlPara } from './api'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthProvider'
+import { useAuth } from './contexts/useAuth'
+import { hubHomeUrlPara } from './api'
+import ProtectedRoute from './components/ProtectedRoute'
 
-function AdministradorPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>Hello Administrador {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
+import Showcase from './pages/Showcase'
+import AcessoNegado from './pages/AcessoNegado'
+import SemPermissao from './pages/SemPermissao'
+import AdministradorPage from './pages/AdministradorPage'
+import AlunoPage from './pages/AlunoPage'
+import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
+import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
+
+import './styles/global.css'
+
+function RedirecionaPorRole() {
+  const { me, carregando } = useAuth()
+
+  if (carregando) return null
+  if (!me) return <Navigate to="/acesso-negado" replace />
+
+  const rotas = {
+    ADMINISTRADOR: '/administrador',
+    ALUNO: '/aluno',
+    COORDENADOR_AREA: '/coordenador-area',
+    COORDENADOR_PROJETO: '/coordenador-projeto',
+  }
+
+  return <Navigate to={rotas[me.role] || '/acesso-negado'} replace />
 }
 
-function AlunoPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>Hello Aluno {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
+function PageWrapper({ Component }) {
+  const { me, initials } = useAuth()
+
+  const onVoltarHub = () => {
+    window.location.href = hubHomeUrlPara(me.role)
+  }
+
+  return <Component me={me} initials={initials} onVoltarHub={onVoltarHub} />
 }
 
-function CoordenadorProjetoPage({ me, onVoltarHub }) {
-  return (
-    <div>
-      <h1>Hello Coordenador de Projeto {me.nome || '(sem nome)'}</h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
-}
+function AppRoutes() {
+  const { erro } = useAuth()
 
-function CoordenadorAreaPage({ me, onVoltarHub }) {
   return (
-    <div>
-      <h1>
-        Hello Coordenador de {me.tipo_area || 'Área'} {me.nome || '(sem nome)'}
-      </h1>
-      <p>id: {me.id}</p>
-      <p>email: {me.email || '(sem email)'}</p>
-      <button onClick={onVoltarHub}>Voltar ao HUB</button>
-    </div>
-  )
-}
+    <Routes>
+      {/* Públicas */}
+      <Route path="/showcase" element={<Showcase />} />
+      <Route path="/acesso-negado" element={<AcessoNegado mensagem={erro} />} />
+      <Route path="/sem-permissao" element={<SemPermissao />} />
 
-function AcessoNegado({ mensagem }) {
-  return (
-    <div>
-      <h1>Acesso negado</h1>
-      <p>{mensagem}</p>
-    </div>
+      {/* Raiz → redireciona por role */}
+      <Route path="/" element={<RedirecionaPorRole />} />
+
+      {/* Administrador */}
+      <Route
+        path="/administrador"
+        element={
+          <ProtectedRoute roles={['ADMINISTRADOR']}>
+            <PageWrapper Component={AdministradorPage} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Aluno */}
+      <Route
+        path="/aluno"
+        element={
+          <ProtectedRoute roles={['ALUNO']}>
+            <PageWrapper Component={AlunoPage} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Coordenador de Área */}
+      <Route
+        path="/coordenador-area"
+        element={
+          <ProtectedRoute roles={['COORDENADOR_AREA']}>
+            <PageWrapper Component={CoordenadorAreaPage} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Coordenador de Projeto */}
+      <Route
+        path="/coordenador-projeto"
+        element={
+          <ProtectedRoute roles={['COORDENADOR_PROJETO']}>
+            <PageWrapper Component={CoordenadorProjetoPage} />
+          </ProtectedRoute>
+        }
+      />
+      {/* Qualquer outra rota → redireciona por role */}
+      <Route path="*" element={<RedirecionaPorRole />} />
+    </Routes>
   )
 }
 
 export default function App() {
-  const [me, setMe] = useState(null)
-  const [erro, setErro] = useState(null)
-  const [carregando, setCarregando] = useState(true)
-
-  useEffect(() => {
-    apiFetch('/whoami/')
-      .then(async (res) => {
-        if (!res.ok) {
-          const corpo = await res.json().catch(() => null)
-          throw new Error(corpo?.detail || 'Não autenticado — acesse este sistema a partir do HUB.')
-        }
-        setMe(await res.json())
-      })
-      .catch((e) => setErro(e.message))
-      .finally(() => setCarregando(false))
-  }, [])
-
-  const voltarAoHub = () => {
-    window.location.href = hubHomeUrlPara(me.role)
-  }
-
-  if (carregando) return null
-  if (!me) return <AcessoNegado mensagem={erro} />
-  if (me.role === 'ADMINISTRADOR') return <AdministradorPage me={me} onVoltarHub={voltarAoHub} />
-  if (me.role === 'ALUNO') return <AlunoPage me={me} onVoltarHub={voltarAoHub} />
-  if (me.role === 'COORDENADOR_AREA')
-    return <CoordenadorAreaPage me={me} onVoltarHub={voltarAoHub} />
-  return <CoordenadorProjetoPage me={me} onVoltarHub={voltarAoHub} />
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
 }

@@ -60,3 +60,15 @@ class Administrador(models.Model):
 
     def __str__(self):
         return self.usuario.nome
+
+
+class EmailCoordenadorArea(models.Model):
+    email = models.EmailField(unique=True)
+    tipo_area = models.CharField(max_length=20, choices=TipoArea.choices)
+
+    class Meta:
+        verbose_name = "E-mail de Coordenador de Área"
+        verbose_name_plural = "E-mails de Coordenadores de Área"
+
+    def __str__(self):
+        return f"{self.email} → {self.get_tipo_area_display()}"

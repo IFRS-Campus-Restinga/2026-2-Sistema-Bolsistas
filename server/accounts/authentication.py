@@ -1,12 +1,20 @@
 import jwt
 from django.conf import settings
 from django.db import transaction
+from django.db.models import ProtectedError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
 from hub_integration.client import fetch_hub_user_data
 
-from .models import Administrador, Aluno, CoordenadorArea, CoordenadorProjeto, Usuario
+from .models import (
+    Administrador,
+    Aluno,
+    CoordenadorArea,
+    CoordenadorProjeto,
+    EmailCoordenadorArea,
+    Usuario,
+)
 
 HUB_GROUP_ADMIN = "admin"
 HUB_ACCESS_PROFILE_ALUNO = "aluno"
@@ -99,7 +107,10 @@ class HubJWTAuthentication(BaseAuthentication):
 
         for outro_model in PERFIL_MODEL_POR_ROLE.values():
             if outro_model is not perfil_model:
-                outro_model.objects.filter(usuario=usuario).delete()
+                try:
+                    outro_model.objects.filter(usuario=usuario).delete()
+                except ProtectedError:
+                    pass
 
         if role == Usuario.Role.COORDENADOR_AREA:
             CoordenadorArea.objects.update_or_create(
@@ -112,8 +123,8 @@ class HubJWTAuthentication(BaseAuthentication):
     def _tipo_area_por_email(email: str | None) -> str | None:
         if not email:
             return None
-        email = email.strip().lower()
-        for tipo, area_email in settings.COORDENADOR_AREA_EMAILS.items():
-            if area_email and area_email.strip().lower() == email:
-                return tipo
-        return None
+        try:
+            entrada = EmailCoordenadorArea.objects.get(email__iexact=email.strip())
+            return entrada.tipo_area
+        except EmailCoordenadorArea.DoesNotExist:
+            return None
