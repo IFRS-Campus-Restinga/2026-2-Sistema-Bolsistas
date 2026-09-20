@@ -47,6 +47,32 @@ class BolsaListCreateView(generics.ListCreateAPIView):
         return queryset.none()
 
 
+def _bolsas_disponiveis_qs():
+    hoje = timezone.localdate()
+    return Bolsa.objects.select_related("projeto", "edital").filter(
+        status=StatusBolsa.ABERTA,
+        edital__data_abertura_inscricoes__lte=hoje,
+        edital__data_fechamento_inscricoes__gte=hoje,
+    )
+
+
+class BolsasDisponiveisView(generics.ListAPIView):
+    serializer_class = BolsaSerializer
+
+    def get_queryset(self):
+        return _bolsas_disponiveis_qs()
+
+
+class BolsaDisponivelDetailView(generics.RetrieveAPIView):
+    """Detalhe de uma bolsa disponível — mesmo recorte do BolsasDisponiveisView,
+    então não dá pra ver detalhe de bolsa fechada/fora do prazo adivinhando o id."""
+
+    serializer_class = BolsaSerializer
+
+    def get_queryset(self):
+        return _bolsas_disponiveis_qs()
+
+
 class BolsaDetailView(generics.RetrieveAPIView):
     serializer_class = BolsaSerializer
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto | IsCoordenadorArea]

@@ -51,7 +51,7 @@ export function Select(props) {
  *   accept   — tipos aceitos (ex: ".pdf,.doc")
  *   required
  */
-export function FileField({ value, onChange, accept, required }) {
+export function FileField({ value, onChange, accept, required, disabled }) {
   const inputRef = useRef(null)
 
   return (
@@ -61,8 +61,9 @@ export function FileField({ value, onChange, accept, required }) {
         type="file"
         accept={accept}
         required={required && !value}
+        disabled={disabled}
         className="form-file__hidden"
-        onChange={(e) => onChange(e.target.files?.[0]?.name ?? '')}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
 
       {value ? (
@@ -74,10 +75,11 @@ export function FileField({ value, onChange, accept, required }) {
           <button
             type="button"
             onClick={() => {
-              onChange('')
+              onChange(null)
               if (inputRef.current) inputRef.current.value = ''
             }}
             className="form-file__remove"
+            disabled={disabled}
           >
             <IconX size={14} />
           </button>
@@ -87,6 +89,7 @@ export function FileField({ value, onChange, accept, required }) {
           type="button"
           onClick={() => inputRef.current?.click()}
           className="form-file__trigger"
+          disabled={disabled}
         >
           <IconUpload size={16} />
           Selecionar arquivo
