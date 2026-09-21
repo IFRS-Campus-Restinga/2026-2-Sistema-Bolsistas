@@ -169,14 +169,14 @@ function ListaProjetos({ onGerenciar }) {
   const linhas = projetos.map((projeto) => [
     projeto.titulo,
     <Badge key="status" status={projeto.status} />,
-    <AcoesCell key="acoes" mostrar={projeto.status === 'ATIVO'}>
-      <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
-        Desligar
-      </Button>
-      <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
-        Gerenciar
-      </Button>
-    </AcoesCell>,
+    <AcoesCell
+      key="acoes"
+      mostrar={projeto.status === 'ATIVO'}
+      acoes={[
+        { label: 'Gerenciar', onClick: () => onGerenciar(projeto.id) },
+        { label: 'Desligar', variant: 'danger', onClick: () => confirmarDesligar(projeto) },
+      ]}
+    />,
   ])
 
   return (
@@ -394,11 +394,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <AcoesCell key="acoes" mostrar={podeCancelar(bolsa)}>
-      <Button size="sm" variant="danger" onClick={() => confirmarCancelarBolsa(bolsa)}>
-        Cancelar Bolsa
-      </Button>
-    </AcoesCell>,
+    <AcoesCell
+      key="acoes"
+      mostrar={podeCancelar(bolsa)}
+      acoes={[
+        {
+          label: 'Cancelar Bolsa',
+          variant: 'danger',
+          onClick: () => confirmarCancelarBolsa(bolsa),
+        },
+      ]}
+    />,
   ])
 
   return (

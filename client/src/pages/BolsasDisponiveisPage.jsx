@@ -56,7 +56,13 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
     bolsa.edital_nome,
     `${bolsa.carga_horaria_semanal}h/semana`,
     `R$ ${bolsa.valor_mensal}`,
-    <Badge key="status" status={bolsa.status} />,
+    bolsa.minha_inscricao_status ? (
+      <Badge key="minha-inscricao" status={bolsa.minha_inscricao_status} />
+    ) : (
+      <span key="minha-inscricao" style={{ color: '#9ca3af' }}>
+        —
+      </span>
+    ),
     <Button key="acoes" size="sm" variant="outline" onClick={() => onVerDetalhes(bolsa.id)}>
       Ver detalhes
     </Button>,
@@ -72,7 +78,15 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
         <p role="status">Carregando bolsas...</p>
       ) : (
         <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Carga Horária', 'Valor', 'Status', 'Ações']}
+          columns={[
+            'Projeto',
+            'Tipo',
+            'Edital',
+            'Carga Horária',
+            'Valor',
+            'Minha Inscrição',
+            'Ações',
+          ]}
           rows={linhas}
           emptyMessage="Nenhuma bolsa disponível no momento."
         />
@@ -126,7 +140,7 @@ function BolsaDetalhe({ bolsaId, onVoltar }) {
   const jaInscrito = !!bolsa.minha_inscricao_status
   const mensagemJaInscrito =
     bolsa.minha_inscricao_status === 'RASCUNHO'
-      ? 'Você já iniciou uma inscrição para esta bolsa — continue em Minhas Inscrições.'
+      ? 'Você já iniciou uma inscrição para esta bolsa, continue em Minhas Inscrições.'
       : 'Você já está inscrito nesta bolsa.'
 
   return (
