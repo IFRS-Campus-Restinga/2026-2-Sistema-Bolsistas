@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { inscricoesFetch } from '../api'
 import {
+  AcoesCell,
   Alert,
   Badge,
   Button,
@@ -92,37 +93,29 @@ export default function MinhasInscricoesPage() {
     })
   }
 
+  function acoesPorInscricao(inscricao) {
+    if (inscricao.status === 'RASCUNHO') {
+      return [
+        { label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) },
+        { label: 'Cancelar', variant: 'danger', onClick: () => excluirRascunho(inscricao) },
+      ]
+    }
+    if (inscricao.status === 'PENDENTE') {
+      return [
+        { label: 'Ver comprovante', onClick: () => setComprovante(inscricao) },
+        { label: 'Editar', onClick: () => setEdicaoAberta(inscricao) },
+        { label: 'Cancelar', variant: 'danger', onClick: () => cancelarInscricao(inscricao) },
+      ]
+    }
+    return []
+  }
+
   const linhas = inscricoes.map((inscricao) => [
     inscricao.projeto_titulo,
     inscricao.bolsa_tipo_display,
     inscricao.edital_nome,
     <Badge key="status" status={inscricao.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {inscricao.status === 'RASCUNHO' && (
-        <>
-          <Button size="sm" variant="outline" onClick={() => setEdicaoAberta(inscricao)}>
-            Continuar
-          </Button>
-          <Button size="sm" variant="danger" onClick={() => excluirRascunho(inscricao)}>
-            Cancelar
-          </Button>
-        </>
-      )}
-      {inscricao.status === 'PENDENTE' && (
-        <>
-          <Button size="sm" variant="outline" onClick={() => setComprovante(inscricao)}>
-            Ver comprovante
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEdicaoAberta(inscricao)}>
-            Editar
-          </Button>
-          <Button size="sm" variant="danger" onClick={() => cancelarInscricao(inscricao)}>
-            Cancelar
-          </Button>
-        </>
-      )}
-      {inscricao.status === 'CANCELADA' && 'Sem ações disponíveis'}
-    </div>,
+    <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])
 
   return (
