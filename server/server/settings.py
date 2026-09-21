@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     "accounts",
     "hub_integration",
     "editais",
+    "projetos",
+    "bolsas",
+    "inscricoes",
 ]
 
 MIDDLEWARE = [

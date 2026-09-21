@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
+  AcoesCell,
+  Alert,
   Modal,
   Button,
   FormField,
@@ -258,33 +260,31 @@ export default function UsuariosPage() {
       )}
     </span>,
     <StatusBadge key="status" ativo={usuario.is_active} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
-      {usuario.role === 'COORDENADOR_AREA' && (
-        <Button variant="outline" size="sm" onClick={() => abrirModalUsuario(usuario)}>
-          Editar
-        </Button>
-      )}
-      <Button
-        variant={usuario.is_active ? 'danger' : 'accent'}
-        size="sm"
-        onClick={() => alternarStatus(usuario)}
-      >
-        {usuario.is_active ? 'Desativar' : 'Ativar'}
-      </Button>
-    </div>,
+    <AcoesCell
+      key="acoes"
+      acoes={[
+        ...(usuario.role === 'COORDENADOR_AREA'
+          ? [{ label: 'Editar', onClick: () => abrirModalUsuario(usuario) }]
+          : []),
+        {
+          label: usuario.is_active ? 'Desativar' : 'Ativar',
+          variant: usuario.is_active ? 'danger' : 'accent',
+          onClick: () => alternarStatus(usuario),
+        },
+      ]}
+    />,
   ])
 
   const rowsEmails = emails.map((entrada) => [
     entrada.email,
     tipoAreaLabel(entrada.tipo_area),
-    <div key="acoes" style={{ display: 'flex', gap: 8 }}>
-      <Button variant="outline" size="sm" onClick={() => abrirModalEditarEmail(entrada)}>
-        Editar
-      </Button>
-      <Button variant="danger" size="sm" onClick={() => removerEmail(entrada)}>
-        Remover
-      </Button>
-    </div>,
+    <AcoesCell
+      key="acoes"
+      acoes={[
+        { label: 'Editar', onClick: () => abrirModalEditarEmail(entrada) },
+        { label: 'Remover', variant: 'danger', onClick: () => removerEmail(entrada) },
+      ]}
+    />,
   ])
 
   return (
@@ -357,9 +357,7 @@ export default function UsuariosPage() {
               </Select>
             </FormField>
           )}
-          {erroSalvarUsuario && (
-            <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarUsuario}</p>
-          )}
+          {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
           <FormActions>
             <Button variant="outline" onClick={fecharModalUsuario}>
               Cancelar
@@ -405,7 +403,7 @@ export default function UsuariosPage() {
               ))}
             </Select>
           </FormField>
-          {erroSalvarEmail && <p style={{ fontSize: 12, color: '#dc2626' }}>{erroSalvarEmail}</p>}
+          {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>
             <Button variant="outline" onClick={fecharModalEmail}>
               Cancelar

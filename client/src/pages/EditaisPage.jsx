@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Badge, Button, DataTable, PageHeader, useConfirm } from '../components'
+import {
+  AcoesCell,
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  PageHeader,
+  useConfirm,
+  useToast,
+} from '../components'
 import EditalForm from './EditalForm'
 
 export default function EditaisPage() {
@@ -8,10 +17,10 @@ export default function EditaisPage() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [sucesso, setSucesso] = useState('')
   const [editalEdicao, setEditalEdicao] = useState(null)
   const [processando, setProcessando] = useState(false)
   const confirmar = useConfirm()
+  const toast = useToast()
 
   useEffect(() => {
     let ativo = true
@@ -58,13 +67,11 @@ export default function EditaisPage() {
     atualizarLista(edital)
     setMostrarFormulario(false)
     setEditalEdicao(null)
-    setSucesso('Edital salvo com sucesso.')
+    toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
   }
 
   async function abrirEdicao(edital) {
     setProcessando(true)
-    setErro('')
-    setSucesso('')
 
     try {
       const response = await editaisFetch(`/${edital.id}/`)
@@ -77,7 +84,7 @@ export default function EditaisPage() {
       setEditalEdicao(dados)
       setMostrarFormulario(true)
     } catch (error) {
-      setErro(error.message || 'Falha ao conectar ao servidor.')
+      toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
       setProcessando(false)
     }
@@ -85,8 +92,6 @@ export default function EditaisPage() {
 
   async function alterarStatus(edital, acao) {
     setProcessando(true)
-    setErro('')
-    setSucesso('')
 
     try {
       const response = await editaisFetch(`/${edital.id}/${acao}/`, {
@@ -112,11 +117,13 @@ export default function EditaisPage() {
       }
 
       atualizarLista(dados)
-      setSucesso(
-        acao === 'publicar' ? 'Edital publicado com sucesso.' : 'Edital encerrado com sucesso.'
-      )
+      toast({
+        message:
+          acao === 'publicar' ? 'Edital publicado com sucesso.' : 'Edital encerrado com sucesso.',
+        tone: 'success',
+      })
     } catch (error) {
-      setErro(error.message || 'Falha ao conectar ao servidor.')
+      toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
       setProcessando(false)
     }
@@ -152,29 +159,23 @@ export default function EditaisPage() {
     >
       Documento oficial
     </a>,
-    <div key={`acoes-${edital.id}`} style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {['RASCUNHO', 'EM_VIGOR'].includes(edital.status) ? (
-        <>
-          <Button
-            size="sm"
-            disabled={processando || mostrarFormulario}
-            onClick={() => abrirEdicao(edital)}
-          >
-            Editar
-          </Button>
-          <Button
-            size="sm"
-            variant={edital.status === 'RASCUNHO' ? 'accent' : 'danger'}
-            disabled={processando || mostrarFormulario}
-            onClick={() => confirmarStatus(edital)}
-          >
-            {edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar'}
-          </Button>
-        </>
-      ) : (
-        'Sem ações disponíveis'
-      )}
-    </div>,
+    <AcoesCell
+      key={`acoes-${edital.id}`}
+      mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
+      acoes={[
+        {
+          label: 'Editar',
+          disabled: processando || mostrarFormulario,
+          onClick: () => abrirEdicao(edital),
+        },
+        {
+          label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
+          variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
+          disabled: processando || mostrarFormulario,
+          onClick: () => confirmarStatus(edital),
+        },
+      ]}
+    />,
   ])
 
   return (
@@ -187,8 +188,6 @@ export default function EditaisPage() {
               variant="accent"
               disabled={processando || mostrarFormulario}
               onClick={() => {
-                setErro('')
-                setSucesso('')
                 setEditalEdicao(null)
                 setMostrarFormulario(true)
               }}
@@ -199,7 +198,6 @@ export default function EditaisPage() {
         }
       />
 
-      {sucesso && <Alert tone="success">{sucesso}</Alert>}
       {erro && <Alert tone="error">{erro}</Alert>}
       {processando && <p role="status">Processando...</p>}
 
