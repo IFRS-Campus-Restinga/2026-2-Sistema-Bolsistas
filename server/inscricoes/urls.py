@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     CancelarInscricaoView,
+    CandidatoListView,
     DocumentoDeleteView,
     DocumentoListCreateView,
     EnviarInscricaoView,
@@ -18,4 +19,5 @@ urlpatterns = [
     path("<int:pk>/cancelar/", CancelarInscricaoView.as_view(), name="cancelar"),
     path("<int:inscricao_pk>/documentos/", DocumentoListCreateView.as_view(), name="documentos"),
     path("documentos/<int:pk>/", DocumentoDeleteView.as_view(), name="documento-detalhe"),
+    path("bolsa/<int:bolsa_pk>/candidatos/", CandidatoListView.as_view(), name="candidatos"),
 ]
