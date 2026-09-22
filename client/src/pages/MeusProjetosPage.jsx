@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CandidatosPage from './CandidatosPage'
 import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
 import {
   AcoesCell,
@@ -245,6 +246,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const confirmar = useConfirm()
   const toast = useToast()
 
+  const [bolsaCandidatos, setBolsaCandidatos] = useState(null)
   const [projeto, setProjeto] = useState(null)
   const [bolsas, setBolsas] = useState([])
   const [editais, setEditais] = useState([])
@@ -386,6 +388,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     )
   }
 
+  if (bolsaCandidatos) {
+    return (
+      <CandidatosPage
+        key={bolsaCandidatos.id}
+        bolsa={bolsaCandidatos}
+        projetoTitulo={projeto.titulo}
+        onVoltar={() => setBolsaCandidatos(null)}
+      />
+    )
+  }
+
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
 
   const linhasBolsas = bolsas.map((bolsa) => [
@@ -396,13 +409,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     <Badge key="status" status={bolsa.status} />,
     <AcoesCell
       key="acoes"
-      mostrar={podeCancelar(bolsa)}
       acoes={[
-        {
-          label: 'Cancelar Bolsa',
-          variant: 'danger',
-          onClick: () => confirmarCancelarBolsa(bolsa),
-        },
+        { label: 'Candidatos', onClick: () => setBolsaCandidatos(bolsa) },
+        ...(podeCancelar(bolsa)
+          ? [
+              {
+                label: 'Cancelar Bolsa',
+                variant: 'danger',
+                onClick: () => confirmarCancelarBolsa(bolsa),
+              },
+            ]
+          : []),
       ]}
     />,
   ])

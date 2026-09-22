@@ -8,10 +8,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAluno
+from accounts.permissions import IsAluno, IsCoordenadorProjeto
+from bolsas.models import Bolsa
 
 from .models import Documento, Inscricao, StatusInscricao, TipoDocumento
-from .serializers import DocumentoSerializer, InscricaoSerializer
+from .serializers import (
+    CandidatoSerializer,
+    DocumentoSerializer,
+    InscricaoSerializer,
+)
 
 DOCUMENTOS_OBRIGATORIOS = {TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA}
 MAX_DOCUMENTOS_ADICIONAIS = 5
@@ -159,3 +164,31 @@ class DocumentoDeleteView(generics.DestroyAPIView):
     def perform_destroy(self, instance):
         _garantir_editavel(instance.inscricao)
         instance.delete()
+
+
+class CandidatoListView(generics.ListAPIView):
+    serializer_class = CandidatoSerializer
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get_queryset(self):
+        bolsa = get_object_or_404(
+            Bolsa,
+            pk=self.kwargs["bolsa_pk"],
+            projeto__coordenador_projeto__usuario=self.request.user,
+        )
+
+        return (
+            Inscricao.objects.filter(
+                bolsa=bolsa,
+                data_envio__isnull=False,
+            )
+            .exclude(
+                status__in=[
+                    StatusInscricao.RASCUNHO,
+                    StatusInscricao.CANCELADA,
+                ]
+            )
+            .select_related("aluno")
+            .prefetch_related("documentos")
+            .order_by("data_envio", "id")
+        )

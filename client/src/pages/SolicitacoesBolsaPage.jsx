@@ -117,14 +117,22 @@ export default function SolicitacoesBolsaPage() {
     bolsa.edital_nome,
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <AcoesCell key="acoes" mostrar={bolsa.status === 'SOLICITADA'}>
-      <Button size="sm" variant="accent" onClick={() => confirmarAprovar(bolsa)}>
-        Aprovar
-      </Button>
-      <Button size="sm" variant="danger" onClick={() => abrirModalRejeitar(bolsa)}>
-        Rejeitar
-      </Button>
-    </AcoesCell>,
+    <AcoesCell
+      key="acoes"
+      mostrar={bolsa.status === 'SOLICITADA'}
+      acoes={[
+        {
+          label: 'Aprovar',
+          variant: 'accent',
+          onClick: () => confirmarAprovar(bolsa),
+        },
+        {
+          label: 'Rejeitar',
+          variant: 'danger',
+          onClick: () => abrirModalRejeitar(bolsa),
+        },
+      ]}
+    />,
   ])
 
   return (

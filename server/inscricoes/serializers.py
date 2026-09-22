@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from bolsas.models import StatusBolsa
 
-from .models import Documento, Inscricao, StatusInscricao
+from .models import Documento, Inscricao, StatusInscricao, TipoDocumento
 
 MAX_INSCRICOES_ATIVAS_POR_EDITAL = 3
 
@@ -83,3 +83,34 @@ class InscricaoSerializer(serializers.ModelSerializer):
                 )
 
         return bolsa
+
+
+class CandidatoSerializer(serializers.ModelSerializer):
+    aluno_nome = serializers.SerializerMethodField()
+    aluno_email = serializers.EmailField(source="aluno.email", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    documentacao_completa = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Inscricao
+        fields = [
+            "id",
+            "aluno_nome",
+            "aluno_email",
+            "status",
+            "status_display",
+            "data_envio",
+            "documentacao_completa",
+        ]
+        read_only_fields = fields
+
+    def get_aluno_nome(self, obj):
+        return obj.aluno.nome or obj.aluno.get_full_name() or obj.aluno.username
+
+    def get_documentacao_completa(self, obj):
+        obrigatorios = {
+            TipoDocumento.HISTORICO_ESCOLAR,
+            TipoDocumento.COMPROVANTE_MATRICULA,
+        }
+        enviados = {documento.tipo for documento in obj.documentos.all()}
+        return obrigatorios.issubset(enviados)
