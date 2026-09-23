@@ -1,9 +1,10 @@
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers
 
 from bolsas.models import StatusBolsa
 
-from .models import Documento, Inscricao, StatusInscricao, TipoDocumento
+from .models import Documento, Inscricao, NotificacaoInscricao, StatusInscricao, TipoDocumento
 
 MAX_INSCRICOES_ATIVAS_POR_EDITAL = 3
 
@@ -16,6 +17,20 @@ class DocumentoSerializer(serializers.ModelSerializer):
         fields = ["id", "tipo", "tipo_display", "nome_original", "arquivo", "enviado_em"]
         read_only_fields = ["id", "nome_original", "enviado_em"]
 
+    def to_representation(self, instance):
+        dados = super().to_representation(instance)
+        caminho = reverse("inscricoes:documento-arquivo", kwargs={"pk": instance.pk})
+        request = self.context.get("request")
+        dados["arquivo"] = request.build_absolute_uri(caminho) if request else caminho
+        return dados
+
+
+class NotificacaoInscricaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificacaoInscricao
+        fields = ["id", "mensagem", "criada_em", "lida_em"]
+        read_only_fields = fields
+
 
 class InscricaoSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
@@ -23,6 +38,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
     projeto_titulo = serializers.CharField(source="bolsa.projeto.titulo", read_only=True)
     edital_nome = serializers.CharField(source="bolsa.edital.nome", read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
+    notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
 
     class Meta:
         model = Inscricao
@@ -40,8 +56,19 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "data_envio",
             "data_cancelamento",
             "documentos",
+            "justificativa_indeferimento",
+            "data_decisao",
+            "notificacoes",
         ]
-        read_only_fields = ["id", "status", "data_criacao", "data_envio", "data_cancelamento"]
+        read_only_fields = [
+            "id",
+            "status",
+            "data_criacao",
+            "data_envio",
+            "data_cancelamento",
+            "justificativa_indeferimento",
+            "data_decisao",
+        ]
 
     def validate_bolsa(self, bolsa):
         if self.instance and bolsa != self.instance.bolsa:
@@ -114,3 +141,20 @@ class CandidatoSerializer(serializers.ModelSerializer):
         }
         enviados = {documento.tipo for documento in obj.documentos.all()}
         return obrigatorios.issubset(enviados)
+
+
+class CandidatoDetalheSerializer(CandidatoSerializer):
+    documentos = DocumentoSerializer(many=True, read_only=True)
+
+    class Meta(CandidatoSerializer.Meta):
+        fields = CandidatoSerializer.Meta.fields + [
+            "documentos",
+            "link_lattes",
+            "justificativa_indeferimento",
+            "data_decisao",
+        ]
+        read_only_fields = fields
+
+
+class IndeferimentoSerializer(serializers.Serializer):
+    justificativa = serializers.CharField(allow_blank=False, max_length=5000, trim_whitespace=True)
