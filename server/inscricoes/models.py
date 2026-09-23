@@ -11,6 +11,8 @@ class StatusInscricao(models.TextChoices):
     RASCUNHO = "RASCUNHO", "Rascunho"
     PENDENTE = "PENDENTE", "Pendente"
     CANCELADA = "CANCELADA", "Cancelada"
+    HOMOLOGADA = "HOMOLOGADA", "Homologada"
+    INDEFERIDA = "INDEFERIDA", "Indeferida"
 
 
 class Inscricao(models.Model):
@@ -26,6 +28,15 @@ class Inscricao(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_envio = models.DateTimeField(null=True, blank=True)
     data_cancelamento = models.DateTimeField(null=True, blank=True)
+    justificativa_indeferimento = models.TextField(blank=True, default="")
+    data_decisao = models.DateTimeField(null=True, blank=True)
+    responsavel_decisao = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inscricoes_analisadas",
+    )
 
     class Meta:
         ordering = ["-data_criacao"]
@@ -65,3 +76,16 @@ class Documento(models.Model):
 @receiver(pre_delete, sender=Documento)
 def _remover_arquivo_do_disco(sender, instance, **kwargs):
     instance.arquivo.delete(save=False)
+
+
+class NotificacaoInscricao(models.Model):
+    inscricao = models.ForeignKey(Inscricao, on_delete=models.CASCADE, related_name="notificacoes")
+    mensagem = models.TextField()
+    criada_em = models.DateTimeField(auto_now_add=True)
+    lida_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criada_em", "-id"]
+
+    def __str__(self):
+        return f"Notificação da inscrição {self.inscricao_id}"

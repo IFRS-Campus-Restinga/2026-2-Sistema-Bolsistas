@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react'
 import { inscricoesFetch } from '../api'
-import { Alert, Badge, Button, DataTable, IconArrowLeft, PageHeader } from '../components'
+import CandidatoAnaliseModal from './CandidatoAnaliseModal'
+import {
+  AcoesCell,
+  useToast,
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  IconArrowLeft,
+  PageHeader,
+} from '../components'
 
 export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
   const [consulta, setConsulta] = useState({ carregando: true, candidatos: [], erro: '' })
   const [tentativa, setTentativa] = useState(0)
+  const [candidatoId, setCandidatoId] = useState(null)
+  const toast = useToast()
 
   useEffect(() => {
     let ativo = true
@@ -50,6 +62,15 @@ export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
     candidato.documentacao_completa
       ? 'Documentos obrigatórios enviados'
       : 'Documentos obrigatórios faltantes',
+    <AcoesCell
+      key={`acoes-${candidato.id}`}
+      acoes={[
+        {
+          label: candidato.status === 'PENDENTE' ? 'Analisar' : 'Ver decisão',
+          onClick: () => setCandidatoId(candidato.id),
+        },
+      ]}
+    />,
   ])
 
   return (
@@ -74,9 +95,29 @@ export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
         </>
       ) : (
         <DataTable
-          columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Documentação']}
+          columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Documentação', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhum candidato com inscrição enviada para esta bolsa."
+        />
+      )}
+      {candidatoId && (
+        <CandidatoAnaliseModal
+          key={candidatoId}
+          candidatoId={candidatoId}
+          onFechar={() => setCandidatoId(null)}
+          onDecisao={(atualizado) => {
+            setConsulta((atual) => ({
+              ...atual,
+              candidatos: atual.candidatos.map((item) =>
+                item.id === atualizado.id ? atualizado : item
+              ),
+            }))
+            setCandidatoId(null)
+            toast({
+              message: 'Decisão registrada. O aluno foi notificado no sistema.',
+              tone: 'success',
+            })
+          }}
         />
       )}
     </>

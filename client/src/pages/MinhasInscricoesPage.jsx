@@ -107,8 +107,30 @@ export default function MinhasInscricoesPage() {
         { label: 'Cancelar', variant: 'danger', onClick: () => cancelarInscricao(inscricao) },
       ]
     }
+    if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
+      return [{ label: 'Ver resultado', onClick: () => setComprovante(inscricao) }]
+    }
     return []
   }
+
+  const [lendoNotificacao, setLendoNotificacao] = useState(null)
+
+  async function marcarLida(id) {
+    setLendoNotificacao(id)
+    try {
+      const res = await inscricoesFetch(`/notificacoes/${id}/ler/`, { method: 'POST' })
+      if (!res.ok) throw new Error('Não foi possível marcar a notificação como lida.')
+      forcarRecarga()
+    } catch (e) {
+      toast({ message: e.message, tone: 'error' })
+    } finally {
+      setLendoNotificacao(null)
+    }
+  }
+
+  const notificacoes = inscricoes
+    .flatMap((item) => item.notificacoes || [])
+    .filter((item) => !item.lida_em)
 
   const linhas = inscricoes.map((inscricao) => [
     inscricao.projeto_titulo,
@@ -123,6 +145,24 @@ export default function MinhasInscricoesPage() {
       <PageHeader title="Minhas Inscrições" />
 
       {erro && <Alert tone="error">{erro}</Alert>}
+      {notificacoes.length > 0 && (
+        <section aria-label="Notificações das inscrições">
+          <h3>Novas notificações</h3>
+          {notificacoes.map((item) => (
+            <Alert key={item.id} tone="warning">
+              <p>{item.mensagem}</p>
+              <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
+              <Button
+                size="sm"
+                disabled={lendoNotificacao !== null}
+                onClick={() => marcarLida(item.id)}
+              >
+                Marcar como lida
+              </Button>
+            </Alert>
+          ))}
+        </section>
+      )}
 
       {carregando ? (
         <p role="status">Carregando inscrições...</p>
@@ -169,6 +209,12 @@ function ComprovanteModal({ inscricao, onFechar }) {
         {inscricao.data_envio ? new Date(inscricao.data_envio).toLocaleString('pt-BR') : '—'}
       </p>
 
+      {inscricao.justificativa_indeferimento && (
+        <Alert tone="error">Motivo do indeferimento: {inscricao.justificativa_indeferimento}</Alert>
+      )}
+      {inscricao.data_decisao && (
+        <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
+      )}
       <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
       <ul style={{ paddingLeft: 20 }}>
         {inscricao.documentos.map((doc) => (
