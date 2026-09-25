@@ -13,6 +13,7 @@ import {
   useToast,
 } from '../components'
 import InscricaoWizard from './InscricaoWizard'
+import RecursosModal from './RecursosModal'
 
 export default function MinhasInscricoesPage() {
   const confirmar = useConfirm()
@@ -24,6 +25,7 @@ export default function MinhasInscricoesPage() {
   const [recarregar, setRecarregar] = useState(0)
   const [edicaoAberta, setEdicaoAberta] = useState(null)
   const [comprovante, setComprovante] = useState(null)
+  const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
 
   useEffect(() => {
     let ativo = true
@@ -108,7 +110,10 @@ export default function MinhasInscricoesPage() {
       ]
     }
     if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
-      return [{ label: 'Ver resultado', onClick: () => setComprovante(inscricao) }]
+      return [
+        { label: 'Ver resultado', onClick: () => setComprovante(inscricao) },
+        { label: 'Recursos', onClick: () => setRecursoInscricaoId(inscricao.id) },
+      ]
     }
     return []
   }
@@ -188,6 +193,14 @@ export default function MinhasInscricoesPage() {
         />
       )}
 
+      {recursoInscricaoId && (
+        <RecursosModal
+          key={recursoInscricaoId}
+          inscricaoId={recursoInscricaoId}
+          onFechar={() => setRecursoInscricaoId(null)}
+          onAtualizar={forcarRecarga}
+        />
+      )}
       {comprovante && (
         <ComprovanteModal inscricao={comprovante} onFechar={() => setComprovante(null)} />
       )}
