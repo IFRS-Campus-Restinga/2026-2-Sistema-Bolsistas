@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { inscricoesFetch } from '../api'
 import CandidatoAnaliseModal from './CandidatoAnaliseModal'
+import RecursosModal from './RecursosModal'
 import {
   AcoesCell,
   useToast,
@@ -16,6 +17,7 @@ export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
   const [consulta, setConsulta] = useState({ carregando: true, candidatos: [], erro: '' })
   const [tentativa, setTentativa] = useState(0)
   const [candidatoId, setCandidatoId] = useState(null)
+  const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -69,6 +71,9 @@ export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
           label: candidato.status === 'PENDENTE' ? 'Analisar' : 'Ver decisão',
           onClick: () => setCandidatoId(candidato.id),
         },
+        ...(['INDEFERIDA', 'HOMOLOGADA'].includes(candidato.status)
+          ? [{ label: 'Recursos', onClick: () => setRecursoInscricaoId(candidato.id) }]
+          : []),
       ]}
     />,
   ])
@@ -98,6 +103,22 @@ export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
           columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Documentação', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhum candidato com inscrição enviada para esta bolsa."
+        />
+      )}
+      {recursoInscricaoId && (
+        <RecursosModal
+          key={recursoInscricaoId}
+          inscricaoId={recursoInscricaoId}
+          coordenador
+          onFechar={() => setRecursoInscricaoId(null)}
+          onAtualizar={(atualizado) => {
+            setConsulta((atual) => ({
+              ...atual,
+              candidatos: atual.candidatos.map((item) =>
+                item.id === atualizado.id ? atualizado : item
+              ),
+            }))
+          }}
         />
       )}
       {candidatoId && (
