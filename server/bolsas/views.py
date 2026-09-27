@@ -12,8 +12,12 @@ from rest_framework.views import APIView
 from accounts.models import Usuario
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 
-from .models import Bolsa, StatusBolsa, TipoBolsa
-from .serializers import BolsaSerializer
+from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
+from .serializers import (
+    BolsaEdicaoSerializer,
+    BolsaSerializer,
+    EtapaAvaliacaoSerializer,
+)
 
 STATUS_BLOQUEIAM_CANCELAMENTO = [
     StatusBolsa.CANCELADA,
@@ -51,7 +55,7 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Bolsa.objects.select_related("projeto", "edital")
+        queryset = Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
 
         if user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(projeto__coordenador_projeto__usuario=user)
@@ -65,10 +69,14 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
 def _bolsas_disponiveis_qs():
     hoje = timezone.localdate()
-    return Bolsa.objects.select_related("projeto", "edital").filter(
-        status=StatusBolsa.ABERTA,
-        edital__data_abertura_inscricoes__lte=hoje,
-        edital__data_fechamento_inscricoes__gte=hoje,
+    return (
+        Bolsa.objects.select_related("projeto", "edital")
+        .prefetch_related("etapas")
+        .filter(
+            status=StatusBolsa.ABERTA,
+            edital__data_abertura_inscricoes__lte=hoje,
+            edital__data_fechamento_inscricoes__gte=hoje,
+        )
     )
 
 
@@ -80,22 +88,34 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
-    """Detalhe de uma bolsa disponível — mesmo recorte do BolsasDisponiveisView,
-    então não dá pra ver detalhe de bolsa fechada/fora do prazo adivinhando o id."""
-
     serializer_class = BolsaSerializer
 
     def get_queryset(self):
         return _bolsas_disponiveis_qs()
 
 
-class BolsaDetailView(generics.RetrieveAPIView):
-    serializer_class = BolsaSerializer
-    permission_classes = [IsAuthenticated, IsCoordenadorProjeto | IsCoordenadorArea]
+class BolsaDetailView(generics.RetrieveUpdateAPIView):
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self):
+        if self.request.method == "PATCH":
+            return [IsAuthenticated(), IsCoordenadorProjeto()]
+        return [IsAuthenticated(), (IsCoordenadorProjeto | IsCoordenadorArea)()]
+
+    def get_serializer_class(self):
+        if self.request.method == "PATCH":
+            return BolsaEdicaoSerializer
+        return BolsaSerializer
+
+    def perform_update(self, serializer):
+        motivo = serializer.instance.motivo_bloqueio_edicao()
+        if motivo:
+            raise ValidationError({"detail": motivo})
+        serializer.save()
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Bolsa.objects.select_related("projeto", "edital")
+        queryset = Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
 
         if user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(projeto__coordenador_projeto__usuario=user)
@@ -135,7 +155,7 @@ class AprovarBolsaView(APIView):
         bolsa.data_decisao = timezone.now()
         bolsa.save(update_fields=["status", "coordenador_area", "data_decisao"])
 
-        return Response(BolsaSerializer(bolsa).data)
+        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
 class RejeitarBolsaView(APIView):
@@ -171,7 +191,7 @@ class RejeitarBolsaView(APIView):
             update_fields=["status", "coordenador_area", "data_decisao", "justificativa_decisao"]
         )
 
-        return Response(BolsaSerializer(bolsa).data)
+        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
 class CancelarBolsaView(APIView):
@@ -193,4 +213,51 @@ class CancelarBolsaView(APIView):
         bolsa.justificativa_decisao = (request.data.get("motivo") or "").strip()
         bolsa.save(update_fields=["status", "justificativa_decisao"])
 
-        return Response(BolsaSerializer(bolsa).data, status=status.HTTP_200_OK)
+        return Response(
+            BolsaSerializer(bolsa, context={"request": request}).data, status=status.HTTP_200_OK
+        )
+
+
+class _EtapasDaBolsaMixin:
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get_bolsa(self):
+        if not hasattr(self, "_bolsa"):
+            self._bolsa = get_object_or_404(
+                Bolsa.objects.select_related("edital"),
+                pk=self.kwargs["bolsa_pk"],
+                projeto__coordenador_projeto__usuario=self.request.user,
+            )
+        return self._bolsa
+
+    def garantir_editavel(self):
+        motivo = self.get_bolsa().motivo_bloqueio_etapas()
+        if motivo:
+            raise ValidationError({"detail": motivo})
+
+    def get_queryset(self):
+        return EtapaAvaliacao.objects.filter(bolsa=self.get_bolsa())
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "bolsa": self.get_bolsa()}
+
+
+class EtapaAvaliacaoListCreateView(_EtapasDaBolsaMixin, generics.ListCreateAPIView):
+    serializer_class = EtapaAvaliacaoSerializer
+
+    def perform_create(self, serializer):
+        self.garantir_editavel()
+        serializer.save(bolsa=self.get_bolsa())
+
+
+class EtapaAvaliacaoDetailView(_EtapasDaBolsaMixin, generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = EtapaAvaliacaoSerializer
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def perform_update(self, serializer):
+        self.garantir_editavel()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self.garantir_editavel()
+        instance.delete()

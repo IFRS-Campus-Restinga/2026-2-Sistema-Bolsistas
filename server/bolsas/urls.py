@@ -7,6 +7,8 @@ from .views import (
     BolsaListCreateView,
     BolsasDisponiveisView,
     CancelarBolsaView,
+    EtapaAvaliacaoDetailView,
+    EtapaAvaliacaoListCreateView,
     RejeitarBolsaView,
 )
 
@@ -19,5 +21,11 @@ urlpatterns = [
     path("<int:pk>/", BolsaDetailView.as_view(), name="detalhe"),
     path("<int:pk>/aprovar/", AprovarBolsaView.as_view(), name="aprovar"),
     path("<int:pk>/rejeitar/", RejeitarBolsaView.as_view(), name="rejeitar"),
+    path("<int:bolsa_pk>/etapas/", EtapaAvaliacaoListCreateView.as_view(), name="etapas"),
+    path(
+        "<int:bolsa_pk>/etapas/<int:pk>/",
+        EtapaAvaliacaoDetailView.as_view(),
+        name="etapa-detalhe",
+    ),
     path("<int:pk>/cancelar/", CancelarBolsaView.as_view(), name="cancelar"),
 ]

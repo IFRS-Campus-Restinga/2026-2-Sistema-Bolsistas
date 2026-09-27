@@ -30,9 +30,12 @@ urlpatterns = [
     path("api/projetos/", include("projetos.urls")),
     path("api/bolsas/", include("bolsas.urls")),
     path("api/inscricoes/", include("inscricoes.urls")),
-    ## A rota que entrega o React deve permanecer por último.
-    re_path(r"^.*$", index_view),
 ]
 
+# Em dev o Django serve os uploads; precisa vir ANTES do catch-all do React,
+# senão /media/... cai no index_view e o arquivo nunca é entregue.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+## A rota que entrega o React deve permanecer por último.
+urlpatterns += [re_path(r"^.*$", index_view)]

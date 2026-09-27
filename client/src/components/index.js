@@ -28,6 +28,7 @@ export { Banner } from './Banner'
 export { PageHeader } from './PageHeader'
 export { Alert } from './Alert'
 export { AcoesCell } from './AcoesCell'
+export { LocalEtapa } from './LocalEtapa'
 
 // Form / Input (#179)
 export { FormField, FormActions, TextInput, TextArea, Select, FileField } from './FormField'
