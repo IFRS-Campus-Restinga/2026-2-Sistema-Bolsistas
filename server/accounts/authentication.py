@@ -67,12 +67,20 @@ class HubJWTAuthentication(BaseAuthentication):
 
         role, tipo_area = self._resolve_role(hub_groups, access_profile, email)
 
+        if (
+            usuario is not None
+            and usuario.role == role
+            and usuario.email == email
+            and usuario.nome == nome
+        ):
+            return usuario
+
         with transaction.atomic():
             if usuario is None:
                 usuario = Usuario.objects.create(
                     id=user_id, username=str(user_id), email=email, nome=nome, role=role
                 )
-            elif usuario.role != role or usuario.email != email or usuario.nome != nome:
+            else:
                 usuario.role, usuario.email, usuario.nome = role, email, nome
                 usuario.save(update_fields=["role", "email", "nome"])
 
