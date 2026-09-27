@@ -72,9 +72,6 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
-    """Detalhe de uma bolsa disponível — mesmo recorte do BolsasDisponiveisView,
-    então não dá pra ver detalhe de bolsa fechada/fora do prazo adivinhando o id."""
-
     serializer_class = BolsaSerializer
 
     def get_queryset(self):
@@ -82,10 +79,6 @@ class BolsaDisponivelDetailView(generics.RetrieveAPIView):
 
 
 class BolsaDetailView(generics.RetrieveUpdateAPIView):
-    """GET: detalhe (Coord. de Projeto dono ou Coord. de Área do tipo).
-    PATCH: edição pelo Coord. de Projeto dono, enquanto a bolsa estiver editável
-    (ver Bolsa.motivo_bloqueio_edicao)."""
-
     http_method_names = ["get", "patch", "head", "options"]
 
     def get_permissions(self):
@@ -208,10 +201,6 @@ class CancelarBolsaView(APIView):
 
 
 class _EtapasDaBolsaMixin:
-    """Etapas de avaliação só são gerenciadas pelo Coordenador de Projeto dono da
-    bolsa, depois de aprovada e dentro do prazo (Bolsa.motivo_bloqueio_etapas).
-    Bolsa de outro coordenador responde 404."""
-
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
 
     def get_bolsa(self):

@@ -75,10 +75,6 @@ class DesligarProjetoView(APIView):
 
 
 class ArquivoEmentaProjetoView(APIView):
-    """Upload (POST, multipart com o campo `arquivo`) e remoção (DELETE) da
-    matriz/ementa do projeto. Só o coordenador dono mexe no arquivo, e só com o
-    projeto Ativo. Enviar de novo substitui o arquivo anterior (inclusive no disco)."""
-
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
     parser_classes = [MultiPartParser, FormParser]
 

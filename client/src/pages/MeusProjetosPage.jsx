@@ -23,8 +23,6 @@ import { enviarEmentaProjeto, validarArquivoEmenta } from '../utils/ementaProjet
 import EmentaProjetoCard from './EmentaProjetoCard'
 import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
 
-// Status em que as etapas de avaliação aparecem (antes de aprovada não faz sentido;
-// encerrada/cancelada/rejeitada não tem mais o que ver).
 const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
 
 const TIPO_OPTIONS = [

@@ -32,17 +32,12 @@ class StatusBolsa(models.TextChoices):
     CANCELADA = "CANCELADA", "Cancelada"
 
 
-# Status em que o Coordenador de Projeto ainda pode editar a bolsa
-# (desde que o prazo de inscrições do edital não tenha terminado).
 STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.APROVADA, StatusBolsa.ABERTA]
 
 
-# Soma que os pesos das etapas de avaliação de uma bolsa precisam fechar (em %).
 PESO_TOTAL = Decimal("100")
 
 
-# Não é mais usado (a ementa foi para o Projeto), mas a migration 0002 ainda
-# referencia esta função — não apagar.
 def caminho_arquivo_bolsa(instance, filename):
     return f"bolsas/{instance.pk}/{filename}"
 
@@ -101,13 +96,6 @@ class Bolsa(models.Model):
         return f"{self.get_tipo_display()} - {self.carga_horaria_semanal}h ({self.get_status_display()})"
 
     def motivo_bloqueio_edicao(self):
-        """Retorna o motivo pelo qual a bolsa NÃO pode ser editada, ou "" se pode.
-
-        Regra: a bolsa pode ser editada enquanto estiver Solicitada/Aprovada/Aberta
-        e o prazo de inscrições do edital não tiver terminado (até o dia do
-        fechamento, inclusive). Se o edital ainda não tem data de fechamento,
-        a edição fica liberada.
-        """
         if self.status not in STATUS_EDITAVEIS:
             return f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada.'
 
@@ -120,9 +108,6 @@ class Bolsa(models.Model):
         return ""
 
     def motivo_bloqueio_etapas(self):
-        """Motivo pelo qual as etapas de avaliação NÃO podem ser cadastradas/alteradas,
-        ou "" se podem. Etapas só fazem sentido depois que a bolsa foi aprovada, e
-        seguem o mesmo prazo da edição da bolsa."""
         if self.status == StatusBolsa.SOLICITADA:
             return (
                 "As etapas de avaliação só podem ser cadastradas depois que a bolsa for aprovada."
@@ -130,9 +115,6 @@ class Bolsa(models.Model):
         return self.motivo_bloqueio_edicao()
 
     def pesos_efetivos_etapas(self):
-        """{id da etapa: peso efetivo em %}. Etapas sem peso dividem igualmente o
-        que sobra de 100%, então, se nenhuma etapa tem peso, todas ficam com o
-        mesmo peso (100 / n)."""
         etapas = list(self.etapas.all())
         indefinidas = [etapa for etapa in etapas if etapa.peso is None]
         soma_definidos = sum((e.peso for e in etapas if e.peso is not None), Decimal("0"))
@@ -143,7 +125,6 @@ class Bolsa(models.Model):
         return {etapa.id: etapa.peso if etapa.peso is not None else cota for etapa in etapas}
 
     def aviso_pesos_etapas(self):
-        """Mensagem explicando por que os pesos não fecham 100%, ou "" se está tudo certo."""
         etapas = list(self.etapas.all())
         if not etapas:
             return ""

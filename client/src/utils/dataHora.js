@@ -1,8 +1,3 @@
-/**
- * Conversões entre o valor de um <input type="datetime-local"> (hora local do
- * navegador, sem fuso: "2026-10-05T14:00") e o ISO com fuso que a API usa.
- */
-
 function doisDigitos(numero) {
   return String(numero).padStart(2, '0')
 }

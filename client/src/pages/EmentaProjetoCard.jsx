@@ -6,16 +6,11 @@ import {
   validarArquivoEmenta,
 } from '../utils/ementaProjeto'
 
-/**
- * Matriz / ementa do projeto na tela de detalhe: mostra o arquivo atual e,
- * com o projeto Ativo, permite anexar, trocar ou remover.
- */
 export default function EmentaProjetoCard({ projeto, onAtualizado }) {
   const confirmar = useConfirm()
   const toast = useToast()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
-  // Remonta o FileField depois de cada envio, pra dar pra escolher o mesmo arquivo de novo.
   const [versaoCampo, setVersaoCampo] = useState(0)
 
   const podeAlterar = projeto.status === 'ATIVO'

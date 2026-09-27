@@ -15,7 +15,6 @@ export function validarArquivoEmenta(arquivo) {
   return ''
 }
 
-/** Envia (ou substitui) a matriz/ementa do projeto. Devolve o projeto atualizado. */
 export async function enviarEmentaProjeto(projetoId, arquivo) {
   const formData = new FormData()
   formData.append('arquivo', arquivo)
@@ -27,7 +26,6 @@ export async function enviarEmentaProjeto(projetoId, arquivo) {
   return corpo
 }
 
-/** Remove a matriz/ementa do projeto. */
 export async function removerEmentaProjeto(projetoId) {
   const res = await projetosFetch(`/${projetoId}/arquivo/`, { method: 'DELETE' })
   if (!res.ok) {

@@ -25,7 +25,7 @@ class BolsaSerializer(serializers.ModelSerializer):
     minha_inscricao_status = serializers.SerializerMethodField()
     pode_editar = serializers.SerializerMethodField()
     pode_editar_etapas = serializers.SerializerMethodField()
-    # matriz/ementa pertence ao projeto; vem junto pra tela de detalhe da bolsa
+
     projeto_arquivo_ementa = serializers.FileField(source="projeto.arquivo_ementa", read_only=True)
     projeto_nome_arquivo = serializers.CharField(
         source="projeto.nome_original_arquivo", read_only=True
@@ -78,8 +78,6 @@ class BolsaSerializer(serializers.ModelSerializer):
         ]
 
     def get_minha_inscricao_status(self, bolsa):
-        # Pra o Aluno saber, ao ver o detalhe da bolsa, se já tem inscrição
-        # (rascunho ou pendente) antes de tentar se inscrever de novo.
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return None
@@ -131,10 +129,6 @@ class BolsaSerializer(serializers.ModelSerializer):
 
 
 class BolsaEdicaoSerializer(BolsaSerializer):
-    """Edição pelo Coordenador de Projeto. Projeto e edital não mudam (o edital
-    define o prazo e o projeto define o dono), e o tipo só pode mudar enquanto a
-    bolsa não foi aprovada — o tipo define qual Coordenador de Área aprova."""
-
     class Meta(BolsaSerializer.Meta):
         read_only_fields = [*BolsaSerializer.Meta.read_only_fields, "projeto", "edital"]
 
@@ -150,7 +144,6 @@ class BolsaEdicaoSerializer(BolsaSerializer):
 class EtapaAvaliacaoSerializer(serializers.ModelSerializer):
     """CRUD de etapa. A bolsa vem da URL (context["bolsa"]), não do corpo."""
 
-    # Declarado à mão pra usar só as validações (e mensagens) de validate_peso.
     peso = serializers.DecimalField(
         max_digits=5, decimal_places=2, allow_null=True, required=False, default=None
     )
@@ -176,8 +169,6 @@ class EtapaAvaliacaoSerializer(serializers.ModelSerializer):
         return nome
 
     def validate_data_hora(self, data_hora):
-        # Só valida quando a data muda: uma etapa que já aconteceu pode continuar
-        # sendo editada (ex.: ajustar o peso) sem precisar trocar a data.
         if data_hora is None:
             return data_hora
         if self.instance and self.instance.data_hora == data_hora:

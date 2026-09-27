@@ -28,20 +28,6 @@ function mensagemDeErro(corpo, padrao) {
   )
 }
 
-/**
- * Lista das etapas de avaliação de uma bolsa. Criar/editar abre um segundo
- * modal por cima (EtapaFormModal).
- *
- * Regra dos pesos (calculada no backend, campo `peso_efetivo`):
- *   - etapa com peso definido usa esse peso;
- *   - etapas sem peso dividem igualmente o que sobra de 100%
- *     (então, se nenhuma tem peso, todas ficam com o mesmo peso).
- *
- * Props:
- *   bolsa        — bolsa vinda da API (com `etapas`, `aviso_pesos` e `pode_editar_etapas`)
- *   onAtualizada — callback(bolsa) com a bolsa recarregada depois de cada alteração
- *   onFechar
- */
 export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada, onFechar }) {
   const confirmar = useConfirm()
 
