@@ -217,16 +217,16 @@ function BolsaDetalhe({ bolsaId, onVoltar }) {
           </div>
         )}
         <p>
-          <strong>Matriz / ementa:</strong>{' '}
-          {bolsa.arquivo_ementa ? (
+          <strong>Matriz / ementa do projeto:</strong>{' '}
+          {bolsa.projeto_arquivo_ementa ? (
             <a
-              href={bolsa.arquivo_ementa}
+              href={bolsa.projeto_arquivo_ementa}
               target="_blank"
               rel="noopener noreferrer"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
               <IconPaperclip size={14} />
-              {bolsa.nome_original_arquivo || 'Abrir arquivo'}
+              {bolsa.projeto_nome_arquivo || 'Abrir arquivo'}
             </a>
           ) : (
             'Não anexado.'

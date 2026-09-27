@@ -19,7 +19,13 @@ import {
   useConfirm,
   useToast,
 } from '../components'
+import { enviarEmentaProjeto, validarArquivoEmenta } from '../utils/ementaProjeto'
+import EmentaProjetoCard from './EmentaProjetoCard'
 import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
+
+// Status em que as etapas de avaliação aparecem (antes de aprovada não faz sentido;
+// encerrada/cancelada/rejeitada não tem mais o que ver).
+const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
 
 const TIPO_OPTIONS = [
   { value: 'ENSINO', label: 'Ensino' },
@@ -39,20 +45,6 @@ const CARGA_HORARIA_OPTIONS = [
   { value: '12', label: '12h semanais' },
   { value: '16', label: '16h semanais' },
 ]
-
-const EXTENSOES_ARQUIVO = ['pdf', 'doc', 'docx']
-const TAMANHO_MAX_ARQUIVO_MB = 10
-
-function validarArquivo(arquivo) {
-  const extensao = arquivo.name.split('.').pop().toLowerCase()
-  if (!EXTENSOES_ARQUIVO.includes(extensao)) {
-    return 'Formato não permitido. Envie .pdf, .doc ou .docx.'
-  }
-  if (arquivo.size > TAMANHO_MAX_ARQUIVO_MB * 1024 * 1024) {
-    return `O arquivo deve ter no máximo ${TAMANHO_MAX_ARQUIVO_MB} MB.`
-  }
-  return ''
-}
 
 function opcaoLabel(opcoes, valor) {
   return opcoes.find((opcao) => opcao.value === valor)?.label || valor
@@ -85,6 +77,7 @@ function ListaProjetos({ onGerenciar }) {
   const [modalAberto, setModalAberto] = useState(false)
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
+  const [arquivoEmenta, setArquivoEmenta] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
 
@@ -114,6 +107,7 @@ function ListaProjetos({ onGerenciar }) {
   function abrirModalNovoProjeto() {
     setTitulo('')
     setDescricao('')
+    setArquivoEmenta(null)
     setErroSalvar('')
     setModalAberto(true)
   }
@@ -131,10 +125,26 @@ function ListaProjetos({ onGerenciar }) {
         const corpo = await res.json().catch(() => null)
         throw new Error(corpo?.titulo?.[0] || corpo?.detail || 'Erro ao criar projeto.')
       }
-      const criado = await res.json()
+      let criado = await res.json()
+      let avisoArquivo = ''
+      if (arquivoEmenta) {
+        try {
+          criado = await enviarEmentaProjeto(criado.id, arquivoEmenta)
+        } catch (e) {
+          avisoArquivo = e.message
+        }
+      }
       setProjetos((atuais) => [criado, ...atuais])
       setModalAberto(false)
-      toast({ message: 'Projeto criado com sucesso.', tone: 'success' })
+      if (avisoArquivo) {
+        toast({
+          message: `Projeto criado, mas a matriz/ementa não foi enviada: ${avisoArquivo}`,
+          tone: 'warning',
+          duration: 6000,
+        })
+      } else {
+        toast({ message: 'Projeto criado com sucesso.', tone: 'success' })
+      }
     } catch (e) {
       setErroSalvar(e.message)
     } finally {
@@ -230,6 +240,18 @@ function ListaProjetos({ onGerenciar }) {
           <FormField label="Descrição">
             <TextArea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
           </FormField>
+          <FormField label="Matriz / ementa (opcional — .pdf, .doc ou .docx, até 10 MB)">
+            <FileField
+              value={arquivoEmenta?.name || ''}
+              onChange={(arquivo) => {
+                const erroArquivo = arquivo ? validarArquivoEmenta(arquivo) : ''
+                setErroSalvar(erroArquivo)
+                setArquivoEmenta(erroArquivo ? null : arquivo)
+              }}
+              accept=".pdf,.doc,.docx"
+              disabled={salvando}
+            />
+          </FormField>
           <FormActions>
             <Button variant="outline" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
@@ -256,9 +278,6 @@ const BOLSA_INICIAL = {
   prerequisitos: '',
   metodologiaAvaliacao: '',
   notaMinima: '',
-  arquivo: null, // arquivo novo escolhido no formulário
-  arquivoAtualNome: '', // arquivo que a bolsa já tem (só na edição)
-  removerArquivo: false,
 }
 
 function formDaBolsa(bolsa) {
@@ -272,9 +291,6 @@ function formDaBolsa(bolsa) {
     prerequisitos: bolsa.prerequisitos || '',
     metodologiaAvaliacao: bolsa.metodologia_avaliacao || '',
     notaMinima: bolsa.nota_minima ?? '',
-    arquivo: null,
-    arquivoAtualNome: bolsa.arquivo_ementa ? bolsa.nome_original_arquivo || 'Arquivo anexado' : '',
-    removerArquivo: false,
   }
 }
 
@@ -366,46 +382,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     setForm((atual) => ({ ...atual, [campo]: valor }))
   }
 
-  function selecionarArquivo(arquivo) {
-    if (arquivo) {
-      const erroArquivo = validarArquivo(arquivo)
-      if (erroArquivo) {
-        setErroSalvar(erroArquivo)
-        return
-      }
-    }
-    setErroSalvar('')
-    if (arquivo) {
-      setForm((atual) => ({ ...atual, arquivo }))
-    } else {
-      // Tirar o arquivo novo volta a mostrar o atual; tirar o atual marca pra remover.
-      setForm((atual) =>
-        atual.arquivo ? { ...atual, arquivo: null } : { ...atual, removerArquivo: true }
-      )
-    }
-  }
-
-  // A bolsa é criada em JSON e o arquivo vai depois pro endpoint próprio
-  // (/bolsas/<id>/arquivo/), que exige a bolsa já existir.
-  async function enviarArquivo(bolsaId, arquivo) {
-    const formData = new FormData()
-    formData.append('arquivo', arquivo)
-    const res = await bolsasFetch(`/${bolsaId}/arquivo/`, { method: 'POST', body: formData })
-    const corpo = await res.json().catch(() => null)
-    if (!res.ok) {
-      throw new Error(corpo?.arquivo?.[0] || corpo?.detail || 'Erro ao enviar o arquivo.')
-    }
-    return corpo
-  }
-
-  async function removerArquivo(bolsaId) {
-    const res = await bolsasFetch(`/${bolsaId}/arquivo/`, { method: 'DELETE' })
-    if (!res.ok) {
-      const corpo = await res.json().catch(() => null)
-      throw new Error(corpo?.detail || 'Erro ao remover o arquivo.')
-    }
-  }
-
   function dadosDoFormulario() {
     return {
       tipo: form.tipo,
@@ -416,26 +392,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       prerequisitos: form.prerequisitos,
       metodologia_avaliacao: form.metodologiaAvaliacao,
       nota_minima: form.notaMinima !== '' ? Number(form.notaMinima) : null,
-    }
-  }
-
-  // Aplica a troca/remoção do arquivo depois de salvar os dados da bolsa.
-  // Devolve a bolsa atualizada e, se falhar, a mensagem pra avisar no toast.
-  async function sincronizarArquivo(bolsa) {
-    try {
-      if (form.arquivo) {
-        return { bolsa: await enviarArquivo(bolsa.id, form.arquivo), aviso: '' }
-      }
-      if (form.removerArquivo && form.arquivoAtualNome) {
-        await removerArquivo(bolsa.id)
-        return {
-          bolsa: { ...bolsa, arquivo_ementa: null, nome_original_arquivo: '' },
-          aviso: '',
-        }
-      }
-      return { bolsa, aviso: '' }
-    } catch (e) {
-      return { bolsa, aviso: e.message }
     }
   }
 
@@ -458,19 +414,10 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a bolsa.'))
       }
 
-      const { bolsa: atualizada, aviso } = await sincronizarArquivo(await res.json())
-
+      const atualizada = await res.json()
       setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
       setModalAberto(false)
-      if (aviso) {
-        toast({
-          message: `Bolsa salva, mas o arquivo não foi atualizado: ${aviso}`,
-          tone: 'warning',
-          duration: 6000,
-        })
-      } else {
-        toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
-      }
+      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
     } catch (e) {
       setErroSalvar(e.message)
     } finally {
@@ -497,19 +444,10 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         throw new Error(mensagemDeErro(corpo, 'Erro ao solicitar bolsa.'))
       }
 
-      const { bolsa: criada, aviso: avisoArquivo } = await sincronizarArquivo(await res.json())
-
+      const criada = await res.json()
       setBolsas((atuais) => [criada, ...atuais])
       setModalAberto(false)
-      if (avisoArquivo) {
-        toast({
-          message: `Bolsa solicitada, mas o arquivo não foi enviado: ${avisoArquivo}`,
-          tone: 'warning',
-          duration: 6000,
-        })
-      } else {
-        toast({ message: 'Bolsa solicitada com sucesso.', tone: 'success' })
-      }
+      toast({ message: 'Bolsa solicitada com sucesso.', tone: 'success' })
     } catch (e) {
       setErroSalvar(e.message)
     } finally {
@@ -566,11 +504,15 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     <AcoesCell
       key="acoes"
       acoes={[
-        {
-          label: 'Etapas de avaliação',
-          variant: 'outline',
-          onClick: () => setBolsaEtapas(bolsa),
-        },
+        ...(STATUS_COM_ETAPAS.includes(bolsa.status)
+          ? [
+              {
+                label: 'Etapas de avaliação',
+                variant: 'outline',
+                onClick: () => setBolsaEtapas(bolsa),
+              },
+            ]
+          : []),
         ...(bolsa.pode_editar
           ? [{ label: 'Editar', variant: 'outline', onClick: () => abrirModalEditarBolsa(bolsa) }]
           : []),
@@ -605,6 +547,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       >
         {projeto.descricao || 'Sem descrição.'}
       </div>
+
+      <EmentaProjetoCard projeto={projeto} onAtualizado={setProjeto} />
 
       <PageHeader
         title="Bolsas do Projeto"
@@ -765,15 +709,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
               rows={2}
               value={form.metodologiaAvaliacao}
               onChange={(e) => atualizarCampo('metodologiaAvaliacao', e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Matriz / ementa (opcional — .pdf, .doc ou .docx, até 10 MB)">
-            <FileField
-              value={form.arquivo?.name || (form.removerArquivo ? '' : form.arquivoAtualNome)}
-              onChange={selecionarArquivo}
-              accept=".pdf,.doc,.docx"
-              disabled={salvando}
             />
           </FormField>
 

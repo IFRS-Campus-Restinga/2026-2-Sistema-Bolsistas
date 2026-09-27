@@ -1,7 +1,8 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,7 +11,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsCoordenadorProjeto
 
 from .models import Projeto, StatusProjeto
-from .serializers import ProjetoSerializer
+from .serializers import ArquivoEmentaSerializer, ProjetoSerializer
 
 BOLSA_STATUS_BLOQUEIAM_DESLIGAMENTO = ["ABERTA", "EM_SELECAO", "PREENCHIDA"]
 
@@ -70,4 +71,51 @@ class DesligarProjetoView(APIView):
         projeto.status = StatusProjeto.DESLIGADO
         projeto.save(update_fields=["status"])
 
-        return Response(ProjetoSerializer(projeto).data)
+        return Response(ProjetoSerializer(projeto, context={"request": request}).data)
+
+
+class ArquivoEmentaProjetoView(APIView):
+    """Upload (POST, multipart com o campo `arquivo`) e remoção (DELETE) da
+    matriz/ementa do projeto. Só o coordenador dono mexe no arquivo, e só com o
+    projeto Ativo. Enviar de novo substitui o arquivo anterior (inclusive no disco)."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def _projeto_editavel(self, request, pk):
+        projeto = get_object_or_404(
+            Projeto.objects.select_for_update(),
+            pk=pk,
+            coordenador_projeto__usuario=request.user,
+        )
+        if projeto.status != StatusProjeto.ATIVO:
+            raise ValidationError({"detail": "Um projeto desligado não pode ser alterado."})
+        return projeto
+
+    @transaction.atomic
+    def post(self, request, pk):
+        projeto = self._projeto_editavel(request, pk)
+
+        serializer = ArquivoEmentaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        arquivo = serializer.validated_data["arquivo"]
+
+        if projeto.arquivo_ementa:
+            projeto.arquivo_ementa.delete(save=False)
+        projeto.arquivo_ementa = arquivo
+        projeto.nome_original_arquivo = arquivo.name
+        projeto.save(update_fields=["arquivo_ementa", "nome_original_arquivo"])
+
+        return Response(ProjetoSerializer(projeto, context={"request": request}).data)
+
+    @transaction.atomic
+    def delete(self, request, pk):
+        projeto = self._projeto_editavel(request, pk)
+
+        if projeto.arquivo_ementa:
+            projeto.arquivo_ementa.delete(save=False)
+        projeto.arquivo_ementa = ""
+        projeto.nome_original_arquivo = ""
+        projeto.save(update_fields=["arquivo_ementa", "nome_original_arquivo"])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

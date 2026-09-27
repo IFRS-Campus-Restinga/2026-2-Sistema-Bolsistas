@@ -1,9 +1,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models.signals import pre_delete
-from django.dispatch import receiver
 from django.utils import timezone
 
 from editais.models import Edital
@@ -38,12 +36,13 @@ class StatusBolsa(models.TextChoices):
 # (desde que o prazo de inscrições do edital não tenha terminado).
 STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.APROVADA, StatusBolsa.ABERTA]
 
-EXTENSOES_ARQUIVO_BOLSA = ["pdf", "doc", "docx"]
 
 # Soma que os pesos das etapas de avaliação de uma bolsa precisam fechar (em %).
 PESO_TOTAL = Decimal("100")
 
 
+# Não é mais usado (a ementa foi para o Projeto), mas a migration 0002 ainda
+# referencia esta função — não apagar.
 def caminho_arquivo_bolsa(instance, filename):
     return f"bolsas/{instance.pk}/{filename}"
 
@@ -76,14 +75,6 @@ class Bolsa(models.Model):
         null=True,
         blank=True,
     )
-    arquivo_ementa = models.FileField(
-        upload_to=caminho_arquivo_bolsa,
-        blank=True,
-        default="",
-        validators=[FileExtensionValidator(EXTENSOES_ARQUIVO_BOLSA)],
-        help_text="Matriz curricular / ementa da bolsa.",
-    )
-    nome_original_arquivo = models.CharField(max_length=255, blank=True, default="")
     data_inicio_vigencia = models.DateField(null=True, blank=True)
     data_fim_vigencia = models.DateField(null=True, blank=True)
     status = models.CharField(
@@ -128,9 +119,19 @@ class Bolsa(models.Model):
             )
         return ""
 
+    def motivo_bloqueio_etapas(self):
+        """Motivo pelo qual as etapas de avaliação NÃO podem ser cadastradas/alteradas,
+        ou "" se podem. Etapas só fazem sentido depois que a bolsa foi aprovada, e
+        seguem o mesmo prazo da edição da bolsa."""
+        if self.status == StatusBolsa.SOLICITADA:
+            return (
+                "As etapas de avaliação só podem ser cadastradas depois que a bolsa for aprovada."
+            )
+        return self.motivo_bloqueio_edicao()
+
     def pesos_efetivos_etapas(self):
         """{id da etapa: peso efetivo em %}. Etapas sem peso dividem igualmente o
-        que sobra de 100% — então, se nenhuma etapa tem peso, todas ficam com o
+        que sobra de 100%, então, se nenhuma etapa tem peso, todas ficam com o
         mesmo peso (100 / n)."""
         etapas = list(self.etapas.all())
         indefinidas = [etapa for etapa in etapas if etapa.peso is None]
@@ -186,9 +187,3 @@ class EtapaAvaliacao(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.peso if self.peso is not None else 'peso igual'})"
-
-
-@receiver(pre_delete, sender=Bolsa)
-def _remover_arquivo_ementa_do_disco(sender, instance, **kwargs):
-    if instance.arquivo_ementa:
-        instance.arquivo_ementa.delete(save=False)

@@ -6,6 +6,7 @@ import {
   DataTable,
   FormActions,
   FormField,
+  IconPlus,
   LocalEtapa,
   Modal,
   TextInput,
@@ -28,7 +29,8 @@ function mensagemDeErro(corpo, padrao) {
 }
 
 /**
- * Cadastro das etapas de avaliação de uma bolsa e dos pesos (%) de cada uma.
+ * Lista das etapas de avaliação de uma bolsa. Criar/editar abre um segundo
+ * modal por cima (EtapaFormModal).
  *
  * Regra dos pesos (calculada no backend, campo `peso_efetivo`):
  *   - etapa com peso definido usa esse peso;
@@ -36,7 +38,7 @@ function mensagemDeErro(corpo, padrao) {
  *     (então, se nenhuma tem peso, todas ficam com o mesmo peso).
  *
  * Props:
- *   bolsa        — bolsa vinda da API (com `etapas`, `aviso_pesos` e `pode_editar`)
+ *   bolsa        — bolsa vinda da API (com `etapas`, `aviso_pesos` e `pode_editar_etapas`)
  *   onAtualizada — callback(bolsa) com a bolsa recarregada depois de cada alteração
  *   onFechar
  */
@@ -44,13 +46,11 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
   const confirmar = useConfirm()
 
   const [bolsa, setBolsa] = useState(bolsaInicial)
-  const [form, setForm] = useState(ETAPA_VAZIA)
-  const [salvando, setSalvando] = useState(false)
+  const [etapaEmEdicao, setEtapaEmEdicao] = useState(null) // null = form fechado
   const [erro, setErro] = useState('')
 
   const etapas = bolsa.etapas || []
-  const editando = form.id !== null
-  const podeEditar = bolsa.pode_editar
+  const podeEditar = bolsa.pode_editar_etapas
 
   async function recarregarBolsa() {
     const res = await bolsasFetch(`/${bolsa.id}/`)
@@ -60,52 +60,20 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
     onAtualizada(atualizada)
   }
 
-  function atualizarCampo(campo, valor) {
-    setForm((atual) => ({ ...atual, [campo]: valor }))
-  }
-
-  function limparFormulario() {
-    setForm(ETAPA_VAZIA)
+  function abrirNovaEtapa() {
     setErro('')
+    setEtapaEmEdicao(ETAPA_VAZIA)
   }
 
-  function editarEtapa(etapa) {
-    setForm({
+  function abrirEdicao(etapa) {
+    setErro('')
+    setEtapaEmEdicao({
       id: etapa.id,
       nome: etapa.nome,
       peso: etapa.peso ?? '',
       dataHora: isoParaInputLocal(etapa.data_hora),
       local: etapa.local || '',
     })
-    setErro('')
-  }
-
-  async function salvarEtapa() {
-    setSalvando(true)
-    setErro('')
-    try {
-      const url = editando ? `/${bolsa.id}/etapas/${form.id}/` : `/${bolsa.id}/etapas/`
-      const res = await bolsasFetch(url, {
-        method: editando ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: form.nome,
-          peso: form.peso === '' ? null : form.peso,
-          data_hora: inputLocalParaIso(form.dataHora),
-          local: form.local,
-        }),
-      })
-      if (!res.ok) {
-        const corpo = await res.json().catch(() => null)
-        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a etapa.'))
-      }
-      setForm(ETAPA_VAZIA)
-      await recarregarBolsa()
-    } catch (e) {
-      setErro(e.message)
-    } finally {
-      setSalvando(false)
-    }
   }
 
   function excluirEtapa(etapa) {
@@ -122,7 +90,6 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
           setErro(mensagemDeErro(corpo, 'Erro ao remover a etapa.'))
           return
         }
-        if (form.id === etapa.id) setForm(ETAPA_VAZIA)
         await recarregarBolsa()
       },
     })
@@ -142,7 +109,7 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
     <LocalEtapa key="local" local={etapa.local} />,
     podeEditar ? (
       <div key="acoes" style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-        <Button size="sm" variant="outline" onClick={() => editarEtapa(etapa)}>
+        <Button size="sm" variant="outline" onClick={() => abrirEdicao(etapa)}>
           Editar
         </Button>
         <Button size="sm" variant="danger" onClick={() => excluirEtapa(etapa)}>
@@ -156,99 +123,183 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
     ),
   ])
 
+  return (
+    <>
+      <Modal title={`Etapas de avaliação — ${bolsa.edital_nome}`} onClose={onFechar} width={760}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ margin: 0, color: '#4b5563', fontSize: 14 }}>
+            Etapas sem peso dividem igualmente o que sobra de 100%. Se nenhuma etapa tiver peso,
+            todas ficam com o mesmo peso.
+          </p>
+          {podeEditar && (
+            <div style={{ flexShrink: 0 }}>
+              <Button variant="accent" onClick={abrirNovaEtapa}>
+                <IconPlus /> Adicionar Etapa
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {!podeEditar && (
+          <Alert tone="warning">
+            As etapas desta bolsa não podem mais ser alteradas (fora do prazo de inscrições).
+          </Alert>
+        )}
+
+        {bolsa.aviso_pesos && <Alert tone="warning">{bolsa.aviso_pesos}</Alert>}
+        {erro && <Alert tone="error">{erro}</Alert>}
+
+        <DataTable
+          columns={['Etapa', 'Peso definido', 'Peso efetivo', 'Data e hora', 'Local', 'Ações']}
+          rows={linhas}
+          emptyMessage="Nenhuma etapa cadastrada."
+        />
+
+        {etapas.length > 0 && (
+          <p style={{ textAlign: 'right', margin: '8px 0 0', color: '#4b5563' }}>
+            <strong>Total:</strong> {formatarPeso(somaEfetiva)}
+          </p>
+        )}
+      </Modal>
+
+      {/* Irmão do modal da lista (e não filho), pra ficar por cima dele. */}
+      {etapaEmEdicao && (
+        <EtapaFormModal
+          bolsaId={bolsa.id}
+          etapaInicial={etapaEmEdicao}
+          onFechar={() => setEtapaEmEdicao(null)}
+          onSalva={async () => {
+            setEtapaEmEdicao(null)
+            await recarregarBolsa()
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function agoraParaInputLocal() {
+  return isoParaInputLocal(new Date().toISOString())
+}
+
+function EtapaFormModal({ bolsaId, etapaInicial, onFechar, onSalva }) {
+  const [form, setForm] = useState(etapaInicial)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const editando = form.id !== null
+
+  function atualizarCampo(campo, valor) {
+    setForm((atual) => ({ ...atual, [campo]: valor }))
+  }
+
   const pesoInvalido =
     form.peso !== '' &&
     (Number.isNaN(Number(form.peso)) || Number(form.peso) <= 0 || Number(form.peso) > 100)
 
+  // Uma etapa que já aconteceu pode ser editada sem trocar a data; só bloqueia
+  // quando a data escolhida é nova e está no passado.
+  const dataMudou = form.dataHora !== etapaInicial.dataHora
+  const dataNoPassado = dataMudou && form.dataHora !== '' && new Date(form.dataHora) < new Date()
+
+  async function salvar() {
+    setSalvando(true)
+    setErro('')
+    try {
+      const url = editando ? `/${bolsaId}/etapas/${form.id}/` : `/${bolsaId}/etapas/`
+      const res = await bolsasFetch(url, {
+        method: editando ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: form.nome,
+          peso: form.peso === '' ? null : form.peso,
+          // Sem mudança, manda a data original (evita diferença de segundos no ISO).
+          ...(dataMudou || !editando ? { data_hora: inputLocalParaIso(form.dataHora) } : {}),
+          local: form.local,
+        }),
+      })
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a etapa.'))
+      }
+      await onSalva()
+    } catch (e) {
+      setErro(e.message)
+      setSalvando(false)
+    }
+  }
+
   return (
-    <Modal title={`Etapas de avaliação — ${bolsa.edital_nome}`} onClose={onFechar} width={680}>
-      <p style={{ margin: '0 0 12px', color: '#4b5563', fontSize: 14 }}>
-        Etapas sem peso dividem igualmente o que sobra de 100%. Se nenhuma etapa tiver peso, todas
-        ficam com o mesmo peso.
-      </p>
-
-      {!podeEditar && (
-        <Alert tone="warning">
-          Esta bolsa não pode mais ser alterada (fora do prazo de inscrições ou status encerrado).
-        </Alert>
-      )}
-
-      {bolsa.aviso_pesos && <Alert tone="warning">{bolsa.aviso_pesos}</Alert>}
+    <Modal
+      title={editando ? 'Editar Etapa de Avaliação' : 'Nova Etapa de Avaliação'}
+      onClose={onFechar}
+      width={480}
+    >
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      <DataTable
-        columns={['Etapa', 'Peso definido', 'Peso efetivo', 'Data e hora', 'Local', 'Ações']}
-        rows={linhas}
-        emptyMessage="Nenhuma etapa cadastrada."
-      />
+      <FormField label="Nome da etapa">
+        <TextInput
+          value={form.nome}
+          maxLength={100}
+          placeholder="Ex.: Entrevista, Análise de Currículo, Prova"
+          onChange={(e) => atualizarCampo('nome', e.target.value)}
+        />
+      </FormField>
 
-      {etapas.length > 0 && (
-        <p style={{ textAlign: 'right', margin: '8px 0 16px', color: '#4b5563' }}>
-          <strong>Total:</strong> {formatarPeso(somaEfetiva)}
-        </p>
+      <FormField label="Peso (%) — opcional; pesos iguais se nenhuma etapa definir">
+        <TextInput
+          type="number"
+          step="0.01"
+          min="0.01"
+          max="100"
+          value={form.peso}
+          placeholder="Ex.: 40"
+          onChange={(e) => atualizarCampo('peso', e.target.value)}
+        />
+      </FormField>
+      {pesoInvalido && <Alert tone="error">O peso deve ser maior que 0% e no máximo 100%.</Alert>}
+
+      <FormField label="Data e hora (opcional)">
+        <TextInput
+          type="datetime-local"
+          min={agoraParaInputLocal()}
+          value={form.dataHora}
+          onChange={(e) => atualizarCampo('dataHora', e.target.value)}
+        />
+      </FormField>
+      {dataNoPassado && (
+        <Alert tone="error">A data e hora da etapa não pode estar no passado.</Alert>
       )}
 
-      {podeEditar && (
-        <>
-          <h4 style={{ margin: '8px 0' }}>{editando ? 'Editar etapa' : 'Nova etapa'}</h4>
+      <FormField label="Local ou link da reunião online (opcional)">
+        <TextInput
+          value={form.local}
+          maxLength={255}
+          placeholder="Sala 204 ou https://meet.google.com/..."
+          onChange={(e) => atualizarCampo('local', e.target.value)}
+        />
+      </FormField>
 
-          <FormField label="Nome da etapa">
-            <TextInput
-              value={form.nome}
-              maxLength={100}
-              placeholder="Ex.: Entrevista, Análise de Currículo, Prova"
-              onChange={(e) => atualizarCampo('nome', e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Peso (%) — opcional; pesos iguais se nenhuma etapa definir">
-            <TextInput
-              type="number"
-              step="0.01"
-              min="0.01"
-              max="100"
-              value={form.peso}
-              placeholder="Ex.: 40"
-              onChange={(e) => atualizarCampo('peso', e.target.value)}
-            />
-          </FormField>
-          {pesoInvalido && (
-            <Alert tone="error">O peso deve ser maior que 0% e no máximo 100%.</Alert>
-          )}
-
-          <FormField label="Data e hora (opcional)">
-            <TextInput
-              type="datetime-local"
-              value={form.dataHora}
-              onChange={(e) => atualizarCampo('dataHora', e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Local ou link da reunião online (opcional)">
-            <TextInput
-              value={form.local}
-              maxLength={255}
-              placeholder="Sala 204 ou https://meet.google.com/..."
-              onChange={(e) => atualizarCampo('local', e.target.value)}
-            />
-          </FormField>
-
-          <FormActions>
-            {editando && (
-              <Button variant="outline" onClick={limparFormulario} disabled={salvando}>
-                Cancelar edição
-              </Button>
-            )}
-            <Button
-              variant="accent"
-              onClick={salvarEtapa}
-              disabled={salvando || !form.nome.trim() || pesoInvalido}
-            >
-              {salvando ? 'Salvando...' : editando ? 'Salvar etapa' : 'Adicionar etapa'}
-            </Button>
-          </FormActions>
-        </>
-      )}
+      <FormActions>
+        <Button variant="outline" onClick={onFechar} disabled={salvando}>
+          Cancelar
+        </Button>
+        <Button
+          variant="accent"
+          onClick={salvar}
+          disabled={salvando || !form.nome.trim() || pesoInvalido || dataNoPassado}
+        >
+          {salvando ? 'Salvando...' : editando ? 'Salvar Etapa' : 'Adicionar Etapa'}
+        </Button>
+      </FormActions>
     </Modal>
   )
 }

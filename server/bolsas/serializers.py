@@ -1,13 +1,12 @@
 from decimal import Decimal
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from editais.models import Edital
 from projetos.models import StatusProjeto
 
-from .models import EXTENSOES_ARQUIVO_BOLSA, PESO_TOTAL, Bolsa, EtapaAvaliacao, StatusBolsa
-
-TAMANHO_MAX_ARQUIVO_BOLSA_MB = 10
+from .models import PESO_TOTAL, Bolsa, EtapaAvaliacao, StatusBolsa
 
 
 def _decimal_str(valor):
@@ -25,6 +24,12 @@ class BolsaSerializer(serializers.ModelSerializer):
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
     minha_inscricao_status = serializers.SerializerMethodField()
     pode_editar = serializers.SerializerMethodField()
+    pode_editar_etapas = serializers.SerializerMethodField()
+    # matriz/ementa pertence ao projeto; vem junto pra tela de detalhe da bolsa
+    projeto_arquivo_ementa = serializers.FileField(source="projeto.arquivo_ementa", read_only=True)
+    projeto_nome_arquivo = serializers.CharField(
+        source="projeto.nome_original_arquivo", read_only=True
+    )
     etapas = serializers.SerializerMethodField()
     aviso_pesos = serializers.SerializerMethodField()
 
@@ -39,6 +44,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "edital_link_documento_oficial",
             "minha_inscricao_status",
             "pode_editar",
+            "pode_editar_etapas",
             "tipo",
             "tipo_display",
             "modalidade",
@@ -48,8 +54,8 @@ class BolsaSerializer(serializers.ModelSerializer):
             "quantidade_vagas",
             "prerequisitos",
             "metodologia_avaliacao",
-            "arquivo_ementa",
-            "nome_original_arquivo",
+            "projeto_arquivo_ementa",
+            "projeto_nome_arquivo",
             "etapas",
             "aviso_pesos",
             "nota_minima",
@@ -69,9 +75,6 @@ class BolsaSerializer(serializers.ModelSerializer):
             "data_decisao",
             "justificativa_decisao",
             "coordenador_area",
-            # upload/remoção do arquivo só pelo endpoint /bolsas/<id>/arquivo/
-            "arquivo_ementa",
-            "nome_original_arquivo",
         ]
 
     def get_minha_inscricao_status(self, bolsa):
@@ -85,6 +88,9 @@ class BolsaSerializer(serializers.ModelSerializer):
 
     def get_pode_editar(self, bolsa):
         return not bolsa.motivo_bloqueio_edicao()
+
+    def get_pode_editar_etapas(self, bolsa):
+        return not bolsa.motivo_bloqueio_etapas()
 
     def get_etapas(self, bolsa):
         efetivos = bolsa.pesos_efetivos_etapas()
@@ -141,21 +147,6 @@ class BolsaEdicaoSerializer(BolsaSerializer):
         return tipo
 
 
-class ArquivoBolsaSerializer(serializers.Serializer):
-    arquivo = serializers.FileField()
-
-    def validate_arquivo(self, arquivo):
-        extensao = arquivo.name.rsplit(".", 1)[-1].lower() if "." in arquivo.name else ""
-        if extensao not in EXTENSOES_ARQUIVO_BOLSA:
-            permitidas = ", ".join(f".{ext}" for ext in EXTENSOES_ARQUIVO_BOLSA)
-            raise serializers.ValidationError(f"Formato não permitido. Envie {permitidas}.")
-        if arquivo.size > TAMANHO_MAX_ARQUIVO_BOLSA_MB * 1024 * 1024:
-            raise serializers.ValidationError(
-                f"O arquivo deve ter no máximo {TAMANHO_MAX_ARQUIVO_BOLSA_MB} MB."
-            )
-        return arquivo
-
-
 class EtapaAvaliacaoSerializer(serializers.ModelSerializer):
     """CRUD de etapa. A bolsa vem da URL (context["bolsa"]), não do corpo."""
 
@@ -183,6 +174,17 @@ class EtapaAvaliacaoSerializer(serializers.ModelSerializer):
         if self._outras_etapas().filter(nome__iexact=nome).exists():
             raise serializers.ValidationError("Já existe uma etapa com esse nome nesta bolsa.")
         return nome
+
+    def validate_data_hora(self, data_hora):
+        # Só valida quando a data muda: uma etapa que já aconteceu pode continuar
+        # sendo editada (ex.: ajustar o peso) sem precisar trocar a data.
+        if data_hora is None:
+            return data_hora
+        if self.instance and self.instance.data_hora == data_hora:
+            return data_hora
+        if data_hora < timezone.now():
+            raise serializers.ValidationError("A data e hora da etapa não pode estar no passado.")
+        return data_hora
 
     def validate_local(self, local):
         return local.strip()

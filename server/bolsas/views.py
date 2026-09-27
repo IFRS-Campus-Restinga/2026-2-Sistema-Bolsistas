@@ -3,7 +3,6 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,7 +12,6 @@ from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
-    ArquivoBolsaSerializer,
     BolsaEdicaoSerializer,
     BolsaSerializer,
     EtapaAvaliacaoSerializer,
@@ -209,59 +207,9 @@ class CancelarBolsaView(APIView):
         )
 
 
-class ArquivoBolsaView(APIView):
-    """Upload (POST, multipart com o campo `arquivo`) e remoção (DELETE) da
-    matriz/ementa da bolsa. Só o coordenador dono do projeto mexe no arquivo, e
-    vale a mesma regra da edição da bolsa (Bolsa.motivo_bloqueio_edicao).
-    Enviar de novo substitui o arquivo anterior (inclusive no disco)."""
-
-    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def _bolsa_editavel(self, request, pk):
-        bolsa = get_object_or_404(Bolsa.objects.select_for_update(), pk=pk)
-
-        if bolsa.projeto.coordenador_projeto.usuario_id != request.user.id:
-            raise PermissionDenied("Você não é o coordenador desta bolsa.")
-
-        motivo = bolsa.motivo_bloqueio_edicao()
-        if motivo:
-            raise ValidationError({"detail": motivo})
-        return bolsa
-
-    @transaction.atomic
-    def post(self, request, pk):
-        bolsa = self._bolsa_editavel(request, pk)
-
-        serializer = ArquivoBolsaSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        arquivo = serializer.validated_data["arquivo"]
-
-        if bolsa.arquivo_ementa:
-            bolsa.arquivo_ementa.delete(save=False)
-
-        bolsa.arquivo_ementa = arquivo
-        bolsa.nome_original_arquivo = arquivo.name
-        bolsa.save(update_fields=["arquivo_ementa", "nome_original_arquivo"])
-
-        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
-
-    @transaction.atomic
-    def delete(self, request, pk):
-        bolsa = self._bolsa_editavel(request, pk)
-
-        if bolsa.arquivo_ementa:
-            bolsa.arquivo_ementa.delete(save=False)
-        bolsa.arquivo_ementa = ""
-        bolsa.nome_original_arquivo = ""
-        bolsa.save(update_fields=["arquivo_ementa", "nome_original_arquivo"])
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 class _EtapasDaBolsaMixin:
     """Etapas de avaliação só são gerenciadas pelo Coordenador de Projeto dono da
-    bolsa, e só enquanto a bolsa puder ser editada (Bolsa.motivo_bloqueio_edicao).
+    bolsa, depois de aprovada e dentro do prazo (Bolsa.motivo_bloqueio_etapas).
     Bolsa de outro coordenador responde 404."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
@@ -276,7 +224,7 @@ class _EtapasDaBolsaMixin:
         return self._bolsa
 
     def garantir_editavel(self):
-        motivo = self.get_bolsa().motivo_bloqueio_edicao()
+        motivo = self.get_bolsa().motivo_bloqueio_etapas()
         if motivo:
             raise ValidationError({"detail": motivo})
 

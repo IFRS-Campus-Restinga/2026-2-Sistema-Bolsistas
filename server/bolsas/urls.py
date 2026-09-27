@@ -2,7 +2,6 @@ from django.urls import path
 
 from .views import (
     AprovarBolsaView,
-    ArquivoBolsaView,
     BolsaDetailView,
     BolsaDisponivelDetailView,
     BolsaListCreateView,
@@ -22,7 +21,6 @@ urlpatterns = [
     path("<int:pk>/", BolsaDetailView.as_view(), name="detalhe"),
     path("<int:pk>/aprovar/", AprovarBolsaView.as_view(), name="aprovar"),
     path("<int:pk>/rejeitar/", RejeitarBolsaView.as_view(), name="rejeitar"),
-    path("<int:pk>/arquivo/", ArquivoBolsaView.as_view(), name="arquivo"),
     path("<int:bolsa_pk>/etapas/", EtapaAvaliacaoListCreateView.as_view(), name="etapas"),
     path(
         "<int:bolsa_pk>/etapas/<int:pk>/",
