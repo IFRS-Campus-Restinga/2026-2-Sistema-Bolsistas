@@ -96,18 +96,31 @@ export default function MinhasInscricoesPage() {
   }
 
   function acoesPorInscricao(inscricao) {
+    const prazoEncerrado = inscricao.prazo_inscricao_encerrado
+
     if (inscricao.status === 'RASCUNHO') {
-      return [
-        { label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) },
-        { label: 'Cancelar', variant: 'danger', onClick: () => excluirRascunho(inscricao) },
-      ]
+      const acoes = []
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) })
+      }
+      acoes.push({
+        label: 'Cancelar',
+        variant: 'danger',
+        onClick: () => excluirRascunho(inscricao),
+      })
+      return acoes
     }
     if (inscricao.status === 'PENDENTE') {
-      return [
-        { label: 'Ver comprovante', onClick: () => setComprovante(inscricao) },
-        { label: 'Editar', onClick: () => setEdicaoAberta(inscricao) },
-        { label: 'Cancelar', variant: 'danger', onClick: () => cancelarInscricao(inscricao) },
-      ]
+      const acoes = [{ label: 'Ver comprovante', onClick: () => setComprovante(inscricao) }]
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Editar', onClick: () => setEdicaoAberta(inscricao) })
+        acoes.push({
+          label: 'Cancelar',
+          variant: 'danger',
+          onClick: () => cancelarInscricao(inscricao),
+        })
+      }
+      return acoes
     }
     if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
       return [

@@ -39,6 +39,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
     edital_nome = serializers.CharField(source="bolsa.edital.nome", read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
     notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
+    prazo_inscricao_encerrado = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -59,6 +60,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "justificativa_indeferimento",
             "data_decisao",
             "notificacoes",
+            "prazo_inscricao_encerrado",
         ]
         read_only_fields = [
             "id",
@@ -69,6 +71,9 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "justificativa_indeferimento",
             "data_decisao",
         ]
+
+    def get_prazo_inscricao_encerrado(self, inscricao):
+        return timezone.localdate() > inscricao.bolsa.edital.data_fechamento_inscricoes
 
     def validate_bolsa(self, bolsa):
         if self.instance and bolsa != self.instance.bolsa:
@@ -101,8 +106,10 @@ class InscricaoSerializer(serializers.ModelSerializer):
                 )
 
             ativas_no_edital = Inscricao.objects.filter(
-                aluno=aluno, bolsa__edital=bolsa.edital
-            ).exclude(status=StatusInscricao.CANCELADA)
+                aluno=aluno,
+                bolsa__edital=bolsa.edital,
+                status__in=[StatusInscricao.PENDENTE, StatusInscricao.HOMOLOGADA],
+            )
             if ativas_no_edital.count() >= MAX_INSCRICOES_ATIVAS_POR_EDITAL:
                 raise serializers.ValidationError(
                     f"Você já atingiu o limite de {MAX_INSCRICOES_ATIVAS_POR_EDITAL} "

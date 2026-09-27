@@ -382,48 +382,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     setForm((atual) => ({ ...atual, [campo]: valor }))
   }
 
-  function dadosDoFormulario() {
-    return {
-      tipo: form.tipo,
-      modalidade: form.modalidade,
-      carga_horaria_semanal: Number(form.cargaHorariaSemanal),
-      valor_mensal: form.valorMensal,
-      quantidade_vagas: Number(form.quantidadeVagas),
-      prerequisitos: form.prerequisitos,
-      metodologia_avaliacao: form.metodologiaAvaliacao,
-      nota_minima: form.notaMinima !== '' ? Number(form.notaMinima) : null,
-    }
-  }
-
-  function salvarBolsa() {
-    return bolsaEditando ? editarBolsa() : solicitarBolsa()
-  }
-
-  async function editarBolsa() {
-    setSalvando(true)
-    setErroSalvar('')
-    try {
-      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosDoFormulario()),
-      })
-
-      if (!res.ok) {
-        const corpo = await res.json().catch(() => null)
-        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a bolsa.'))
-      }
-
-      const atualizada = await res.json()
-      setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
-      setModalAberto(false)
-      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
-    } catch (e) {
-      setErroSalvar(e.message)
-    } finally {
-      setSalvando(false)
-    }
-  }
+  const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
+  const editalSelecionadoComPrazoEncerrado = !!editalSelecionado?.prazo_inscricao_encerrado
 
   async function solicitarBolsa() {
     setSalvando(true)
@@ -623,13 +583,14 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             )}
           </FormField>
 
-          <FormField
-            label={
-              tipoBloqueado
-                ? 'Tipo da bolsa (não pode ser alterado depois da aprovação)'
-                : 'Tipo da bolsa (define o Coordenador de Área responsável)'
-            }
-          >
+          {editalSelecionadoComPrazoEncerrado && (
+            <Alert tone="warning">
+              O prazo de inscrição deste edital já foi encerrado. A bolsa pode ser solicitada e
+              aprovada normalmente, mas não vai ficar disponível para inscrição dos alunos.
+            </Alert>
+          )}
+
+          <FormField label="Tipo da bolsa (define o Coordenador de Área responsável)">
             <Select
               value={form.tipo}
               onChange={(e) => atualizarCampo('tipo', e.target.value)}
