@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
 import {
+  AcoesCell,
   Alert,
   Badge,
   Button,
   DataTable,
+  FileField,
   FormActions,
   FormField,
   IconArrowLeft,
@@ -17,6 +19,7 @@ import {
   useConfirm,
   useToast,
 } from '../components'
+import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
 
 const TIPO_OPTIONS = [
   { value: 'ENSINO', label: 'Ensino' },
@@ -36,6 +39,20 @@ const CARGA_HORARIA_OPTIONS = [
   { value: '12', label: '12h semanais' },
   { value: '16', label: '16h semanais' },
 ]
+
+const EXTENSOES_ARQUIVO = ['pdf', 'doc', 'docx']
+const TAMANHO_MAX_ARQUIVO_MB = 10
+
+function validarArquivo(arquivo) {
+  const extensao = arquivo.name.split('.').pop().toLowerCase()
+  if (!EXTENSOES_ARQUIVO.includes(extensao)) {
+    return 'Formato não permitido. Envie .pdf, .doc ou .docx.'
+  }
+  if (arquivo.size > TAMANHO_MAX_ARQUIVO_MB * 1024 * 1024) {
+    return `O arquivo deve ter no máximo ${TAMANHO_MAX_ARQUIVO_MB} MB.`
+  }
+  return ''
+}
 
 function opcaoLabel(opcoes, valor) {
   return opcoes.find((opcao) => opcao.value === valor)?.label || valor
@@ -168,19 +185,14 @@ function ListaProjetos({ onGerenciar }) {
   const linhas = projetos.map((projeto) => [
     projeto.titulo,
     <Badge key="status" status={projeto.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {projeto.status === 'ATIVO' && (
-        <div>
-          <Button size="sm" variant="danger" onClick={() => confirmarDesligar(projeto)}>
-            Desligar
-          </Button>
-          <Button size="sm" onClick={() => onGerenciar(projeto.id)}>
-            Gerenciar
-          </Button>
-        </div>
-      )}
-      {projeto.status === 'DESLIGADO' && <span> Sem ações </span>}
-    </div>,
+    <AcoesCell
+      key="acoes"
+      mostrar={projeto.status === 'ATIVO'}
+      acoes={[
+        { label: 'Gerenciar', onClick: () => onGerenciar(projeto.id) },
+        { label: 'Desligar', variant: 'danger', onClick: () => confirmarDesligar(projeto) },
+      ]}
+    />,
   ])
 
   return (
@@ -240,9 +252,42 @@ const BOLSA_INICIAL = {
   modalidade: '',
   cargaHorariaSemanal: '',
   valorMensal: '',
+  quantidadeVagas: '1',
   prerequisitos: '',
   metodologiaAvaliacao: '',
   notaMinima: '',
+  arquivo: null, // arquivo novo escolhido no formulário
+  arquivoAtualNome: '', // arquivo que a bolsa já tem (só na edição)
+  removerArquivo: false,
+}
+
+function formDaBolsa(bolsa) {
+  return {
+    editalId: String(bolsa.edital),
+    tipo: bolsa.tipo,
+    modalidade: bolsa.modalidade,
+    cargaHorariaSemanal: String(bolsa.carga_horaria_semanal),
+    valorMensal: bolsa.valor_mensal,
+    quantidadeVagas: String(bolsa.quantidade_vagas),
+    prerequisitos: bolsa.prerequisitos || '',
+    metodologiaAvaliacao: bolsa.metodologia_avaliacao || '',
+    notaMinima: bolsa.nota_minima ?? '',
+    arquivo: null,
+    arquivoAtualNome: bolsa.arquivo_ementa ? bolsa.nome_original_arquivo || 'Arquivo anexado' : '',
+    removerArquivo: false,
+  }
+}
+
+function mensagemDeErro(corpo, padrao) {
+  return (
+    corpo?.edital?.[0] ||
+    corpo?.projeto?.[0] ||
+    corpo?.detail ||
+    Object.values(corpo || {})
+      .flat()
+      .join(' ') ||
+    padrao
+  )
 }
 
 function ProjetoDetalhe({ projetoId, onVoltar }) {
@@ -256,9 +301,12 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [erro, setErro] = useState('')
 
   const [modalAberto, setModalAberto] = useState(false)
+  const [bolsaEditando, setBolsaEditando] = useState(null) // null = nova solicitação
+  const [bolsaEtapas, setBolsaEtapas] = useState(null) // bolsa com o modal de etapas aberto
   const [form, setForm] = useState(BOLSA_INICIAL)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
+  const [avisoSemEditais, setAvisoSemEditais] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -296,13 +344,138 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   }, [projetoId])
 
   function abrirModalSolicitarBolsa() {
+    if (editais.length === 0) {
+      setAvisoSemEditais(true)
+      return
+    }
+    setAvisoSemEditais(false)
+    setBolsaEditando(null)
     setForm(BOLSA_INICIAL)
+    setErroSalvar('')
+    setModalAberto(true)
+  }
+
+  function abrirModalEditarBolsa(bolsa) {
+    setBolsaEditando(bolsa)
+    setForm(formDaBolsa(bolsa))
     setErroSalvar('')
     setModalAberto(true)
   }
 
   function atualizarCampo(campo, valor) {
     setForm((atual) => ({ ...atual, [campo]: valor }))
+  }
+
+  function selecionarArquivo(arquivo) {
+    if (arquivo) {
+      const erroArquivo = validarArquivo(arquivo)
+      if (erroArquivo) {
+        setErroSalvar(erroArquivo)
+        return
+      }
+    }
+    setErroSalvar('')
+    if (arquivo) {
+      setForm((atual) => ({ ...atual, arquivo }))
+    } else {
+      // Tirar o arquivo novo volta a mostrar o atual; tirar o atual marca pra remover.
+      setForm((atual) =>
+        atual.arquivo ? { ...atual, arquivo: null } : { ...atual, removerArquivo: true }
+      )
+    }
+  }
+
+  // A bolsa é criada em JSON e o arquivo vai depois pro endpoint próprio
+  // (/bolsas/<id>/arquivo/), que exige a bolsa já existir.
+  async function enviarArquivo(bolsaId, arquivo) {
+    const formData = new FormData()
+    formData.append('arquivo', arquivo)
+    const res = await bolsasFetch(`/${bolsaId}/arquivo/`, { method: 'POST', body: formData })
+    const corpo = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new Error(corpo?.arquivo?.[0] || corpo?.detail || 'Erro ao enviar o arquivo.')
+    }
+    return corpo
+  }
+
+  async function removerArquivo(bolsaId) {
+    const res = await bolsasFetch(`/${bolsaId}/arquivo/`, { method: 'DELETE' })
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => null)
+      throw new Error(corpo?.detail || 'Erro ao remover o arquivo.')
+    }
+  }
+
+  function dadosDoFormulario() {
+    return {
+      tipo: form.tipo,
+      modalidade: form.modalidade,
+      carga_horaria_semanal: Number(form.cargaHorariaSemanal),
+      valor_mensal: form.valorMensal,
+      quantidade_vagas: Number(form.quantidadeVagas),
+      prerequisitos: form.prerequisitos,
+      metodologia_avaliacao: form.metodologiaAvaliacao,
+      nota_minima: form.notaMinima !== '' ? Number(form.notaMinima) : null,
+    }
+  }
+
+  // Aplica a troca/remoção do arquivo depois de salvar os dados da bolsa.
+  // Devolve a bolsa atualizada e, se falhar, a mensagem pra avisar no toast.
+  async function sincronizarArquivo(bolsa) {
+    try {
+      if (form.arquivo) {
+        return { bolsa: await enviarArquivo(bolsa.id, form.arquivo), aviso: '' }
+      }
+      if (form.removerArquivo && form.arquivoAtualNome) {
+        await removerArquivo(bolsa.id)
+        return {
+          bolsa: { ...bolsa, arquivo_ementa: null, nome_original_arquivo: '' },
+          aviso: '',
+        }
+      }
+      return { bolsa, aviso: '' }
+    } catch (e) {
+      return { bolsa, aviso: e.message }
+    }
+  }
+
+  function salvarBolsa() {
+    return bolsaEditando ? editarBolsa() : solicitarBolsa()
+  }
+
+  async function editarBolsa() {
+    setSalvando(true)
+    setErroSalvar('')
+    try {
+      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosDoFormulario()),
+      })
+
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a bolsa.'))
+      }
+
+      const { bolsa: atualizada, aviso } = await sincronizarArquivo(await res.json())
+
+      setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
+      setModalAberto(false)
+      if (aviso) {
+        toast({
+          message: `Bolsa salva, mas o arquivo não foi atualizado: ${aviso}`,
+          tone: 'warning',
+          duration: 6000,
+        })
+      } else {
+        toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
+      }
+    } catch (e) {
+      setErroSalvar(e.message)
+    } finally {
+      setSalvando(false)
+    }
   }
 
   async function solicitarBolsa() {
@@ -315,33 +488,28 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         body: JSON.stringify({
           projeto: projetoId,
           edital: Number(form.editalId),
-          tipo: form.tipo,
-          modalidade: form.modalidade,
-          carga_horaria_semanal: Number(form.cargaHorariaSemanal),
-          valor_mensal: form.valorMensal,
-          prerequisitos: form.prerequisitos,
-          metodologia_avaliacao: form.metodologiaAvaliacao,
-          nota_minima: form.notaMinima ? Number(form.notaMinima) : null,
+          ...dadosDoFormulario(),
         }),
       })
 
       if (!res.ok) {
         const corpo = await res.json().catch(() => null)
-        const mensagem =
-          corpo?.edital?.[0] ||
-          corpo?.projeto?.[0] ||
-          corpo?.detail ||
-          Object.values(corpo || {})
-            .flat()
-            .join(' ') ||
-          'Erro ao solicitar bolsa.'
-        throw new Error(mensagem)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao solicitar bolsa.'))
       }
 
-      const criada = await res.json()
+      const { bolsa: criada, aviso: avisoArquivo } = await sincronizarArquivo(await res.json())
+
       setBolsas((atuais) => [criada, ...atuais])
       setModalAberto(false)
-      toast({ message: 'Bolsa solicitada com sucesso.', tone: 'success' })
+      if (avisoArquivo) {
+        toast({
+          message: `Bolsa solicitada, mas o arquivo não foi enviado: ${avisoArquivo}`,
+          tone: 'warning',
+          duration: 6000,
+        })
+      } else {
+        toast({ message: 'Bolsa solicitada com sucesso.', tone: 'success' })
+      }
     } catch (e) {
       setErroSalvar(e.message)
     } finally {
@@ -384,21 +552,39 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     )
   }
 
+  const tipoBloqueado = !!bolsaEditando && bolsaEditando.status !== 'SOLICITADA'
+
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
 
   const linhasBolsas = bolsas.map((bolsa) => [
     bolsa.edital_nome,
     opcaoLabel(TIPO_OPTIONS, bolsa.tipo),
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
+    bolsa.quantidade_vagas,
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <div key="acoes" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {podeCancelar(bolsa) && (
-        <Button size="sm" variant="danger" onClick={() => confirmarCancelarBolsa(bolsa)}>
-          Cancelar Bolsa
-        </Button>
-      )}
-    </div>,
+    <AcoesCell
+      key="acoes"
+      acoes={[
+        {
+          label: 'Etapas de avaliação',
+          variant: 'outline',
+          onClick: () => setBolsaEtapas(bolsa),
+        },
+        ...(bolsa.pode_editar
+          ? [{ label: 'Editar', variant: 'outline', onClick: () => abrirModalEditarBolsa(bolsa) }]
+          : []),
+        ...(podeCancelar(bolsa)
+          ? [
+              {
+                label: 'Cancelar Bolsa',
+                variant: 'danger',
+                onClick: () => confirmarCancelarBolsa(bolsa),
+              },
+            ]
+          : []),
+      ]}
+    />,
   ])
 
   return (
@@ -429,35 +615,69 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         }
       />
 
+      {avisoSemEditais && (
+        <Alert tone="warning">
+          Não há editais em vigor no momento — não é possível solicitar uma nova bolsa até que um
+          edital seja publicado.
+        </Alert>
+      )}
+
       <DataTable
-        columns={['Edital', 'Tipo', 'Modalidade', 'Valor', 'Status', 'Ações']}
+        columns={['Edital', 'Tipo', 'Modalidade', 'Vagas', 'Valor', 'Status', 'Ações']}
         rows={linhasBolsas}
         emptyMessage="Nenhuma bolsa solicitada para este projeto."
       />
 
+      {bolsaEtapas && (
+        <EtapasAvaliacaoModal
+          bolsa={bolsaEtapas}
+          onFechar={() => setBolsaEtapas(null)}
+          onAtualizada={(atualizada) =>
+            setBolsas((atuais) =>
+              atuais.map((item) => (item.id === atualizada.id ? atualizada : item))
+            )
+          }
+        />
+      )}
+
       {modalAberto && (
-        <Modal title="Solicitar Nova Bolsa" onClose={() => setModalAberto(false)} width={600}>
+        <Modal
+          title={bolsaEditando ? 'Editar Bolsa' : 'Solicitar Nova Bolsa'}
+          onClose={() => setModalAberto(false)}
+          width={600}
+        >
           {erroSalvar && <Alert tone="error">{erroSalvar}</Alert>}
 
-          <FormField label="Edital">
-            <Select
-              value={form.editalId}
-              onChange={(e) => atualizarCampo('editalId', e.target.value)}
-              required
-            >
-              <option value="">Selecione um edital</option>
-              {editais.map((edital) => (
-                <option key={edital.id} value={edital.id}>
-                  {edital.nome} ({edital.ano_codigo})
-                </option>
-              ))}
-            </Select>
+          <FormField label={bolsaEditando ? 'Edital (não pode ser alterado)' : 'Edital'}>
+            {bolsaEditando ? (
+              <TextInput value={bolsaEditando.edital_nome} disabled />
+            ) : (
+              <Select
+                value={form.editalId}
+                onChange={(e) => atualizarCampo('editalId', e.target.value)}
+                required
+              >
+                <option value="">Selecione um edital</option>
+                {editais.map((edital) => (
+                  <option key={edital.id} value={edital.id}>
+                    {edital.nome} ({edital.ano_codigo})
+                  </option>
+                ))}
+              </Select>
+            )}
           </FormField>
 
-          <FormField label="Tipo da bolsa (define o Coordenador de Área responsável)">
+          <FormField
+            label={
+              tipoBloqueado
+                ? 'Tipo da bolsa (não pode ser alterado depois da aprovação)'
+                : 'Tipo da bolsa (define o Coordenador de Área responsável)'
+            }
+          >
             <Select
               value={form.tipo}
               onChange={(e) => atualizarCampo('tipo', e.target.value)}
+              disabled={tipoBloqueado}
               required
             >
               <option value="">Selecione o tipo</option>
@@ -510,6 +730,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             />
           </FormField>
 
+          <FormField label="Quantidade de vagas">
+            <TextInput
+              type="number"
+              step="1"
+              min="1"
+              value={form.quantidadeVagas}
+              onChange={(e) => atualizarCampo('quantidadeVagas', e.target.value)}
+              required
+            />
+          </FormField>
+
           <FormField label="Nota mínima de classificação (opcional)">
             <TextInput
               type="number"
@@ -537,23 +768,34 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             />
           </FormField>
 
+          <FormField label="Matriz / ementa (opcional — .pdf, .doc ou .docx, até 10 MB)">
+            <FileField
+              value={form.arquivo?.name || (form.removerArquivo ? '' : form.arquivoAtualNome)}
+              onChange={selecionarArquivo}
+              accept=".pdf,.doc,.docx"
+              disabled={salvando}
+            />
+          </FormField>
+
           <FormActions>
             <Button variant="outline" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
             </Button>
             <Button
               variant="accent"
-              onClick={solicitarBolsa}
+              onClick={salvarBolsa}
               disabled={
                 salvando ||
                 !form.editalId ||
                 !form.tipo ||
                 !form.modalidade ||
                 !form.cargaHorariaSemanal ||
-                !form.valorMensal
+                !form.valorMensal ||
+                !Number.isInteger(Number(form.quantidadeVagas)) ||
+                Number(form.quantidadeVagas) < 1
               }
             >
-              {salvando ? 'Enviando...' : 'Solicitar Bolsa'}
+              {salvando ? 'Enviando...' : bolsaEditando ? 'Salvar Alterações' : 'Solicitar Bolsa'}
             </Button>
           </FormActions>
         </Modal>

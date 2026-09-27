@@ -2,7 +2,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Usuario
+from accounts.models import CoordenadorProjeto, Usuario
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from projetos.models import Projeto
 
 from .models import AlteracaoCronograma, Edital
 
@@ -504,3 +506,46 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.edital.refresh_from_db()
         self.assertEqual(self.edital.status, Edital.Status.RASCUNHO)
+
+    def _cria_bolsa(self, status_bolsa):
+        coordenador_projeto = Usuario.objects.create_user(
+            username=f"coord_projeto_{status_bolsa}",
+            email=f"{status_bolsa}@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=coordenador_projeto)
+        projeto = Projeto.objects.create(
+            titulo=f"Projeto {status_bolsa}",
+            coordenador_projeto=coordenador_projeto.perfil_coordenador_projeto,
+        )
+        return Bolsa.objects.create(
+            projeto=projeto,
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=status_bolsa,
+        )
+
+    def test_nao_encerra_edital_com_bolsa_nao_finalizada(self):
+        self._cria_bolsa(StatusBolsa.ABERTA)
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.EM_VIGOR)
+
+    def test_encerra_edital_com_bolsas_todas_finalizadas(self):
+        self._cria_bolsa(StatusBolsa.CANCELADA)
+        self._cria_bolsa(StatusBolsa.REJEITADA)
+        self._cria_bolsa(StatusBolsa.ENCERRADA)
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)

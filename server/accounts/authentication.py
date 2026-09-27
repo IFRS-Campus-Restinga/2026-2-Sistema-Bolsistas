@@ -1,6 +1,7 @@
 import jwt
 from django.conf import settings
 from django.db import transaction
+from django.db.models import ProtectedError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -106,7 +107,10 @@ class HubJWTAuthentication(BaseAuthentication):
 
         for outro_model in PERFIL_MODEL_POR_ROLE.values():
             if outro_model is not perfil_model:
-                outro_model.objects.filter(usuario=usuario).delete()
+                try:
+                    outro_model.objects.filter(usuario=usuario).delete()
+                except ProtectedError:
+                    pass
 
         if role == Usuario.Role.COORDENADOR_AREA:
             CoordenadorArea.objects.update_or_create(

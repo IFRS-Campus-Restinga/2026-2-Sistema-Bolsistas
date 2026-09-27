@@ -7,9 +7,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from bolsas.models import StatusBolsa
 
 from .models import Edital
 from .serializers import CronogramaEditalSerializer, EditalSerializer, validar_cronograma
+
+STATUS_BOLSA_FINALIZADOS = {
+    StatusBolsa.REJEITADA,
+    StatusBolsa.ENCERRADA,
+    StatusBolsa.CANCELADA,
+}
 
 
 class EditalListCreateView(generics.ListCreateAPIView):
@@ -69,6 +76,14 @@ class EncerrarEditalView(APIView):
 
         if edital.status != Edital.Status.EM_VIGOR:
             raise ValidationError({"detail": "Somente editais em vigor podem ser encerrados."})
+
+        if edital.bolsas.exclude(status__in=STATUS_BOLSA_FINALIZADOS).exists():
+            raise ValidationError(
+                {
+                    "detail": "Não é possível encerrar: há bolsas deste edital que ainda não "
+                    "foram finalizadas (rejeitadas, encerradas ou canceladas)."
+                }
+            )
 
         edital.status = Edital.Status.ENCERRADO
         edital.save(update_fields=["status"])
