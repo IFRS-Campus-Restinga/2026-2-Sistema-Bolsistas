@@ -240,7 +240,7 @@ function ListaProjetos({ onGerenciar }) {
           <FormField label="Descrição">
             <TextArea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
           </FormField>
-          <FormField label="Matriz / ementa (opcional — .pdf, .doc ou .docx, até 10 MB)">
+          <FormField label="Matriz / ementa (opcional: .pdf, .doc ou .docx, até 10 MB)">
             <FileField
               value={arquivoEmenta?.name || ''}
               onChange={(arquivo) => {

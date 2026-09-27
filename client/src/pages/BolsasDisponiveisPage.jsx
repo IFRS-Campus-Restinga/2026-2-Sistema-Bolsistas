@@ -203,7 +203,7 @@ function BolsaDetalhe({ bolsaId, onVoltar }) {
             <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
               {bolsa.etapas.map((etapa) => (
                 <li key={etapa.id}>
-                  {etapa.nome} — peso {formatarPeso(etapa.peso_efetivo)}
+                  {etapa.nome}: peso {formatarPeso(etapa.peso_efetivo)}
                   {etapa.data_hora && <> · {formatarDataHora(etapa.data_hora)}</>}
                   {etapa.local && (
                     <>

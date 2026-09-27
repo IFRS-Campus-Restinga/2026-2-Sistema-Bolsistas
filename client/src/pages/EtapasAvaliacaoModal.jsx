@@ -254,7 +254,7 @@ function EtapaFormModal({ bolsaId, etapaInicial, onFechar, onSalva }) {
         />
       </FormField>
 
-      <FormField label="Peso (%) — opcional; pesos iguais se nenhuma etapa definir">
+      <FormField label="Peso (%): opcional; pesos iguais se nenhuma etapa definir">
         <TextInput
           type="number"
           step="0.01"
