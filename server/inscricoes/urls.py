@@ -1,7 +1,7 @@
 from django.urls import path
 
-from .recursos_views import AnexoRecursoArquivoView, JulgarRecursoView, RecursosInscricaoView
 from .views import (
+    AnexoRecursoArquivoView,
     CancelarInscricaoView,
     CandidatoDetailView,
     CandidatoListView,
@@ -13,7 +13,9 @@ from .views import (
     IndeferirInscricaoView,
     InscricaoDetailView,
     InscricaoListCreateView,
+    JulgarRecursoView,
     LerNotificacaoView,
+    RecursosInscricaoView,
 )
 
 app_name = "inscricoes"
