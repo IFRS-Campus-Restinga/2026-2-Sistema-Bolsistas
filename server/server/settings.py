@@ -172,6 +172,10 @@ USE_TZ = True
 
 STATIC_URL = "assets/"
 
+# Uploads (documentos de inscrição, ementa das bolsas)
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 STATICFILES_DIRS = [
     BASE_DIR.parent / "client" / "dist" / "assets",
 ]

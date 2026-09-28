@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   DataTable,
+  FileField,
   FormActions,
   FormField,
   IconArrowLeft,
@@ -19,6 +20,11 @@ import {
   useConfirm,
   useToast,
 } from '../components'
+import { enviarEmentaProjeto, validarArquivoEmenta } from '../utils/ementaProjeto'
+import EmentaProjetoCard from './EmentaProjetoCard'
+import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
+
+const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
 
 const TIPO_OPTIONS = [
   { value: 'ENSINO', label: 'Ensino' },
@@ -70,6 +76,7 @@ function ListaProjetos({ onGerenciar }) {
   const [modalAberto, setModalAberto] = useState(false)
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
+  const [arquivoEmenta, setArquivoEmenta] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
 
@@ -99,6 +106,7 @@ function ListaProjetos({ onGerenciar }) {
   function abrirModalNovoProjeto() {
     setTitulo('')
     setDescricao('')
+    setArquivoEmenta(null)
     setErroSalvar('')
     setModalAberto(true)
   }
@@ -116,10 +124,26 @@ function ListaProjetos({ onGerenciar }) {
         const corpo = await res.json().catch(() => null)
         throw new Error(corpo?.titulo?.[0] || corpo?.detail || 'Erro ao criar projeto.')
       }
-      const criado = await res.json()
+      let criado = await res.json()
+      let avisoArquivo = ''
+      if (arquivoEmenta) {
+        try {
+          criado = await enviarEmentaProjeto(criado.id, arquivoEmenta)
+        } catch (e) {
+          avisoArquivo = e.message
+        }
+      }
       setProjetos((atuais) => [criado, ...atuais])
       setModalAberto(false)
-      toast({ message: 'Projeto criado com sucesso.', tone: 'success' })
+      if (avisoArquivo) {
+        toast({
+          message: `Projeto criado, mas a matriz/ementa não foi enviada: ${avisoArquivo}`,
+          tone: 'warning',
+          duration: 6000,
+        })
+      } else {
+        toast({ message: 'Projeto criado com sucesso.', tone: 'success' })
+      }
     } catch (e) {
       setErroSalvar(e.message)
     } finally {
@@ -215,6 +239,18 @@ function ListaProjetos({ onGerenciar }) {
           <FormField label="Descrição">
             <TextArea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
           </FormField>
+          <FormField label="Matriz / ementa (opcional: .pdf, .doc ou .docx, até 10 MB)">
+            <FileField
+              value={arquivoEmenta?.name || ''}
+              onChange={(arquivo) => {
+                const erroArquivo = arquivo ? validarArquivoEmenta(arquivo) : ''
+                setErroSalvar(erroArquivo)
+                setArquivoEmenta(erroArquivo ? null : arquivo)
+              }}
+              accept=".pdf,.doc,.docx"
+              disabled={salvando}
+            />
+          </FormField>
           <FormActions>
             <Button variant="outline" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
@@ -237,9 +273,36 @@ const BOLSA_INICIAL = {
   modalidade: '',
   cargaHorariaSemanal: '',
   valorMensal: '',
+  quantidadeVagas: '1',
   prerequisitos: '',
   metodologiaAvaliacao: '',
   notaMinima: '',
+}
+
+function formDaBolsa(bolsa) {
+  return {
+    editalId: String(bolsa.edital),
+    tipo: bolsa.tipo,
+    modalidade: bolsa.modalidade,
+    cargaHorariaSemanal: String(bolsa.carga_horaria_semanal),
+    valorMensal: bolsa.valor_mensal,
+    quantidadeVagas: String(bolsa.quantidade_vagas),
+    prerequisitos: bolsa.prerequisitos || '',
+    metodologiaAvaliacao: bolsa.metodologia_avaliacao || '',
+    notaMinima: bolsa.nota_minima ?? '',
+  }
+}
+
+function mensagemDeErro(corpo, padrao) {
+  return (
+    corpo?.edital?.[0] ||
+    corpo?.projeto?.[0] ||
+    corpo?.detail ||
+    Object.values(corpo || {})
+      .flat()
+      .join(' ') ||
+    padrao
+  )
 }
 
 function ProjetoDetalhe({ projetoId, onVoltar }) {
@@ -254,6 +317,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [erro, setErro] = useState('')
 
   const [modalAberto, setModalAberto] = useState(false)
+  const [bolsaEditando, setBolsaEditando] = useState(null) // null = nova solicitação
+  const [bolsaEtapas, setBolsaEtapas] = useState(null) // bolsa com o modal de etapas aberto
   const [form, setForm] = useState(BOLSA_INICIAL)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
@@ -300,7 +365,15 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       return
     }
     setAvisoSemEditais(false)
+    setBolsaEditando(null)
     setForm(BOLSA_INICIAL)
+    setErroSalvar('')
+    setModalAberto(true)
+  }
+
+  function abrirModalEditarBolsa(bolsa) {
+    setBolsaEditando(bolsa)
+    setForm(formDaBolsa(bolsa))
     setErroSalvar('')
     setModalAberto(true)
   }
@@ -311,6 +384,48 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
   const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
   const editalSelecionadoComPrazoEncerrado = !!editalSelecionado?.prazo_inscricao_encerrado
+  function dadosDoFormulario() {
+    return {
+      tipo: form.tipo,
+      modalidade: form.modalidade,
+      carga_horaria_semanal: Number(form.cargaHorariaSemanal),
+      valor_mensal: form.valorMensal,
+      quantidade_vagas: Number(form.quantidadeVagas),
+      prerequisitos: form.prerequisitos,
+      metodologia_avaliacao: form.metodologiaAvaliacao,
+      nota_minima: form.notaMinima !== '' ? Number(form.notaMinima) : null,
+    }
+  }
+
+  function salvarBolsa() {
+    return bolsaEditando ? editarBolsa() : solicitarBolsa()
+  }
+
+  async function editarBolsa() {
+    setSalvando(true)
+    setErroSalvar('')
+    try {
+      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosDoFormulario()),
+      })
+
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a bolsa.'))
+      }
+
+      const atualizada = await res.json()
+      setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
+      setModalAberto(false)
+      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
+    } catch (e) {
+      setErroSalvar(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   async function solicitarBolsa() {
     setSalvando(true)
@@ -322,27 +437,13 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         body: JSON.stringify({
           projeto: projetoId,
           edital: Number(form.editalId),
-          tipo: form.tipo,
-          modalidade: form.modalidade,
-          carga_horaria_semanal: Number(form.cargaHorariaSemanal),
-          valor_mensal: form.valorMensal,
-          prerequisitos: form.prerequisitos,
-          metodologia_avaliacao: form.metodologiaAvaliacao,
-          nota_minima: form.notaMinima ? Number(form.notaMinima) : null,
+          ...dadosDoFormulario(),
         }),
       })
 
       if (!res.ok) {
         const corpo = await res.json().catch(() => null)
-        const mensagem =
-          corpo?.edital?.[0] ||
-          corpo?.projeto?.[0] ||
-          corpo?.detail ||
-          Object.values(corpo || {})
-            .flat()
-            .join(' ') ||
-          'Erro ao solicitar bolsa.'
-        throw new Error(mensagem)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao solicitar bolsa.'))
       }
 
       const criada = await res.json()
@@ -401,6 +502,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       />
     )
   }
+  const tipoBloqueado = !!bolsaEditando && bolsaEditando.status !== 'SOLICITADA'
 
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
 
@@ -408,12 +510,25 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     bolsa.edital_nome,
     opcaoLabel(TIPO_OPTIONS, bolsa.tipo),
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
+    bolsa.quantidade_vagas,
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
     <AcoesCell
       key="acoes"
       acoes={[
         { label: 'Candidatos', onClick: () => setBolsaCandidatos(bolsa) },
+        ...(STATUS_COM_ETAPAS.includes(bolsa.status)
+          ? [
+              {
+                label: 'Etapas de avaliação',
+                variant: 'outline',
+                onClick: () => setBolsaEtapas(bolsa),
+              },
+            ]
+          : []),
+        ...(bolsa.pode_editar
+          ? [{ label: 'Editar', variant: 'outline', onClick: () => abrirModalEditarBolsa(bolsa) }]
+          : []),
         ...(podeCancelar(bolsa)
           ? [
               {
@@ -446,6 +561,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         {projeto.descricao || 'Sem descrição.'}
       </div>
 
+      <EmentaProjetoCard projeto={projeto} onAtualizado={setProjeto} />
+
       <PageHeader
         title="Bolsas do Projeto"
         action={
@@ -463,28 +580,48 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       )}
 
       <DataTable
-        columns={['Edital', 'Tipo', 'Modalidade', 'Valor', 'Status', 'Ações']}
+        columns={['Edital', 'Tipo', 'Modalidade', 'Vagas', 'Valor', 'Status', 'Ações']}
         rows={linhasBolsas}
         emptyMessage="Nenhuma bolsa solicitada para este projeto."
       />
 
+      {bolsaEtapas && (
+        <EtapasAvaliacaoModal
+          bolsa={bolsaEtapas}
+          onFechar={() => setBolsaEtapas(null)}
+          onAtualizada={(atualizada) =>
+            setBolsas((atuais) =>
+              atuais.map((item) => (item.id === atualizada.id ? atualizada : item))
+            )
+          }
+        />
+      )}
+
       {modalAberto && (
-        <Modal title="Solicitar Nova Bolsa" onClose={() => setModalAberto(false)} width={600}>
+        <Modal
+          title={bolsaEditando ? 'Editar Bolsa' : 'Solicitar Nova Bolsa'}
+          onClose={() => setModalAberto(false)}
+          width={600}
+        >
           {erroSalvar && <Alert tone="error">{erroSalvar}</Alert>}
 
-          <FormField label="Edital">
-            <Select
-              value={form.editalId}
-              onChange={(e) => atualizarCampo('editalId', e.target.value)}
-              required
-            >
-              <option value="">Selecione um edital</option>
-              {editais.map((edital) => (
-                <option key={edital.id} value={edital.id}>
-                  {edital.nome} ({edital.ano_codigo})
-                </option>
-              ))}
-            </Select>
+          <FormField label={bolsaEditando ? 'Edital (não pode ser alterado)' : 'Edital'}>
+            {bolsaEditando ? (
+              <TextInput value={bolsaEditando.edital_nome} disabled />
+            ) : (
+              <Select
+                value={form.editalId}
+                onChange={(e) => atualizarCampo('editalId', e.target.value)}
+                required
+              >
+                <option value="">Selecione um edital</option>
+                {editais.map((edital) => (
+                  <option key={edital.id} value={edital.id}>
+                    {edital.nome} ({edital.ano_codigo})
+                  </option>
+                ))}
+              </Select>
+            )}
           </FormField>
 
           {editalSelecionadoComPrazoEncerrado && (
@@ -494,10 +631,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             </Alert>
           )}
 
-          <FormField label="Tipo da bolsa (define o Coordenador de Área responsável)">
+          <FormField
+            label={
+              tipoBloqueado
+                ? 'Tipo da bolsa (não pode ser alterado depois da aprovação)'
+                : 'Tipo da bolsa (define o Coordenador de Área responsável)'
+            }
+          >
             <Select
               value={form.tipo}
               onChange={(e) => atualizarCampo('tipo', e.target.value)}
+              disabled={tipoBloqueado}
               required
             >
               <option value="">Selecione o tipo</option>
@@ -550,6 +694,17 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             />
           </FormField>
 
+          <FormField label="Quantidade de vagas">
+            <TextInput
+              type="number"
+              step="1"
+              min="1"
+              value={form.quantidadeVagas}
+              onChange={(e) => atualizarCampo('quantidadeVagas', e.target.value)}
+              required
+            />
+          </FormField>
+
           <FormField label="Nota mínima de classificação (opcional)">
             <TextInput
               type="number"
@@ -583,17 +738,19 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             </Button>
             <Button
               variant="accent"
-              onClick={solicitarBolsa}
+              onClick={salvarBolsa}
               disabled={
                 salvando ||
                 !form.editalId ||
                 !form.tipo ||
                 !form.modalidade ||
                 !form.cargaHorariaSemanal ||
-                !form.valorMensal
+                !form.valorMensal ||
+                !Number.isInteger(Number(form.quantidadeVagas)) ||
+                Number(form.quantidadeVagas) < 1
               }
             >
-              {salvando ? 'Enviando...' : 'Solicitar Bolsa'}
+              {salvando ? 'Enviando...' : bolsaEditando ? 'Salvar Alterações' : 'Solicitar Bolsa'}
             </Button>
           </FormActions>
         </Modal>

@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { bolsasFetch } from '../api'
-import { Alert, Badge, Button, DataTable, IconArrowLeft, PageHeader } from '../components'
+import {
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  IconArrowLeft,
+  IconPaperclip,
+  LocalEtapa,
+  PageHeader,
+} from '../components'
+import { formatarDataHora } from '../utils/dataHora'
+import { formatarPeso } from '../utils/formatarPeso'
 import InscricaoWizard from './InscricaoWizard'
 
 const TIPO_LABEL = {
@@ -171,6 +182,9 @@ function BolsaDetalhe({ bolsaId, onVoltar }) {
         <p>
           <strong>Valor mensal:</strong> R$ {bolsa.valor_mensal}
         </p>
+        <p>
+          <strong>Vagas:</strong> {bolsa.quantidade_vagas}
+        </p>
         {bolsa.nota_minima != null && (
           <p>
             <strong>Nota mínima:</strong> {bolsa.nota_minima}
@@ -182,6 +196,41 @@ function BolsaDetalhe({ bolsaId, onVoltar }) {
         <p>
           <strong>Metodologia de avaliação:</strong>{' '}
           {bolsa.metodologia_avaliacao || 'Não informado.'}
+        </p>
+        {bolsa.etapas?.length > 0 && (
+          <div>
+            <strong>Etapas de avaliação:</strong>
+            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+              {bolsa.etapas.map((etapa) => (
+                <li key={etapa.id}>
+                  {etapa.nome}: peso {formatarPeso(etapa.peso_efetivo)}
+                  {etapa.data_hora && <> · {formatarDataHora(etapa.data_hora)}</>}
+                  {etapa.local && (
+                    <>
+                      {' · '}
+                      <LocalEtapa local={etapa.local} />
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p>
+          <strong>Matriz / ementa do projeto:</strong>{' '}
+          {bolsa.projeto_arquivo_ementa ? (
+            <a
+              href={bolsa.projeto_arquivo_ementa}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <IconPaperclip size={14} />
+              {bolsa.projeto_nome_arquivo || 'Abrir arquivo'}
+            </a>
+          ) : (
+            'Não anexado.'
+          )}
         </p>
       </div>
 
