@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from bolsas.models import Bolsa, StatusBolsa
+from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
 
 from .models import (
@@ -308,7 +309,7 @@ class DecisaoInscricaoView(APIView):
                 "data_decisao",
             ]
         )
-        mensagem = f'Sua inscrição no projeto "{inscricao.bolsa.projeto.titulo}" (bolsa #{inscricao.bolsa_id}) foi {inscricao.get_status_display().lower()}.'
+        mensagem = f'Sua inscrição no projeto "{inscricao.bolsa.projeto.titulo}" foi {inscricao.get_status_display().lower()}.'
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
         NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
@@ -372,6 +373,8 @@ def motivo_bloqueio_recurso(inscricao):
         return "O edital ou a bolsa não está disponível para receber recursos."
     inicio = edital.data_recurso_homologacao_inicio
     fim = edital.data_recurso_homologacao_fim
+    if fim and timezone.localdate() > fim:
+        return "O período de interpor recursos encerrou."
     if not inicio or not fim or not inicio <= timezone.localdate() <= fim:
         return "O período de recursos da homologação não está aberto."
     if inscricao.recursos.filter(
@@ -521,7 +524,7 @@ class JulgarRecursoView(APIView):
                 ]
             )
         mensagem = (
-            f"Seu recurso #{recurso.pk} de homologação, na bolsa do projeto "
+            f"Seu recurso de homologação, na bolsa do projeto "
             f'"{inscricao.bolsa.projeto.titulo}", foi {recurso.get_status_display().lower()}.'
         )
         if recurso.justificativa_julgamento:
@@ -543,3 +546,33 @@ class AnexoRecursoArquivoView(APIView):
         except OSError:
             raise Http404("Arquivo não encontrado.") from None
         return FileResponse(arquivo, as_attachment=True, filename=anexo.nome_original)
+
+
+class RecursosListView(APIView):
+    permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
+
+    def get(self, request):
+        recursos = (
+            Recurso.objects.filter(
+                inscricao__in=inscricoes_acessiveis(request.user), etapa=EtapaRecurso.HOMOLOGACAO
+            )
+            .select_related(
+                "inscricao__aluno", "inscricao__bolsa__projeto", "inscricao__bolsa__edital"
+            )
+            .prefetch_related("anexos")
+        )
+        return Response(RecursoSerializer(recursos, many=True, context={"request": request}).data)
+
+
+class BolsaInscricaoDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAluno]
+
+    def get(self, request, pk):
+        inscricao = get_object_or_404(
+            Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital").prefetch_related(
+                "bolsa__etapas"
+            ),
+            pk=pk,
+            aluno=request.user,
+        )
+        return Response(BolsaSerializer(inscricao.bolsa, context={"request": request}).data)

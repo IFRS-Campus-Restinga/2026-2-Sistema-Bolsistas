@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import CandidatosPage from './CandidatosPage'
 import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
 import {
   AcoesCell,
@@ -309,7 +308,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const confirmar = useConfirm()
   const toast = useToast()
 
-  const [bolsaCandidatos, setBolsaCandidatos] = useState(null)
   const [projeto, setProjeto] = useState(null)
   const [bolsas, setBolsas] = useState([])
   const [editais, setEditais] = useState([])
@@ -492,16 +490,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     )
   }
 
-  if (bolsaCandidatos) {
-    return (
-      <CandidatosPage
-        key={bolsaCandidatos.id}
-        bolsa={bolsaCandidatos}
-        projetoTitulo={projeto.titulo}
-        onVoltar={() => setBolsaCandidatos(null)}
-      />
-    )
-  }
   const tipoBloqueado = !!bolsaEditando && bolsaEditando.status !== 'SOLICITADA'
 
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
@@ -516,7 +504,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     <AcoesCell
       key="acoes"
       acoes={[
-        { label: 'Candidatos', onClick: () => setBolsaCandidatos(bolsa) },
         ...(STATUS_COM_ETAPAS.includes(bolsa.status)
           ? [
               {

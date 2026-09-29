@@ -742,3 +742,76 @@ class RecursosTests(APITestCase):
         self.assertFalse(Recurso.objects.exists())
         self.assertFalse(AnexoRecurso.objects.exists())
         self.assertEqual([p for p in Path(self.media.name).rglob("*") if p.is_file()], [])
+
+    def test_expirado_apos_ultimo_dia_mantem_julgamento(self):
+        self.enviar()
+        recurso = Recurso.objects.get()
+        self.edital.data_recurso_homologacao_fim = timezone.localdate()
+        self.edital.save()
+        self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "PENDENTE")
+        self.edital.data_recurso_homologacao_fim -= timedelta(days=1)
+        self.edital.save()
+        dados = self.client.get(self.url).data
+        self.assertEqual(dados["recursos"][0]["status"], "EXPIRADO")
+        self.assertFalse(dados["pode_enviar"])
+        self.assertEqual(dados["motivo_bloqueio"], "O período de interpor recursos encerrou.")
+        self.assertEqual(self.enviar().status_code, 400)
+        self.assertEqual(self.julgar(recurso).status_code, 200)
+        self.inscricao.refresh_from_db()
+        self.assertEqual(self.inscricao.status, "HOMOLOGADA")
+        self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "DEFERIDO")
+
+    def test_historico_privado_e_disponivel_fora_do_prazo(self):
+        self.enviar()
+        self.edital.data_recurso_homologacao_fim = timezone.localdate() - timedelta(days=1)
+        self.edital.save()
+        url = reverse("inscricoes:recursos-lista")
+        resposta = self.client.get(url)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.data[0]["status"], "EXPIRADO")
+        self.assertEqual(resposta.data[0]["projeto_titulo"], "Projeto")
+        outro = Usuario.objects.create_user(username="outro", role=Usuario.Role.ALUNO)
+        self.client.force_authenticate(outro)
+        self.assertEqual(self.client.get(url).data, [])
+        self.client.force_authenticate(self.coordenador)
+        self.assertEqual(len(self.client.get(url).data), 1)
+        outro_coord = Usuario.objects.create_user(
+            username="outrocoord",
+            email="outrocoord@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro_coord)
+        self.client.force_authenticate(outro_coord)
+        self.assertEqual(self.client.get(url).data, [])
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(url).status_code, 401)
+
+    def test_bolsa_da_inscricao_acessivel_apos_prazo_apenas_ao_dono(self):
+        self.edital.data_fechamento_inscricoes = timezone.localdate() - timedelta(days=2)
+        self.edital.save()
+        url = reverse("inscricoes:inscricao-bolsa", kwargs={"pk": self.inscricao.pk})
+        resposta = self.client.get(url)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.data["id"], self.bolsa.pk)
+        outro = Usuario.objects.create_user(username="outro", role=Usuario.Role.ALUNO)
+        self.client.force_authenticate(outro)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(url).status_code, 401)
+
+    def test_mensagens_sem_ids_preservam_justificativa(self):
+        from .serializers import NotificacaoInscricaoSerializer
+
+        antiga = NotificacaoInscricao.objects.create(
+            inscricao=self.inscricao,
+            mensagem="Seu recurso #2 de homologação, na bolsa #6, foi indeferido. Justificativa: Rever item #7.",
+        )
+        texto = NotificacaoInscricaoSerializer(antiga).data["mensagem"]
+        self.assertNotIn("#2", texto)
+        self.assertNotIn("#6", texto)
+        self.assertIn('projeto "Projeto"', texto)
+        self.assertIn("item #7", texto)
+        self.enviar()
+        self.julgar(Recurso.objects.get())
+        texto = NotificacaoInscricao.objects.order_by("-id").first().mensagem
+        self.assertNotIn("#", texto)
