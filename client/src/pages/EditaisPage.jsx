@@ -46,6 +46,7 @@ export default function EditaisPage() {
   const [historico, setHistorico] = useState([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
   const confirmar = useConfirm()
+  const toast = useToast()
 
   useEffect(() => {
     let ativo = true
@@ -201,13 +202,38 @@ export default function EditaisPage() {
     return sequencia.length > 0 ? sequencia : ['—']
   }
 
-  const linhasHistorico = historico.map((item) => [
-    item.campo_display || item.campo || '—',
-    formatarData(item.data_anterior),
-    formatarData(item.data_nova),
-    item.responsavel || '—',
-    item.alterado_em || '—',
-  ])
+  const ultimoIndicePorCampo = historico.reduce((acc, item, idx) => {
+    acc[item.campo] = idx
+    return acc
+  }, {})
+
+  const linhasHistorico = historico.map((item, idx) => {
+    const ehUltima = ultimoIndicePorCampo[item.campo] === idx
+    return [
+      item.campo_display || item.campo || '—',
+      <span
+        key={`anterior-${item.id}`}
+        style={{
+          textDecoration: item.data_anterior ? 'line-through' : 'none',
+          opacity: item.data_anterior ? 0.55 : 1,
+        }}
+      >
+        {formatarData(item.data_anterior)}
+      </span>,
+      <span
+        key={`nova-${item.id}`}
+        style={{
+          textDecoration: item.data_nova && !ehUltima ? 'line-through' : 'none',
+          opacity: item.data_nova && !ehUltima ? 0.55 : 1,
+          fontWeight: item.data_nova && ehUltima ? 600 : 400,
+        }}
+      >
+        {formatarData(item.data_nova)}
+      </span>,
+      item.responsavel || '—',
+      item.alterado_em || '—',
+    ]
+  })
 
   const linhas = editais.map((edital) => [
     edital.nome,

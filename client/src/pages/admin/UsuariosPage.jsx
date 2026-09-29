@@ -311,9 +311,15 @@ export default function UsuariosPage() {
           <FormField label="Tipo de Área">
             <Select
               value={tipoAreaEmailEditado}
-              options={[{ value: '', label: 'Selecione...' }, ...TIPO_AREA_OPTIONS]}
-              onChange={(valor) => setTipoAreaEmailEditado(valor)}
-            />
+              onChange={(e) => setTipoAreaEmailEditado(e.target.value)}
+            >
+              <option value="">Selecione...</option>
+              {TIPO_AREA_OPTIONS.map((opcao) => (
+                <option key={opcao.value} value={opcao.value}>
+                  {opcao.label}
+                </option>
+              ))}
+            </Select>
           </FormField>
           {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>

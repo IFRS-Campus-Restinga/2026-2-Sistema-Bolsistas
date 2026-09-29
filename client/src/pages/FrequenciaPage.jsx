@@ -24,7 +24,7 @@ function mesAtualISO() {
 const COLUNAS = ['Bolsista', 'Prazo', 'Mês/Ano', 'Status', 'Lançado em', '']
 
 export default function FrequenciaPage() {
-  const { showToast } = useToast()
+  const toast = useToast()
   const [frequencias, setFrequencias] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [processando, setProcessando] = useState(null)
@@ -38,9 +38,9 @@ export default function FrequenciaPage() {
         return res.json()
       })
       .then((dados) => setFrequencias(Array.isArray(dados) ? dados : []))
-      .catch(() => showToast('Erro ao carregar frequências.', 'error'))
+      .catch(() => toast({ message: 'Erro ao carregar frequências.', tone: 'error' }))
       .finally(() => setCarregando(false))
-  }, [filtroMes])
+  }, [filtroMes, toast])
 
   function handleFiltroMes(valor) {
     setFiltroMes(valor)
@@ -60,9 +60,9 @@ export default function FrequenciaPage() {
             : freq_atual
         )
       )
-      showToast('Frequência lançada com sucesso.', 'success')
+      toast({ message: 'Frequência lançada com sucesso.', tone: 'success' })
     } catch (error) {
-      showToast(error.message || 'Erro ao lançar frequência.', 'error')
+      toast({ message: error.message || 'Erro ao lançar frequência.', tone: 'error' })
     } finally {
       setProcessando(null)
     }
@@ -117,7 +117,13 @@ export default function FrequenciaPage() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16 }}>
         <FormField label="Mês de referência" style={{ flex: '0 0 220px' }}>
-          <Select value={filtroMes} options={opcoesMs} onChange={handleFiltroMes} />
+          <Select value={filtroMes} onChange={(evento) => handleFiltroMes(evento.target.value)}>
+            {opcoesMs.map((opcao) => (
+              <option key={opcao.value} value={opcao.value}>
+                {opcao.label}
+              </option>
+            ))}
+          </Select>
         </FormField>
       </div>
 

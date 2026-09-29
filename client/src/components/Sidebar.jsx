@@ -49,7 +49,7 @@ export function Sidebar({ menuItems, active, onNav, onLogout }) {
       <div className="sidebar__footer">
         <button onClick={onLogout} className="sidebar__logout">
           <IconLogOut />
-          Sair do Sistema
+          Voltar ao HUB
         </button>
       </div>
     </aside>

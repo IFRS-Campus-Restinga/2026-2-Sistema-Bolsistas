@@ -65,7 +65,7 @@ function linhasTabela(logs) {
 }
 
 export default function AuditoriaPage({ mostrarFiltroUsuario = true }) {
-  const { showToast } = useToast()
+  const toast = useToast()
 
   const [logs, setLogs] = useState([])
   const [usuarios, setUsuarios] = useState([])
@@ -110,7 +110,7 @@ export default function AuditoriaPage({ mostrarFiltroUsuario = true }) {
         setTemProxima(!!data.next)
         setTemAnterior(!!data.previous)
       } catch {
-        if (ativo) showToast('Erro ao carregar logs de auditoria.', 'error')
+        if (ativo) toast({ message: 'Erro ao carregar logs de auditoria.', tone: 'error' })
       } finally {
         if (ativo) setCarregando(false)
       }
@@ -121,7 +121,7 @@ export default function AuditoriaPage({ mostrarFiltroUsuario = true }) {
     return () => {
       ativo = false
     }
-  }, [pagina, filtros, showToast])
+  }, [pagina, filtros, toast])
 
   function limparFiltros() {
     const vazios = { usuario: '', dataInicio: '', dataFim: '' }
@@ -156,9 +156,14 @@ export default function AuditoriaPage({ mostrarFiltroUsuario = true }) {
           <FormField label="Usuário" style={{ flex: '1 1 180px' }}>
             <Select
               value={filtros.usuario}
-              options={opcoesUsuario}
-              onChange={(valor) => atualizarFiltro('usuario', valor)}
-            />
+              onChange={(e) => atualizarFiltro('usuario', e.target.value)}
+            >
+              {opcoesUsuario.map((opcao) => (
+                <option key={opcao.value} value={opcao.value}>
+                  {opcao.label}
+                </option>
+              ))}
+            </Select>
           </FormField>
         )}
         <FormField label="De" style={{ flex: '1 1 140px' }}>

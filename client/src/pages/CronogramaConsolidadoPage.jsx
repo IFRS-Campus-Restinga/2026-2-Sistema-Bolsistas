@@ -34,7 +34,7 @@ const DATAS_CHAVE = [
 ]
 
 export default function CronogramaConsolidadoPage() {
-  const { showToast } = useToast()
+  const toast = useToast()
   const [editais, setEditais] = useState([])
   const [historicoPorEdital, setHistoricoPorEdital] = useState({})
   const [carregando, setCarregando] = useState(true)
@@ -73,7 +73,7 @@ export default function CronogramaConsolidadoPage() {
         if (!ativo) return
         setHistoricoPorEdital(Object.fromEntries(respostas))
       } catch {
-        if (ativo) showToast('Erro ao carregar cronograma consolidado.', 'error')
+        if (ativo) toast({ message: 'Erro ao carregar cronograma consolidado.', tone: 'error' })
       } finally {
         if (ativo) setCarregando(false)
       }
@@ -84,7 +84,7 @@ export default function CronogramaConsolidadoPage() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [toast])
 
   function datasPorCampo(edital, campo) {
     const historicoEdital = historicoPorEdital[edital.id] || []
@@ -121,7 +121,7 @@ export default function CronogramaConsolidadoPage() {
       }
       setHistorico(Array.isArray(dados) ? dados : [])
     } catch (error) {
-      showToast(error.message || 'Erro ao carregar histórico de prazos.', 'error')
+      toast({ message: error.message || 'Erro ao carregar histórico de prazos.', tone: 'error' })
     } finally {
       setCarregandoHistorico(false)
     }

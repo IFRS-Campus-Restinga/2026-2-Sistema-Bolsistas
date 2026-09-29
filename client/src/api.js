@@ -42,12 +42,28 @@ export async function apiFetch(path, options = {}, base = API_BASE) {
   return res
 }
 
+function fetchWithRefresh(base, path = '/', options = {}) {
+  return apiFetch(path, options, base)
+}
+
+function adminFetch(path, options) {
+  return apiFetch(path, options, ADMIN_BASE)
+}
+
 export function editaisFetch(path = '/', options = {}) {
   return apiFetch(path, options, `${DJANGO_HOST}/api/editais`)
 }
 
 export function inscricoesFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
+}
+
+export function bolsasFetch(path = '/', options = {}) {
+  return apiFetch(path, options, `${DJANGO_HOST}/api/bolsas`)
+}
+
+export function projetosFetch(path = '/', options = {}) {
+  return apiFetch(path, options, `${DJANGO_HOST}/api/projetos`)
 }
 
 export { SessaoExpiradaError }

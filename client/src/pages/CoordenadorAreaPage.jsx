@@ -31,7 +31,6 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      <PageHeader title={`Painel — Coordenação de ${areaLabel}`} />
       {active === 'editais' ? (
         <EditaisPage />
       ) : (

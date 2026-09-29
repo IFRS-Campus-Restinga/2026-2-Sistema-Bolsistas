@@ -384,6 +384,20 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
   const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
   const editalSelecionadoComPrazoEncerrado = !!editalSelecionado?.prazo_inscricao_encerrado
+  const tipoBloqueado = !!bolsaEditando
+
+  function dadosDoFormulario() {
+    return {
+      tipo: form.tipo,
+      modalidade: form.modalidade,
+      carga_horaria_semanal: Number(form.cargaHorariaSemanal),
+      valor_mensal: form.valorMensal,
+      quantidade_vagas: Number(form.quantidadeVagas),
+      prerequisitos: form.prerequisitos,
+      metodologia_avaliacao: form.metodologiaAvaliacao,
+      nota_minima: form.notaMinima !== '' ? form.notaMinima : null,
+    }
+  }
 
   async function solicitarBolsa() {
     setSalvando(true)
@@ -412,6 +426,38 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       setErroSalvar(e.message)
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function editarBolsa() {
+    setSalvando(true)
+    setErroSalvar('')
+    try {
+      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosDoFormulario()),
+      })
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao editar bolsa.'))
+      }
+      const atualizada = await res.json()
+      setBolsas((atuais) => atuais.map((b) => (b.id === atualizada.id ? atualizada : b)))
+      setModalAberto(false)
+      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
+    } catch (e) {
+      setErroSalvar(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  function salvarBolsa() {
+    if (bolsaEditando) {
+      editarBolsa()
+    } else {
+      solicitarBolsa()
     }
   }
 
@@ -479,8 +525,12 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       key="acoes"
       acoes={[
         { label: 'Candidatos', onClick: () => setBolsaCandidatos(bolsa) },
+        ...(STATUS_COM_ETAPAS.includes(bolsa.status)
+          ? [{ label: 'Etapas', onClick: () => setBolsaEtapas(bolsa) }]
+          : []),
         ...(podeCancelar(bolsa)
           ? [
+              { label: 'Editar', onClick: () => abrirModalEditarBolsa(bolsa) },
               {
                 label: 'Cancelar Bolsa',
                 variant: 'danger',
