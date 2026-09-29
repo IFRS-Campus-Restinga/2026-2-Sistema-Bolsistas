@@ -53,6 +53,8 @@ def atualizar_status(request, usuario_id):
             {"is_active": ["Este campo é obrigatório e deve ser verdadeiro ou falso."]},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if not is_active and str(usuario.id) == str(request.user.id):
+        raise ValidationError({"detail": "Você não pode desativar o próprio usuário."})
     usuario.is_active = is_active
     usuario.save(update_fields=["is_active"])
     return Response(UsuarioListSerializer(usuario).data)

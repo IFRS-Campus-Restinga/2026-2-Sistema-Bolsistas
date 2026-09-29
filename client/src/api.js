@@ -91,3 +91,61 @@ export async function patchEmailCoordenador(id, email, tipoArea) {
 export async function deleteEmailCoordenador(id) {
   return adminFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
 }
+
+// ── Auditoria ─────────────────────────────────────────────────────────────
+
+function auditoriaFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/auditoria`, path, options)
+}
+
+export async function getLogsAuditoria({
+  pagina = 1,
+  usuario,
+  ator,
+  dataInicio,
+  dataFim,
+  modelo,
+  acao,
+} = {}) {
+  const params = new URLSearchParams()
+  params.set('page', pagina)
+  if (usuario) params.set('usuario', usuario)
+  else if (ator) params.set('usuario', ator)
+  if (dataInicio) params.set('data_inicio', dataInicio)
+  if (dataFim) params.set('data_fim', dataFim)
+  if (modelo) params.set('modelo', modelo)
+  if (acao) params.set('acao', acao)
+  return auditoriaFetch(`/logs/?${params}`)
+}
+
+export async function getHistoricoCronograma(editalId) {
+  return auditoriaFetch(`/editais/${editalId}/cronograma/`)
+}
+
+// ── Editais — ações extras ────────────────────────────────────────────────
+
+export async function arquivarEdital(id) {
+  return editaisFetch(`/${id}/arquivar/`, { method: 'POST' })
+}
+
+export async function getCronogramaConsolidado() {
+  return editaisFetch('/cronograma-consolidado/')
+}
+
+// ── Frequência ────────────────────────────────────────────────────────────
+
+export async function getFrequencias({ vinculoId, mes } = {}) {
+  const params = new URLSearchParams()
+  if (vinculoId) params.set('vinculo', vinculoId)
+  if (mes) params.set('mes', mes)
+  const query = params.toString() ? `?${params}` : ''
+  return bolsasFetch(`/frequencias/${query}`)
+}
+
+export async function lancarFrequencia(vinculoId, mesReferencia) {
+  return bolsasFetch(`/vinculos/${vinculoId}/frequencias/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mes_referencia: mesReferencia }),
+  })
+}

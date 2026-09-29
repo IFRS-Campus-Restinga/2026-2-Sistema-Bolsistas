@@ -17,9 +17,9 @@ class CronogramaEditalAPITests(APITestCase):
             nome="Edital de Bolsas 2026",
             ano_codigo="2026-001",
             link_documento_oficial="https://example.com/edital.pdf",
-            data_abertura_inscricoes="2026-09-01",
-            data_fechamento_inscricoes="2026-09-10",
-            data_homologacao="2026-09-15",
+            data_abertura_inscricoes="2026-10-01",
+            data_fechamento_inscricoes="2026-10-10",
+            data_homologacao="2026-10-15",
         )
         self.url = reverse(
             "editais:cronograma",
@@ -30,7 +30,7 @@ class CronogramaEditalAPITests(APITestCase):
     def test_atualiza_apenas_a_data_enviada(self):
         response = self.client.patch(
             self.url,
-            {"data_fechamento_inscricoes": "2026-09-12"},
+            {"data_fechamento_inscricoes": "2026-10-12"},
             format="json",
         )
 
@@ -39,21 +39,21 @@ class CronogramaEditalAPITests(APITestCase):
         self.edital.refresh_from_db()
         self.assertEqual(
             self.edital.data_fechamento_inscricoes.isoformat(),
-            "2026-09-12",
+            "2026-10-12",
         )
         self.assertEqual(
             self.edital.data_abertura_inscricoes.isoformat(),
-            "2026-09-01",
+            "2026-10-01",
         )
         self.assertEqual(
             self.edital.data_homologacao.isoformat(),
-            "2026-09-15",
+            "2026-10-15",
         )
 
     def test_rejeita_data_incompativel_com_datas_salvas(self):
         response = self.client.patch(
             self.url,
-            {"data_fechamento_inscricoes": "2026-09-20"},
+            {"data_fechamento_inscricoes": "2026-10-20"},
             format="json",
         )
 
@@ -63,22 +63,21 @@ class CronogramaEditalAPITests(APITestCase):
         self.edital.refresh_from_db()
         self.assertEqual(
             self.edital.data_fechamento_inscricoes.isoformat(),
-            "2026-09-10",
+            "2026-10-10",
         )
 
     def test_permite_etapas_no_mesmo_dia(self):
         response = self.client.patch(
             self.url,
-            {"data_fechamento_inscricoes": "2026-09-15"},
+            {"data_fechamento_inscricoes": "2026-10-15"},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_bloqueia_edital_encerrado_ou_arquivado(self):
+    def test_bloqueia_edital_encerrado(self):
         estados = [
             Edital.Status.ENCERRADO,
-            Edital.Status.ARQUIVADO,
         ]
 
         for estado in estados:
@@ -88,7 +87,7 @@ class CronogramaEditalAPITests(APITestCase):
 
                 response = self.client.patch(
                     self.url,
-                    {"data_fechamento_inscricoes": "2026-09-12"},
+                    {"data_fechamento_inscricoes": "2026-10-12"},
                     format="json",
                 )
 
@@ -99,14 +98,13 @@ class CronogramaEditalAPITests(APITestCase):
                 self.edital.refresh_from_db()
                 self.assertEqual(
                     self.edital.data_fechamento_inscricoes.isoformat(),
-                    "2026-09-10",
+                    "2026-10-10",
                 )
 
     def test_outros_perfis_nao_podem_atualizar_cronograma(self):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
-            Usuario.Role.ADMINISTRADOR,
         ]
 
         for perfil in perfis:
@@ -120,7 +118,7 @@ class CronogramaEditalAPITests(APITestCase):
 
                 response = self.client.patch(
                     self.url,
-                    {"data_fechamento_inscricoes": "2026-09-12"},
+                    {"data_fechamento_inscricoes": "2026-10-12"},
                     format="json",
                 )
 
@@ -132,15 +130,31 @@ class CronogramaEditalAPITests(APITestCase):
         self.edital.refresh_from_db()
         self.assertEqual(
             self.edital.data_fechamento_inscricoes.isoformat(),
-            "2026-09-10",
+            "2026-10-10",
         )
+
+    def test_administrador_pode_atualizar_cronograma(self):
+        admin = Usuario.objects.create_user(
+            username="admin_cronograma",
+            email="admin.cronograma@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-10-12"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_visitante_nao_pode_atualizar_cronograma(self):
         self.client.force_authenticate(user=None)
 
         response = self.client.patch(
             self.url,
-            {"data_fechamento_inscricoes": "2026-09-12"},
+            {"data_fechamento_inscricoes": "2026-10-12"},
             format="json",
         )
 
@@ -156,7 +170,7 @@ class CronogramaEditalAPITests(APITestCase):
         url = reverse("editais:cronograma", kwargs={"pk": edital_id})
         response = self.client.patch(
             url,
-            {"data_fechamento_inscricoes": "2026-09-12"},
+            {"data_fechamento_inscricoes": "2026-10-12"},
             format="json",
         )
 
@@ -168,10 +182,10 @@ class CronogramaEditalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.data["data_abertura_inscricoes"],
-            "2026-09-01",
+            "2026-10-01",
         )
         self.assertEqual(
             response.data["data_fechamento_inscricoes"],
-            "2026-09-10",
+            "2026-10-10",
         )
         self.assertIsNone(response.data["data_resultado"])

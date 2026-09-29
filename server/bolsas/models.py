@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
 from editais.models import Edital
 from projetos.models import Projeto
@@ -91,6 +92,8 @@ class Bolsa(models.Model):
         help_text="Coordenador de Área que aprovou/rejeitou esta bolsa.",
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         ordering = ["-data_solicitacao"]
 
@@ -171,6 +174,8 @@ class EtapaAvaliacao(models.Model):
         help_text="Local (ex.: Sala 204) ou link da reunião online.",
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         ordering = ["id"]
         verbose_name = "etapa de avaliação"
@@ -178,3 +183,106 @@ class EtapaAvaliacao(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.peso if self.peso is not None else 'peso igual'})"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# US15 — Vínculo do bolsista e frequência mensal
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class StatusVinculo(models.TextChoices):
+    ATIVO = "ATIVO", "Ativo"
+    DESLIGADO = "DESLIGADO", "Desligado"
+
+
+class VinculoBolsista(models.Model):
+    """
+    Representa o vínculo entre um aluno titular e uma bolsa preenchida.
+    Nasce quando a Bolsa transiciona para PREENCHIDA (fluxo 4.5 — ainda não
+    implementado). Um vínculo ATIVO por bolsa de cada vez (RN-09).
+    """
+
+    bolsa = models.ForeignKey(Bolsa, on_delete=models.PROTECT, related_name="vinculos")
+    aluno = models.ForeignKey(
+        "accounts.Usuario",
+        on_delete=models.PROTECT,
+        related_name="vinculos_bolsista",
+        limit_choices_to={"role": "ALUNO"},
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=StatusVinculo.choices,
+        default=StatusVinculo.ATIVO,
+    )
+    data_inicio = models.DateField()
+    data_fim = models.DateField(null=True, blank=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-data_inicio"]
+        verbose_name = "vínculo de bolsista"
+        verbose_name_plural = "vínculos de bolsistas"
+
+    def __str__(self):
+        return f"{self.aluno} → {self.bolsa} ({self.get_status_display()})"
+
+    def clean(self):
+        # RN-09: apenas 1 vínculo ATIVO por bolsa
+        conflito = VinculoBolsista.objects.filter(
+            bolsa=self.bolsa,
+            status=StatusVinculo.ATIVO,
+        ).exclude(pk=self.pk)
+        if conflito.exists() and self.status == StatusVinculo.ATIVO:
+            raise ValidationError(
+                "Já existe um vínculo ativo para esta bolsa. "
+                "Desative o vínculo atual antes de criar um novo."
+            )
+
+
+class StatusFrequencia(models.TextChoices):
+    PENDENTE = "PENDENTE", "Pendente"
+    INFORMADA = "INFORMADA", "Informada"
+    NAO_INFORMADA = "NAO_INFORMADA", "Não Informado"
+
+
+class Frequencia(models.Model):
+    """
+    Frequência mensal de um bolsista vinculado.
+    Lançada pelo Coordenador de Projeto até o dia_limite_frequencia do edital.
+    Gerada automaticamente como NAO_INFORMADA após o prazo (command gerar_status_frequencia).
+    """
+
+    vinculo = models.ForeignKey(
+        VinculoBolsista,
+        on_delete=models.PROTECT,
+        related_name="frequencias",
+    )
+    # Sempre dia 1 do mês de referência
+    mes_referencia = models.DateField(
+        help_text="Primeiro dia do mês de referência (ex.: 2026-09-01 para setembro/2026)."
+    )
+    status = models.CharField(
+        max_length=15,
+        choices=StatusFrequencia.choices,
+        default=StatusFrequencia.PENDENTE,
+    )
+    lancada_em = models.DateTimeField(null=True, blank=True)
+    lancada_por = models.ForeignKey(
+        "accounts.Usuario",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="frequencias_lancadas",
+    )
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-mes_referencia"]
+        unique_together = [("vinculo", "mes_referencia")]
+        verbose_name = "frequência mensal"
+        verbose_name_plural = "frequências mensais"
+
+    def __str__(self):
+        return f"{self.vinculo.aluno} — {self.mes_referencia:%m/%Y} ({self.get_status_display()})"

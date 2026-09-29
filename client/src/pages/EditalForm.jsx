@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Button, FormActions, FormField, Modal, TextInput, useConfirm } from '../components'
+import {
+  Alert,
+  Button,
+  FormActions,
+  FormField,
+  IconArrowLeft,
+  Modal,
+  TextInput,
+  useConfirm,
+} from '../components'
 
 const campos = [
   { name: 'nome', label: 'Nome', minLength: 3, maxLength: 200 },
@@ -31,11 +40,18 @@ const datas = [
 ]
 
 const nomesCampos = [...campos.map((campo) => campo.name), ...datas.map(([nome]) => nome)]
+const nomesCamposFormulario = [...nomesCampos, 'dia_limite_frequencia']
+
+function formatarData(data) {
+  if (!data) return null
+  const apenasData = String(data).split('T')[0]
+  return new Date(`${apenasData}T00:00:00`).toLocaleDateString('pt-BR')
+}
 
 export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
   const confirmar = useConfirm()
   const [iniciais] = useState(() =>
-    Object.fromEntries(nomesCampos.map((nome) => [nome, edital?.[nome] ?? '']))
+    Object.fromEntries(nomesCamposFormulario.map((nome) => [nome, edital?.[nome] ?? '']))
   )
   const [dados, setDados] = useState(iniciais)
   const [salvando, setSalvando] = useState(false)
@@ -43,7 +59,7 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
   const [errosCampos, setErrosCampos] = useState({})
 
   const emVigor = edital?.status === 'EM_VIGOR'
-  const alterado = nomesCampos.some((nome) => dados[nome] !== iniciais[nome])
+  const alterado = nomesCamposFormulario.some((nome) => dados[nome] !== iniciais[nome])
 
   function solicitarFechamento() {
     if (salvando) return
@@ -73,6 +89,28 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
     return Array.isArray(mensagens) ? mensagens.join(' ') : mensagens
   }
 
+  function historicoCampo(nome) {
+    const alteracoes = edital?.historico_por_data?.[nome] || []
+    if (!alteracoes.length) return []
+
+    const sequencia = []
+    for (const alteracao of alteracoes) {
+      if (alteracao.data_anterior && sequencia[sequencia.length - 1] !== alteracao.data_anterior) {
+        sequencia.push(alteracao.data_anterior)
+      }
+      if (alteracao.data_nova && sequencia[sequencia.length - 1] !== alteracao.data_nova) {
+        sequencia.push(alteracao.data_nova)
+      }
+    }
+
+    const atual = dados[nome] || null
+    if (atual && sequencia[sequencia.length - 1] !== atual) {
+      sequencia.push(atual)
+    }
+
+    return sequencia
+  }
+
   async function enviar(event) {
     event.preventDefault()
     if (salvando) return
@@ -85,6 +123,9 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
     for (const [nome] of datas) {
       corpo[nome] = corpo[nome] || null
     }
+    corpo.dia_limite_frequencia = corpo.dia_limite_frequencia
+      ? Number(corpo.dia_limite_frequencia)
+      : null
 
     try {
       const response = await editaisFetch(edital ? `/${edital.id}/` : '/', {
@@ -162,6 +203,41 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
                 aria-invalid={Boolean(mensagemCampo(nome))}
                 aria-describedby={mensagemCampo(nome) ? `${nome}-erro` : undefined}
               />
+              {emVigor && historicoCampo(nome).length > 1 && (
+                <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                  Histórico:{' '}
+                  {historicoCampo(nome).map((data, indice, lista) => {
+                    const atual = indice === lista.length - 1
+                    return (
+                      <span
+                        key={`${nome}-${data}-${indice}`}
+                        style={{
+                          textDecoration: atual ? 'none' : 'line-through',
+                          opacity: atual ? 1 : 0.85,
+                          fontWeight: atual ? 600 : 400,
+                        }}
+                      >
+                        {formatarData(data)}
+                        {!atual && (
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              margin: '0 2px',
+                              opacity: 0.65,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              transform: 'scaleX(-1)',
+                              verticalAlign: 'middle',
+                            }}
+                          >
+                            <IconArrowLeft size={12} />
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })}
+                </p>
+              )}
               {mensagemCampo(nome) && (
                 <div id={`${nome}-erro`} role="alert">
                   <Alert tone="error">{mensagemCampo(nome)}</Alert>
@@ -169,6 +245,37 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
               )}
             </FormField>
           ))}
+
+          <h3>Frequência</h3>
+          <FormField label="Dia-limite mensal para entrega de frequência">
+            <TextInput
+              type="number"
+              name="dia_limite_frequencia"
+              aria-label="Dia-limite mensal para entrega de frequência"
+              min={1}
+              max={31}
+              step={1}
+              placeholder="Ex.: 10"
+              value={dados.dia_limite_frequencia}
+              onChange={alterarCampo}
+              required={emVigor}
+              disabled={salvando}
+              aria-invalid={Boolean(mensagemCampo('dia_limite_frequencia'))}
+              aria-describedby={
+                mensagemCampo('dia_limite_frequencia')
+                  ? 'dia_limite_frequencia-erro'
+                  : 'dia_limite_frequencia-ajuda'
+              }
+            />
+            <p id="dia_limite_frequencia-ajuda" style={{ fontSize: 12, marginTop: 4 }}>
+              Informe um dia entre 1 e 31 para padronizar o prazo mensal dos projetos.
+            </p>
+            {mensagemCampo('dia_limite_frequencia') && (
+              <div id="dia_limite_frequencia-erro" role="alert">
+                <Alert tone="error">{mensagemCampo('dia_limite_frequencia')}</Alert>
+              </div>
+            )}
+          </FormField>
         </div>
 
         <FormActions>

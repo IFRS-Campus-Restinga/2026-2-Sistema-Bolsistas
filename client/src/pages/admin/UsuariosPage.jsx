@@ -19,7 +19,6 @@ import {
   getUsuarios,
   patchEmailCoordenador,
   patchStatusUsuario,
-  patchTipoArea,
   postEmailCoordenador,
 } from '../../api'
 
@@ -48,31 +47,20 @@ function StatusBadge({ ativo }) {
   )
 }
 
-// ─── página principal ─────────────────────────────────────────────────────────
-
 export default function UsuariosPage() {
   const confirm = useConfirm()
   const toast = useToast()
-  // usuários
+
   const [usuarios, setUsuarios] = useState([])
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(true)
   const [erroUsuarios, setErroUsuarios] = useState(null)
 
-  // modal editar usuário
-  const [modalUsuarioAberto, setModalUsuarioAberto] = useState(false)
-  const [usuarioSelecionado, setUsuarioSelecionado] = useState(null)
-  const [tipoAreaEditado, setTipoAreaEditado] = useState('')
-  const [salvandoUsuario, setSalvandoUsuario] = useState(false)
-  const [erroSalvarUsuario, setErroSalvarUsuario] = useState(null)
-
-  // e-mails de coordenadores
   const [emails, setEmails] = useState([])
   const [carregandoEmails, setCarregandoEmails] = useState(true)
   const [erroEmails, setErroEmails] = useState(null)
 
-  // modal add/editar e-mail
   const [modalEmailAberto, setModalEmailAberto] = useState(false)
-  const [emailSelecionado, setEmailSelecionado] = useState(null) // null = novo
+  const [emailSelecionado, setEmailSelecionado] = useState(null)
   const [emailEditado, setEmailEditado] = useState('')
   const [tipoAreaEmailEditado, setTipoAreaEmailEditado] = useState('')
   const [salvandoEmail, setSalvandoEmail] = useState(false)
@@ -105,19 +93,6 @@ export default function UsuariosPage() {
       .finally(() => setCarregandoEmails(false))
   }
 
-  // ── modal usuário ──
-  const abrirModalUsuario = (usuario) => {
-    setUsuarioSelecionado(usuario)
-    setTipoAreaEditado(usuario.tipo_area || '')
-    setErroSalvarUsuario(null)
-    setModalUsuarioAberto(true)
-  }
-
-  const fecharModalUsuario = () => {
-    setModalUsuarioAberto(false)
-    setUsuarioSelecionado(null)
-  }
-
   const alternarStatus = (usuario) => {
     const novoStatus = !usuario.is_active
     confirm({
@@ -143,46 +118,31 @@ export default function UsuariosPage() {
     })
   }
 
-  const salvarUsuario = async () => {
-    setSalvandoUsuario(true)
-    setErroSalvarUsuario(null)
-    try {
-      const res = await patchTipoArea(usuarioSelecionado.id, tipoAreaEditado)
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.tipo_area?.[0] || body?.detail || 'Erro ao salvar')
-      }
-      const atualizado = await res.json()
-      setUsuarios((prev) => prev.map((atual) => (atual.id === atualizado.id ? atualizado : atual)))
-      setEmails((prev) =>
-        prev.map((entrada) =>
-          entrada.email?.toLowerCase() === usuarioSelecionado.email?.toLowerCase()
-            ? { ...entrada, tipo_area: tipoAreaEditado }
-            : entrada
-        )
-      )
-      fecharModalUsuario()
-      toast({ message: 'Tipo de área atualizado com sucesso.', tone: 'success' })
-    } catch (erro) {
-      setErroSalvarUsuario(erro.message)
-    } finally {
-      setSalvandoUsuario(false)
-    }
-  }
-
-  // ── modal e-mail ──
-  const abrirModalNovoEmail = () => {
-    setEmailSelecionado(null)
-    setEmailEditado('')
-    setTipoAreaEmailEditado('')
-    setErroSalvarEmail(null)
-    setModalEmailAberto(true)
-  }
-
   const abrirModalEditarEmail = (entrada) => {
     setEmailSelecionado(entrada)
     setEmailEditado(entrada.email)
     setTipoAreaEmailEditado(entrada.tipo_area)
+    setErroSalvarEmail(null)
+    setModalEmailAberto(true)
+  }
+
+  const abrirModalEmailParaUsuario = (usuario) => {
+    const entrada = emails.find((e) => e.email?.toLowerCase() === usuario.email?.toLowerCase())
+    if (entrada) {
+      abrirModalEditarEmail(entrada)
+    } else {
+      setEmailSelecionado(null)
+      setEmailEditado(usuario.email || '')
+      setTipoAreaEmailEditado(usuario.tipo_area || '')
+      setErroSalvarEmail(null)
+      setModalEmailAberto(true)
+    }
+  }
+
+  const abrirModalNovoEmail = () => {
+    setEmailSelecionado(null)
+    setEmailEditado('')
+    setTipoAreaEmailEditado('')
     setErroSalvarEmail(null)
     setModalEmailAberto(true)
   }
@@ -216,9 +176,7 @@ export default function UsuariosPage() {
       carregarUsuarios()
       fecharModalEmail()
       toast({
-        message: emailSelecionado
-          ? 'E-mail atualizado com sucesso.'
-          : 'E-mail adicionado com sucesso.',
+        message: emailSelecionado ? 'E-mail atualizado.' : 'E-mail adicionado.',
         tone: 'success',
       })
     } catch (erro) {
@@ -264,7 +222,14 @@ export default function UsuariosPage() {
       key="acoes"
       acoes={[
         ...(usuario.role === 'COORDENADOR_AREA'
-          ? [{ label: 'Editar', onClick: () => abrirModalUsuario(usuario) }]
+          ? [
+              {
+                label: emails.some((e) => e.email?.toLowerCase() === usuario.email?.toLowerCase())
+                  ? 'Editar e-mail'
+                  : 'Adicionar e-mail',
+                onClick: () => abrirModalEmailParaUsuario(usuario),
+              },
+            ]
           : []),
         {
           label: usuario.is_active ? 'Desativar' : 'Ativar',
@@ -290,7 +255,6 @@ export default function UsuariosPage() {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-        {/* ── Usuários ── */}
         <section>
           <PageHeader title="Usuários" />
           {carregandoUsuarios && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
@@ -304,13 +268,12 @@ export default function UsuariosPage() {
           )}
         </section>
 
-        {/* ── E-mails de Coordenadores de Área ── */}
         <section>
           <PageHeader
             title="E-mails de Coordenadores de Área"
             action={
-              <Button variant="primary" onClick={abrirModalNovoEmail}>
-                + Adicionar
+              <Button variant="accent" onClick={abrirModalNovoEmail}>
+                Adicionar e-mail
               </Button>
             }
           />
@@ -330,51 +293,6 @@ export default function UsuariosPage() {
         </section>
       </div>
 
-      {/* ── Modal editar usuário ── */}
-      {modalUsuarioAberto && usuarioSelecionado && (
-        <Modal
-          onClose={fecharModalUsuario}
-          title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
-        >
-          <FormField label="Nome">
-            <TextInput readOnly disabled value={usuarioSelecionado.nome || ''} />
-          </FormField>
-          <FormField label="E-mail">
-            <TextInput readOnly disabled value={usuarioSelecionado.email || ''} />
-          </FormField>
-          {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
-            <FormField label="Tipo de Área">
-              <Select
-                value={tipoAreaEditado}
-                onChange={(evento) => setTipoAreaEditado(evento.target.value)}
-              >
-                <option value="">Selecione...</option>
-                {TIPO_AREA_OPTIONS.map((opcao) => (
-                  <option key={opcao.value} value={opcao.value}>
-                    {opcao.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          )}
-          {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
-          <FormActions>
-            <Button variant="outline" onClick={fecharModalUsuario}>
-              Cancelar
-            </Button>
-            {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
-              <Button
-                variant="primary"
-                onClick={salvarUsuario}
-                disabled={salvandoUsuario || !tipoAreaEditado}
-              >
-                {salvandoUsuario ? 'Salvando...' : 'Salvar'}
-              </Button>
-            )}
-          </FormActions>
-        </Modal>
-      )}
-
       {modalEmailAberto && (
         <Modal
           onClose={fecharModalEmail}
@@ -393,15 +311,9 @@ export default function UsuariosPage() {
           <FormField label="Tipo de Área">
             <Select
               value={tipoAreaEmailEditado}
-              onChange={(evento) => setTipoAreaEmailEditado(evento.target.value)}
-            >
-              <option value="">Selecione...</option>
-              {TIPO_AREA_OPTIONS.map((opcao) => (
-                <option key={opcao.value} value={opcao.value}>
-                  {opcao.label}
-                </option>
-              ))}
-            </Select>
+              options={[{ value: '', label: 'Selecione...' }, ...TIPO_AREA_OPTIONS]}
+              onChange={(valor) => setTipoAreaEmailEditado(valor)}
+            />
           </FormField>
           {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>

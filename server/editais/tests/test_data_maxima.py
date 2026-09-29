@@ -105,3 +105,44 @@ class DataMaximaPreenchimentoVagasTests(APITestCase):
         self.assertIn("datas_originais", response.data)
         original = response.data["datas_originais"]["data_maxima_preenchimento_vagas"]
         self.assertIsNotNone(original)
+
+    def test_historico_por_data_retorna_todas_as_prorrogacoes(self):
+        """6.4: prorrogar 2x deve gerar 2 entradas em historico_por_data."""
+        self.edital.status = Edital.Status.EM_VIGOR
+        self.edital.save(update_fields=["status"])
+
+        hoje = date.today()
+        primeira_prorrogacao = hoje + timedelta(days=30)
+        segunda_prorrogacao = hoje + timedelta(days=45)
+
+        self.client.patch(
+            self.url_detalhe,
+            {"data_maxima_preenchimento_vagas": primeira_prorrogacao.isoformat()},
+            format="json",
+        )
+        self.client.patch(
+            self.url_detalhe,
+            {"data_maxima_preenchimento_vagas": segunda_prorrogacao.isoformat()},
+            format="json",
+        )
+
+        response = self.client.get(self.url_detalhe)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("historico_por_data", response.data)
+
+        historico = response.data["historico_por_data"]["data_maxima_preenchimento_vagas"]
+        self.assertEqual(len(historico), 2)
+
+        # Primeira entrada: data_anterior → original; data_nova → primeira prorrogação
+        self.assertEqual(
+            historico[0]["data_nova"],
+            primeira_prorrogacao.isoformat(),
+        )
+        # Segunda entrada: data_nova → segunda prorrogação
+        self.assertEqual(
+            historico[1]["data_nova"],
+            segunda_prorrogacao.isoformat(),
+        )
+        # Responsável preenchido
+        self.assertIsNotNone(historico[0]["responsavel"])

@@ -28,7 +28,11 @@ const STATUS_STYLE = {
   DESCLASSIFICADO: 'badge--red',
   EM_ANALISE: 'badge--blue',
   EM_VIGOR: 'badge--green',
-  ARQUIVADO: 'badge--gray',
+  Criação: 'badge--green',
+  Alteração: 'badge--blue',
+  Edição: 'badge--blue',
+  Exclusão: 'badge--red',
+  Acesso: 'badge--gray',
 }
 
 const STATUS_LABEL = {
@@ -53,7 +57,11 @@ const STATUS_LABEL = {
   DESCLASSIFICADO: 'Desclassificado',
   EM_ANALISE: 'Em Análise',
   EM_VIGOR: 'Em vigor',
-  ARQUIVADO: 'Arquivado',
+  Criação: 'Criação',
+  Alteração: 'Alteração',
+  Edição: 'Edição',
+  Exclusão: 'Exclusão',
+  Acesso: 'Acesso',
 }
 
 export function Badge({ status }) {

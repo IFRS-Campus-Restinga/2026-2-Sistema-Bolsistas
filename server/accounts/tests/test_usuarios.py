@@ -66,6 +66,26 @@ class AtualizarStatusTests(TestCase):
         )
         self.assertEqual(resposta.status_code, 404)
 
+    def test_admin_nao_pode_desativar_a_si_mesmo(self):
+        resposta = self.client.patch(
+            f"/api/admin/usuarios/{self.admin.id}/status/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_admin_pode_desativar_outro_usuario(self):
+        resposta = self.client.patch(
+            f"/api/admin/usuarios/{self.usuario.id}/status/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.usuario.refresh_from_db()
+        self.assertFalse(self.usuario.is_active)
+
 
 class TipoAreaErrosTests(TestCase):
     """PATCH /usuarios/<id>/tipo-area/ deve retornar 404 para usuários inválidos."""

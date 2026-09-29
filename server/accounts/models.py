@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class Usuario(AbstractUser):
@@ -15,6 +16,8 @@ class Usuario(AbstractUser):
     email = models.EmailField(unique=True, null=True, blank=True)
     nome = models.CharField(max_length=150, blank=True)
     role = models.CharField(max_length=25, choices=Role.choices)
+
+    history = HistoricalRecords()
 
     def __str__(self):
         return self.nome or self.username
@@ -49,6 +52,8 @@ class CoordenadorArea(models.Model):
 
     tipo_area = models.CharField(max_length=20, choices=TipoArea.choices)
 
+    history = HistoricalRecords()
+
     def __str__(self):
         return f"{self.usuario.nome} ({self.get_tipo_area_display()})"
 
@@ -65,6 +70,8 @@ class Administrador(models.Model):
 class EmailCoordenadorArea(models.Model):
     email = models.EmailField(unique=True)
     tipo_area = models.CharField(max_length=20, choices=TipoArea.choices)
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "E-mail de Coordenador de Área"

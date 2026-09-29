@@ -50,9 +50,15 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "simple_history",
+    "auditlog",
     "accounts",
     "hub_integration",
     "editais",
+    "projetos",
+    "bolsas",
+    "inscricoes",
+    "auditoria.apps.AuditoriaConfig",
 ]
 
 MIDDLEWARE = [
@@ -62,9 +68,15 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.HubJWTRequestUserMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
+    "auditlog.middleware.AuditlogMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Auditlog: registro explícito por modelo (ver auditoria/apps.py::ready)
+AUDITLOG_INCLUDE_ALL_MODELS = False
 
 AUTH_USER_MODEL = "accounts.Usuario"
 

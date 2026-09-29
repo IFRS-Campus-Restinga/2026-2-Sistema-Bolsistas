@@ -2,7 +2,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Usuario
+from accounts.models import CoordenadorProjeto, Usuario
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from projetos.models import Projeto
 
 from .models import AlteracaoCronograma, Edital
 
@@ -84,11 +86,10 @@ class EditalAPITests(APITestCase):
 
         self.assertFalse(Edital.objects.exists())
 
-    def test_outros_perfis_nao_podem_listar_nem_cadastrar(self):
+    def test_outros_perfis_nao_podem_cadastrar(self):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
-            Usuario.Role.ADMINISTRADOR,
         ]
 
         for perfil in perfis:
@@ -100,7 +101,6 @@ class EditalAPITests(APITestCase):
                 )
                 self.client.force_authenticate(user=usuario)
 
-                resposta_get = self.client.get(self.url)
                 resposta_post = self.client.post(
                     self.url,
                     self.dados,
@@ -108,15 +108,61 @@ class EditalAPITests(APITestCase):
                 )
 
                 self.assertEqual(
-                    resposta_get.status_code,
-                    status.HTTP_403_FORBIDDEN,
-                )
-                self.assertEqual(
                     resposta_post.status_code,
                     status.HTTP_403_FORBIDDEN,
                 )
 
         self.assertFalse(Edital.objects.exists())
+
+    def test_administrador_pode_cadastrar_edital(self):
+        admin = Usuario.objects.create_user(
+            username="admin_teste",
+            email="admin.teste@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Edital.objects.count(), 1)
+
+    def test_aluno_nao_pode_listar(self):
+        aluno = Usuario.objects.create_user(
+            username="teste_aluno",
+            email="teste_aluno@example.com",
+            role=Usuario.Role.ALUNO,
+        )
+        self.client.force_authenticate(user=aluno)
+
+        resposta_get = self.client.get(self.url)
+
+        self.assertEqual(resposta_get.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_administrador_pode_listar(self):
+        admin = Usuario.objects.create_user(
+            username="admin_lista",
+            email="admin.lista@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        resposta_get = self.client.get(self.url)
+
+        self.assertEqual(resposta_get.status_code, status.HTTP_200_OK)
+
+    def test_coordenador_projeto_pode_listar_para_escolher_edital_ao_solicitar_bolsa(self):
+        Edital.objects.create(**self.dados, status=Edital.Status.EM_VIGOR)
+        coordenador_projeto = Usuario.objects.create_user(
+            username="coord_projeto_teste",
+            email="coord.projeto.teste@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        self.client.force_authenticate(user=coordenador_projeto)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
 
     def test_visitante_nao_pode_listar_nem_cadastrar(self):
         resposta_get = self.client.get(self.url)
@@ -220,10 +266,9 @@ class CronogramaEditalAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_bloqueia_edital_encerrado_ou_arquivado(self):
+    def test_bloqueia_edital_encerrado(self):
         estados = [
             Edital.Status.ENCERRADO,
-            Edital.Status.ARQUIVADO,
         ]
 
         for estado in estados:
@@ -251,7 +296,6 @@ class CronogramaEditalAPITests(APITestCase):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
-            Usuario.Role.ADMINISTRADOR,
         ]
 
         for perfil in perfis:
@@ -279,6 +323,22 @@ class CronogramaEditalAPITests(APITestCase):
             self.edital.data_fechamento_inscricoes.isoformat(),
             "2026-09-10",
         )
+
+    def test_administrador_pode_atualizar_cronograma(self):
+        admin = Usuario.objects.create_user(
+            username="admin_cronograma",
+            email="admin.cronograma@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-09-12"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_visitante_nao_pode_atualizar_cronograma(self):
         self.client.force_authenticate(user=None)
@@ -482,3 +542,46 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.edital.refresh_from_db()
         self.assertEqual(self.edital.status, Edital.Status.RASCUNHO)
+
+    def _cria_bolsa(self, status_bolsa):
+        coordenador_projeto = Usuario.objects.create_user(
+            username=f"coord_projeto_{status_bolsa}",
+            email=f"{status_bolsa}@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=coordenador_projeto)
+        projeto = Projeto.objects.create(
+            titulo=f"Projeto {status_bolsa}",
+            coordenador_projeto=coordenador_projeto.perfil_coordenador_projeto,
+        )
+        return Bolsa.objects.create(
+            projeto=projeto,
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=status_bolsa,
+        )
+
+    def test_nao_encerra_edital_com_bolsa_nao_finalizada(self):
+        self._cria_bolsa(StatusBolsa.ABERTA)
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.EM_VIGOR)
+
+    def test_encerra_edital_com_bolsas_todas_finalizadas(self):
+        self._cria_bolsa(StatusBolsa.CANCELADA)
+        self._cria_bolsa(StatusBolsa.REJEITADA)
+        self._cria_bolsa(StatusBolsa.ENCERRADA)
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)

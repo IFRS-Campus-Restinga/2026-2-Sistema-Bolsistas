@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class Edital(models.Model):
@@ -8,7 +9,6 @@ class Edital(models.Model):
         RASCUNHO = "RASCUNHO", "Rascunho"
         EM_VIGOR = "EM_VIGOR", "Em vigor"
         ENCERRADO = "ENCERRADO", "Encerrado"
-        ARQUIVADO = "ARQUIVADO", "Arquivado"
 
     nome = models.CharField(
         max_length=200,
@@ -66,6 +66,14 @@ class Edital(models.Model):
         blank=True,
         help_text="Data de entrega dos relatórios finais",
     )
+    # US15: dia do mês limite para o Coordenador de Projeto lançar frequência
+    dia_limite_frequencia = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Dia do mês limite para o Coordenador de Projeto lançar a frequência (1–31).",
+    )
+
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.nome} ({self.ano_codigo})"

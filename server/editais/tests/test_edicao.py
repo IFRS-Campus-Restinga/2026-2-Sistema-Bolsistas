@@ -22,13 +22,13 @@ class EdicaoEditalAPITests(APITestCase):
             ano_codigo="2026-001",
             link_documento_oficial="https://example.com/edital.pdf",
             status=Edital.Status.EM_VIGOR,
-            data_abertura_inscricoes="2026-09-01",
-            data_fechamento_inscricoes="2026-09-10",
-            data_homologacao="2026-09-15",
-            data_recurso_homologacao_inicio="2026-09-16",
-            data_recurso_homologacao_fim="2026-09-18",
-            data_resultado="2026-09-20",
-            data_maxima_preenchimento_vagas="2026-09-25",
+            data_abertura_inscricoes="2026-10-01",
+            data_fechamento_inscricoes="2026-10-10",
+            data_homologacao="2026-10-15",
+            data_recurso_homologacao_inicio="2026-10-16",
+            data_recurso_homologacao_fim="2026-10-18",
+            data_resultado="2026-10-20",
+            data_maxima_preenchimento_vagas="2026-10-25",
             data_entrega_relatorios="2026-12-01",
         )
         self.url = reverse(
@@ -41,7 +41,7 @@ class EdicaoEditalAPITests(APITestCase):
             self.url,
             {
                 "nome": "Edital atualizado",
-                "data_fechamento_inscricoes": "2026-09-12",
+                "data_fechamento_inscricoes": "2026-10-12",
             },
             format="json",
         )
@@ -52,20 +52,20 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(self.edital.nome, "Edital atualizado")
         self.assertEqual(
             self.edital.data_fechamento_inscricoes.isoformat(),
-            "2026-09-12",
+            "2026-10-12",
         )
 
         historico = AlteracaoCronograma.objects.get(edital=self.edital)
         self.assertEqual(historico.campo, "data_fechamento_inscricoes")
-        self.assertEqual(historico.data_anterior.isoformat(), "2026-09-10")
-        self.assertEqual(historico.data_nova.isoformat(), "2026-09-12")
+        self.assertEqual(historico.data_anterior.isoformat(), "2026-10-10")
+        self.assertEqual(historico.data_nova.isoformat(), "2026-10-12")
         self.assertEqual(historico.responsavel, self.coordenador)
         self.assertIsNotNone(historico.alterado_em)
 
     def test_nao_registra_historico_para_data_igual(self):
         response = self.client.patch(
             self.url,
-            {"data_fechamento_inscricoes": "2026-09-10"},
+            {"data_fechamento_inscricoes": "2026-10-10"},
             format="json",
         )
 
@@ -85,7 +85,7 @@ class EdicaoEditalAPITests(APITestCase):
         self.edital.refresh_from_db()
         self.assertEqual(
             self.edital.data_resultado.isoformat(),
-            "2026-09-20",
+            "2026-10-20",
         )
         self.assertFalse(AlteracaoCronograma.objects.exists())
 
@@ -94,7 +94,7 @@ class EdicaoEditalAPITests(APITestCase):
             self.url,
             {
                 "nome": "Nome que não deve ser salvo",
-                "data_fechamento_inscricoes": "2026-09-21",
+                "data_fechamento_inscricoes": "2026-10-21",
             },
             format="json",
         )
@@ -105,7 +105,7 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(self.edital.nome, "Edital original")
         self.assertEqual(
             self.edital.data_fechamento_inscricoes.isoformat(),
-            "2026-09-10",
+            "2026-10-10",
         )
         self.assertFalse(AlteracaoCronograma.objects.exists())
 
@@ -135,7 +135,7 @@ class EdicaoEditalAPITests(APITestCase):
 
     def test_nao_publica_cronograma_fora_de_ordem(self):
         self.edital.status = Edital.Status.RASCUNHO
-        self.edital.data_fechamento_inscricoes = "2026-09-21"
+        self.edital.data_fechamento_inscricoes = "2026-10-21"
         self.edital.save(update_fields=["status", "data_fechamento_inscricoes"])
 
         url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
@@ -192,7 +192,26 @@ class EdicaoEditalAPITests(APITestCase):
         )
 
     def test_nao_encerra_edital_com_bolsa_nao_finalizada(self):
-        self._cria_bolsa(StatusBolsa.ABERTA)
+        """Regra antiga removida: bolsa ABERTA agora é cancelada em cascata, não bloqueia."""
+        bolsa = self._cria_bolsa(StatusBolsa.ABERTA)
+
+        url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
+        response = self.client.post(url)
+
+        # Encerra com sucesso — bolsa ABERTA é cancelada em cascata
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.edital.refresh_from_db()
+        self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)
+        bolsa.refresh_from_db()
+        self.assertEqual(bolsa.status, StatusBolsa.CANCELADA)
+        self.assertEqual(
+            bolsa.justificativa_decisao, "Cancelada automaticamente: edital encerrado."
+        )
+
+    def test_nao_encerra_edital_com_bolsa_preenchida(self):
+        """Bolsa PREENCHIDA (bolsista vinculado) ainda bloqueia o encerramento."""
+        # Criar PREENCHIDA direto via ORM — nenhum endpoint transiciona para PREENCHIDA hoje
+        self._cria_bolsa(StatusBolsa.PREENCHIDA)
 
         url = reverse("editais:encerrar", kwargs={"pk": self.edital.pk})
         response = self.client.post(url)
@@ -212,3 +231,41 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.edital.refresh_from_db()
         self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)
+
+    def test_nao_aceita_data_passada_em_rascunho(self):
+        """6.3: criar/editar RASCUNHO com data passada deve ser bloqueado."""
+        self.edital.status = Edital.Status.RASCUNHO
+        self.edital.save(update_fields=["status"])
+
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-09-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fechamento_inscricoes", response.data)
+
+    def test_nao_aceita_alterar_data_para_passado_em_vigor(self):
+        """6.3: editar EM_VIGOR alterando data para o passado deve ser bloqueado."""
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-09-05"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fechamento_inscricoes", response.data)
+
+    def test_aceita_data_passada_nao_alterada_em_vigor(self):
+        """6.3: editar EM_VIGOR sem tocar numa data já vencida deve ser permitido."""
+        self.edital.data_abertura_inscricoes = "2026-09-01"
+        self.edital.save(update_fields=["data_abertura_inscricoes"])
+
+        response = self.client.patch(
+            self.url,
+            {"nome": "Novo nome sem mudar datas"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
