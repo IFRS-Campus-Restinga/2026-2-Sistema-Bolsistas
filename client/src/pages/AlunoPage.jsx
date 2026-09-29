@@ -13,10 +13,12 @@ import {
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
 import MinhasInscricoesPage from './MinhasInscricoesPage'
+import MeusRecursosPage from './MeusRecursosPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
+  { id: 'recursos', label: 'Meus Recursos', icon: <IconClipboardList /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
 ]
 
@@ -103,7 +105,10 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
 
       {active === 'bolsas' && <BolsasDisponiveisPage />}
 
-      {active === 'inscricoes' && <MinhasInscricoesPage />}
+      {active === 'inscricoes' && (
+        <MinhasInscricoesPage onHistorico={() => setActive('recursos')} />
+      )}
+      {active === 'recursos' && <MeusRecursosPage />}
     </Layout>
   )
 }

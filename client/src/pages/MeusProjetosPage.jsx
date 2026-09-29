@@ -380,6 +380,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     setForm((atual) => ({ ...atual, [campo]: valor }))
   }
 
+  const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
+  const editalSelecionadoComPrazoEncerrado = !!editalSelecionado?.prazo_inscricao_encerrado
   function dadosDoFormulario() {
     return {
       tipo: form.tipo,
@@ -608,6 +610,13 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
               </Select>
             )}
           </FormField>
+
+          {editalSelecionadoComPrazoEncerrado && (
+            <Alert tone="warning">
+              O prazo de inscrição deste edital já foi encerrado. A bolsa pode ser solicitada e
+              aprovada normalmente, mas não vai ficar disponível para inscrição dos alunos.
+            </Alert>
+          )}
 
           <FormField
             label={

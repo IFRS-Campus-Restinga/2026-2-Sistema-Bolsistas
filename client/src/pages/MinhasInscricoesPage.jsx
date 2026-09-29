@@ -13,17 +13,21 @@ import {
   useToast,
 } from '../components'
 import InscricaoWizard from './InscricaoWizard'
+import RecursosModal from './RecursosModal'
+import { BolsaDetalhe } from './BolsasDisponiveisPage'
 
-export default function MinhasInscricoesPage() {
+export default function MinhasInscricoesPage({ onHistorico }) {
   const confirmar = useConfirm()
   const toast = useToast()
-
   const [inscricoes, setInscricoes] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [recarregar, setRecarregar] = useState(0)
   const [edicaoAberta, setEdicaoAberta] = useState(null)
   const [comprovante, setComprovante] = useState(null)
+  const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
+  const [bolsaInscricao, setBolsaInscricao] = useState(null)
+  const [consultandoRecurso, setConsultandoRecurso] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -93,22 +97,83 @@ export default function MinhasInscricoesPage() {
     })
   }
 
+  async function interporRecurso(inscricao) {
+    if (consultandoRecurso) return
+    setConsultandoRecurso(true)
+    setErro('')
+    try {
+      const res = await inscricoesFetch(`/${inscricao.id}/recursos/`)
+      const dados = await res.json()
+      if (!res.ok) throw new Error(dados.detail || 'Não foi possível consultar o prazo.')
+      if (!dados.pode_enviar) {
+        setErro(dados.motivo_bloqueio)
+        return
+      }
+      setRecursoInscricaoId(inscricao.id)
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setConsultandoRecurso(false)
+    }
+  }
+
   function acoesPorInscricao(inscricao) {
+    const prazoEncerrado = inscricao.prazo_inscricao_encerrado
+
     if (inscricao.status === 'RASCUNHO') {
-      return [
-        { label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) },
-        { label: 'Cancelar', variant: 'danger', onClick: () => excluirRascunho(inscricao) },
-      ]
+      const acoes = []
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) })
+      }
+      acoes.push({
+        label: 'Cancelar',
+        variant: 'danger',
+        onClick: () => excluirRascunho(inscricao),
+      })
+      return acoes
     }
     if (inscricao.status === 'PENDENTE') {
+      const acoes = [{ label: 'Ver comprovante', onClick: () => setComprovante(inscricao) }]
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Editar', onClick: () => setEdicaoAberta(inscricao) })
+        acoes.push({
+          label: 'Cancelar',
+          variant: 'danger',
+          onClick: () => cancelarInscricao(inscricao),
+        })
+      }
+      return acoes
+    }
+    if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
       return [
-        { label: 'Ver comprovante', onClick: () => setComprovante(inscricao) },
-        { label: 'Editar', onClick: () => setEdicaoAberta(inscricao) },
-        { label: 'Cancelar', variant: 'danger', onClick: () => cancelarInscricao(inscricao) },
+        { label: 'Ver resultado', onClick: () => setComprovante(inscricao) },
+        ...(inscricao.status === 'INDEFERIDA'
+          ? [{ label: 'Interpor Recursos', onClick: () => interporRecurso(inscricao) }]
+          : []),
+        { label: 'Histórico de recursos', onClick: onHistorico },
       ]
     }
     return []
   }
+
+  const [lendoNotificacao, setLendoNotificacao] = useState(null)
+
+  async function marcarLida(id) {
+    setLendoNotificacao(id)
+    try {
+      const res = await inscricoesFetch(`/notificacoes/${id}/ler/`, { method: 'POST' })
+      if (!res.ok) throw new Error('Não foi possível marcar a notificação como lida.')
+      forcarRecarga()
+    } catch (e) {
+      toast({ message: e.message, tone: 'error' })
+    } finally {
+      setLendoNotificacao(null)
+    }
+  }
+
+  const notificacoes = inscricoes
+    .flatMap((inscricao) => (inscricao.notificacoes || []).map((item) => ({ ...item, inscricao })))
+    .filter((item) => !item.lida_em)
 
   const linhas = inscricoes.map((inscricao) => [
     inscricao.projeto_titulo,
@@ -118,11 +183,42 @@ export default function MinhasInscricoesPage() {
     <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])
 
+  if (bolsaInscricao)
+    return (
+      <BolsaDetalhe
+        key={bolsaInscricao.id}
+        inscricaoId={bolsaInscricao.id}
+        bolsaId={bolsaInscricao.bolsa}
+        onVoltar={() => setBolsaInscricao(null)}
+      />
+    )
+
   return (
     <>
       <PageHeader title="Minhas Inscrições" />
 
       {erro && <Alert tone="error">{erro}</Alert>}
+      {notificacoes.length > 0 && (
+        <section aria-label="Notificações das inscrições">
+          <h3>Novas notificações</h3>
+          {notificacoes.map((item) => (
+            <Alert key={item.id} tone="warning">
+              <p>{item.mensagem}</p>
+              <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
+              <Button
+                size="sm"
+                disabled={lendoNotificacao !== null}
+                onClick={() => marcarLida(item.id)}
+              >
+                Marcar como lida
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBolsaInscricao(item.inscricao)}>
+                Ir para a bolsa
+              </Button>
+            </Alert>
+          ))}
+        </section>
+      )}
 
       {carregando ? (
         <p role="status">Carregando inscrições...</p>
@@ -148,6 +244,14 @@ export default function MinhasInscricoesPage() {
         />
       )}
 
+      {recursoInscricaoId && (
+        <RecursosModal
+          key={recursoInscricaoId}
+          inscricaoId={recursoInscricaoId}
+          onFechar={() => setRecursoInscricaoId(null)}
+          onAtualizar={forcarRecarga}
+        />
+      )}
       {comprovante && (
         <ComprovanteModal inscricao={comprovante} onFechar={() => setComprovante(null)} />
       )}
@@ -169,6 +273,12 @@ function ComprovanteModal({ inscricao, onFechar }) {
         {inscricao.data_envio ? new Date(inscricao.data_envio).toLocaleString('pt-BR') : '—'}
       </p>
 
+      {inscricao.justificativa_indeferimento && (
+        <Alert tone="error">Motivo do indeferimento: {inscricao.justificativa_indeferimento}</Alert>
+      )}
+      {inscricao.data_decisao && (
+        <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
+      )}
       <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
       <ul style={{ paddingLeft: 20 }}>
         {inscricao.documentos.map((doc) => (
