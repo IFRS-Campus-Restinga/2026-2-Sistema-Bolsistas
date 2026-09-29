@@ -8,10 +8,8 @@ import {
   IconUsers,
   IconCheck,
   IconFileText,
-  IconClipboardList,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
-import FrequenciaPage from './FrequenciaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -19,7 +17,6 @@ const menuItems = [
   { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
   { id: 'bolsistas', label: 'Bolsistas', icon: <IconUsers /> },
   { id: 'bolsas', label: 'Minhas Bolsas', icon: <IconFileText /> },
-  { id: 'frequencia', label: 'Frequência', icon: <IconClipboardList /> },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
@@ -48,7 +45,6 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       )}
 
       {active === 'projetos' && <MeusProjetosPage />}
-      {active === 'frequencia' && <FrequenciaPage />}
     </Layout>
   )
 }

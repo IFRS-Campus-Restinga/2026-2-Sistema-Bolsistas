@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
-import { editaisFetch, getHistoricoCronograma } from '../api'
+import { editaisFetch } from '../api'
 import {
   AcoesCell,
-  Alert,
   Badge,
   Button,
   DataTable,
-  IconArrowLeft,
   Modal,
   PageHeader,
   useConfirm,
@@ -20,6 +18,21 @@ function formatarData(iso) {
   return `${dia}/${mes}/${ano}`
 }
 
+function formatarDataHora(iso) {
+  if (!iso) return '—'
+  const data = new Date(iso)
+  if (Number.isNaN(data.getTime())) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(data)
+}
+
 const DATAS_CHAVE = [
   ['Abertura', 'data_abertura_inscricoes'],
   ['Fechamento', 'data_fechamento_inscricoes'],
@@ -31,22 +44,17 @@ const DATAS_CHAVE = [
   ['Entrega relatórios', 'data_entrega_relatorios'],
 ]
 
-const COLUNAS_HISTORICO = ['Prazo', 'Data anterior', 'Nova data', 'Alterado por', 'Quando']
-
 export default function EditaisPage() {
+  const toast = useToast()
   const [editais, setEditais] = useState([])
-  const [historicoPorEdital, setHistoricoPorEdital] = useState({})
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [sucesso, setSucesso] = useState('')
   const [editalEdicao, setEditalEdicao] = useState(null)
   const [processando, setProcessando] = useState(false)
   const [editalHistorico, setEditalHistorico] = useState(null)
-  const [historico, setHistorico] = useState([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
   const confirmar = useConfirm()
-  const toast = useToast()
 
   useEffect(() => {
     let ativo = true
@@ -65,19 +73,6 @@ export default function EditaisPage() {
         }
 
         if (ativo) setEditais(dados)
-
-        const respostas = await Promise.all(
-          dados.map(async (edital) => {
-            try {
-              const res = await getHistoricoCronograma(edital.id)
-              const hist = await res.json().catch(() => null)
-              return [edital.id, Array.isArray(hist) ? hist : []]
-            } catch {
-              return [edital.id, []]
-            }
-          })
-        )
-        if (ativo) setHistoricoPorEdital(Object.fromEntries(respostas))
       } catch (error) {
         if (ativo) setErro(error.message || 'Falha ao conectar ao servidor.')
       } finally {
@@ -105,7 +100,7 @@ export default function EditaisPage() {
     atualizarLista(edital)
     setMostrarFormulario(false)
     setEditalEdicao(null)
-    setSucesso('Edital salvo com sucesso.')
+    toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
   }
 
   async function abrirEdicao(edital) {
@@ -120,24 +115,9 @@ export default function EditaisPage() {
       setMostrarFormulario(true)
     } catch (error) {
       setErro(error.message || 'Falha ao conectar ao servidor.')
+      toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
       setProcessando(false)
-    }
-  }
-
-  async function abrirHistorico(edital) {
-    setEditalHistorico(edital)
-    setHistorico([])
-    setCarregandoHistorico(true)
-    try {
-      const res = await getHistoricoCronograma(edital.id)
-      const dados = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(dados?.detail || 'Erro ao carregar histórico de prazos.')
-      setHistorico(Array.isArray(dados) ? dados : [])
-    } catch (error) {
-      toast({ message: error.message || 'Erro ao carregar histórico de prazos.', tone: 'error' })
-    } finally {
-      setCarregandoHistorico(false)
     }
   }
 
@@ -162,13 +142,34 @@ export default function EditaisPage() {
       }
 
       atualizarLista(dados)
-      setSucesso(
-        acao === 'publicar' ? 'Edital publicado com sucesso.' : 'Edital encerrado com sucesso.'
-      )
+      toast({
+        message:
+          acao === 'publicar' ? 'Edital publicado com sucesso.' : 'Edital encerrado com sucesso.',
+        tone: 'success',
+      })
     } catch (error) {
       setErro(error.message || 'Falha ao conectar ao servidor.')
+      toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
       setProcessando(false)
+    }
+  }
+
+  async function abrirHistorico(edital) {
+    setEditalHistorico(edital)
+    setCarregandoHistorico(true)
+
+    try {
+      const response = await editaisFetch(`/${edital.id}/`)
+      const dados = await response.json().catch(() => null)
+      if (!response.ok || !dados) {
+        throw new Error(dados?.detail || 'Erro ao carregar histórico de prazos.')
+      }
+      setEditalHistorico(dados)
+    } catch (error) {
+      toast({ message: error.message || 'Erro ao carregar histórico de prazos.', tone: 'error' })
+    } finally {
+      setCarregandoHistorico(false)
     }
   }
 
@@ -189,108 +190,54 @@ export default function EditaisPage() {
     })
   }
 
-  function datasPorCampo(edital, campo) {
-    const alteracoes = (historicoPorEdital[edital.id] || []).filter((item) => item.campo === campo)
-    if (alteracoes.length === 0) return edital[campo] ? [edital[campo]] : ['—']
-    const sequencia = []
-    if (alteracoes[0]?.data_anterior) sequencia.push(alteracoes[0].data_anterior)
-    alteracoes.forEach((alt) => {
-      if (alt.data_nova) sequencia.push(alt.data_nova)
+  const linhasHistorico = DATAS_CHAVE.flatMap(([rotulo, campo]) => {
+    const alteracoes = editalHistorico?.historico_por_data?.[campo] || []
+
+    if (alteracoes.length === 0) {
+      return [
+        [
+          rotulo,
+          '—',
+          editalHistorico?.[campo] ? formatarData(editalHistorico[campo]) : '—',
+          '—',
+          '—',
+        ],
+      ]
+    }
+
+    return alteracoes.map((item, indice) => {
+      const ehUltima = indice === alteracoes.length - 1
+      return [
+        rotulo,
+        <span
+          key={`${campo}-anterior-${indice}`}
+          style={{
+            textDecoration: item.data_anterior ? 'line-through' : 'none',
+            opacity: item.data_anterior ? 0.65 : 1,
+          }}
+        >
+          {formatarData(item.data_anterior)}
+        </span>,
+        <span
+          key={`${campo}-nova-${indice}`}
+          style={{
+            textDecoration: item.data_nova && !ehUltima ? 'line-through' : 'none',
+            opacity: item.data_nova && !ehUltima ? 0.65 : 1,
+            fontWeight: item.data_nova && ehUltima ? 600 : 400,
+          }}
+        >
+          {formatarData(item.data_nova)}
+        </span>,
+        item.responsavel || '—',
+        formatarDataHora(item.alterado_em),
+      ]
     })
-    if (edital[campo] && sequencia[sequencia.length - 1] !== edital[campo])
-      sequencia.push(edital[campo])
-    return sequencia.length > 0 ? sequencia : ['—']
-  }
-
-  const ultimoIndicePorCampo = historico.reduce((acc, item, idx) => {
-    acc[item.campo] = idx
-    return acc
-  }, {})
-
-  const linhasHistorico = historico.map((item, idx) => {
-    const ehUltima = ultimoIndicePorCampo[item.campo] === idx
-    return [
-      item.campo_display || item.campo || '—',
-      <span
-        key={`anterior-${item.id}`}
-        style={{
-          textDecoration: item.data_anterior ? 'line-through' : 'none',
-          opacity: item.data_anterior ? 0.55 : 1,
-        }}
-      >
-        {formatarData(item.data_anterior)}
-      </span>,
-      <span
-        key={`nova-${item.id}`}
-        style={{
-          textDecoration: item.data_nova && !ehUltima ? 'line-through' : 'none',
-          opacity: item.data_nova && !ehUltima ? 0.55 : 1,
-          fontWeight: item.data_nova && ehUltima ? 600 : 400,
-        }}
-      >
-        {formatarData(item.data_nova)}
-      </span>,
-      item.responsavel || '—',
-      item.alterado_em || '—',
-    ]
   })
 
   const linhas = editais.map((edital) => [
     edital.nome,
     edital.ano_codigo,
     <Badge key={`status-${edital.id}`} status={edital.status} />,
-    <div
-      key={`datas-${edital.id}`}
-      style={{ display: 'grid', rowGap: 4, minWidth: 280, textAlign: 'left' }}
-    >
-      {DATAS_CHAVE.map(([rotulo, campo]) => (
-        <div
-          key={`${edital.id}-${campo}`}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '150px 1fr',
-            alignItems: 'center',
-            columnGap: 8,
-          }}
-        >
-          <strong style={{ fontSize: 12 }}>{rotulo}:</strong>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            {datasPorCampo(edital, campo).map((data, index, lista) => {
-              const antiga = index < lista.length - 1
-              return (
-                <span
-                  key={`${edital.id}-${campo}-${index}`}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      textDecoration: antiga ? 'line-through' : 'none',
-                      opacity: antiga ? 0.55 : 1,
-                    }}
-                  >
-                    {data === '—' ? '—' : formatarData(data)}
-                  </span>
-                  {antiga && (
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        opacity: 0.55,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        transform: 'scaleX(-1)',
-                      }}
-                    >
-                      <IconArrowLeft size={10} />
-                    </span>
-                  )}
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>,
     <a
       key={`documento-${edital.id}`}
       href={edital.link_documento_oficial}
@@ -335,7 +282,6 @@ export default function EditaisPage() {
               disabled={processando || mostrarFormulario}
               onClick={() => {
                 setErro('')
-                setSucesso('')
                 setEditalEdicao(null)
                 setMostrarFormulario(true)
               }}
@@ -346,15 +292,13 @@ export default function EditaisPage() {
         }
       />
 
-      {sucesso && <Alert tone="success">{sucesso}</Alert>}
-      {erro && <Alert tone="error">{erro}</Alert>}
       {processando && <p role="status">Processando...</p>}
 
       {carregando ? (
         <p role="status">Carregando editais...</p>
       ) : (
         <DataTable
-          columns={['Nome', 'Ano-Código', 'Status', 'Datas', 'Documento', 'Ações']}
+          columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
           rows={linhas}
           emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
         />
@@ -375,14 +319,16 @@ export default function EditaisPage() {
       {editalHistorico && (
         <Modal
           title={`Histórico de prazos: ${editalHistorico.ano_codigo}`}
-          onClose={() => setEditalHistorico(null)}
-          width={800}
+          onClose={() => {
+            setEditalHistorico(null)
+          }}
+          width={900}
         >
           <DataTable
-            columns={COLUNAS_HISTORICO}
+            columns={['Prazo', 'Data anterior', 'Data atual', 'Alterado por', 'Quando']}
             rows={linhasHistorico}
             loading={carregandoHistorico}
-            emptyMessage="Nenhuma alteração de prazo registrada para este edital."
+            emptyMessage="Sem dados de cronograma para este edital."
           />
         </Modal>
       )}

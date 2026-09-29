@@ -112,36 +112,6 @@ export async function deleteEmailCoordenador(id) {
   return adminFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
 }
 
-// ── Auditoria ─────────────────────────────────────────────────────────────
-
-function auditoriaFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/auditoria`, path, options)
-}
-
-export async function getLogsAuditoria({
-  pagina = 1,
-  usuario,
-  ator,
-  dataInicio,
-  dataFim,
-  modelo,
-  acao,
-} = {}) {
-  const params = new URLSearchParams()
-  params.set('page', pagina)
-  if (usuario) params.set('usuario', usuario)
-  else if (ator) params.set('usuario', ator)
-  if (dataInicio) params.set('data_inicio', dataInicio)
-  if (dataFim) params.set('data_fim', dataFim)
-  if (modelo) params.set('modelo', modelo)
-  if (acao) params.set('acao', acao)
-  return auditoriaFetch(`/logs/?${params}`)
-}
-
-export async function getHistoricoCronograma(editalId) {
-  return auditoriaFetch(`/editais/${editalId}/cronograma/`)
-}
-
 // ── Editais — ações extras ────────────────────────────────────────────────
 
 export async function arquivarEdital(id) {
