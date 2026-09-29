@@ -162,23 +162,20 @@ export default function EditaisPage() {
     <AcoesCell
       key={`acoes-${edital.id}`}
       mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
-    >
-      <Button
-        size="sm"
-        disabled={processando || mostrarFormulario}
-        onClick={() => abrirEdicao(edital)}
-      >
-        Editar
-      </Button>
-      <Button
-        size="sm"
-        variant={edital.status === 'RASCUNHO' ? 'accent' : 'danger'}
-        disabled={processando || mostrarFormulario}
-        onClick={() => confirmarStatus(edital)}
-      >
-        {edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar'}
-      </Button>
-    </AcoesCell>,
+      acoes={[
+        {
+          label: 'Editar',
+          disabled: processando || mostrarFormulario,
+          onClick: () => abrirEdicao(edital),
+        },
+        {
+          label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
+          variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
+          disabled: processando || mostrarFormulario,
+          onClick: () => confirmarStatus(edital),
+        },
+      ]}
+    />,
   ])
 
   return (

@@ -29,6 +29,7 @@ const STATUS_STYLE = {
   SUPLENTE: 'badge--yellow',
   DESCLASSIFICADO: 'badge--red',
   EM_ANALISE: 'badge--blue',
+  EXPIRADO: 'badge--gray',
   EM_VIGOR: 'badge--green',
   ARQUIVADO: 'badge--gray',
 }
@@ -56,6 +57,7 @@ const STATUS_LABEL = {
   SUPLENTE: 'Suplente',
   DESCLASSIFICADO: 'Desclassificado',
   EM_ANALISE: 'Em Análise',
+  EXPIRADO: 'Expirado',
   EM_VIGOR: 'Em vigor',
   ARQUIVADO: 'Arquivado',
 }

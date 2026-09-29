@@ -1,0 +1,309 @@
+import { useEffect, useState } from 'react'
+import { inscricoesFetch } from '../api'
+import {
+  AcoesCell,
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  FormActions,
+  Modal,
+  PageHeader,
+  useConfirm,
+  useToast,
+} from '../components'
+import InscricaoWizard from './InscricaoWizard'
+import RecursosModal from './RecursosModal'
+import { BolsaDetalhe } from './BolsasDisponiveisPage'
+
+export default function MinhasInscricoesPage({ onHistorico }) {
+  const confirmar = useConfirm()
+  const toast = useToast()
+  const [inscricoes, setInscricoes] = useState([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+  const [recarregar, setRecarregar] = useState(0)
+  const [edicaoAberta, setEdicaoAberta] = useState(null)
+  const [comprovante, setComprovante] = useState(null)
+  const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
+  const [bolsaInscricao, setBolsaInscricao] = useState(null)
+  const [consultandoRecurso, setConsultandoRecurso] = useState(false)
+
+  useEffect(() => {
+    let ativo = true
+
+    async function carregarInscricoes() {
+      setCarregando(true)
+      setErro('')
+      try {
+        const res = await inscricoesFetch('/')
+        if (!res.ok) throw new Error('Não foi possível carregar suas inscrições.')
+        const dados = await res.json()
+        if (ativo) setInscricoes(dados)
+      } catch (e) {
+        if (ativo) setErro(e.message)
+      } finally {
+        if (ativo) setCarregando(false)
+      }
+    }
+
+    carregarInscricoes()
+
+    return () => {
+      ativo = false
+    }
+  }, [recarregar])
+
+  function forcarRecarga() {
+    setRecarregar((n) => n + 1)
+  }
+
+  function cancelarInscricao(inscricao) {
+    confirmar({
+      title: 'Cancelar inscrição',
+      message: 'Tem certeza que deseja cancelar esta inscrição? Essa ação não pode ser desfeita.',
+      confirmLabel: 'Cancelar Inscrição',
+      tone: 'danger',
+      onConfirm: async () => {
+        const res = await inscricoesFetch(`/${inscricao.id}/cancelar/`, { method: 'POST' })
+        if (res.ok) {
+          toast({ message: 'Inscrição cancelada.', tone: 'success' })
+          forcarRecarga()
+        } else {
+          const corpo = await res.json().catch(() => null)
+          toast({ message: corpo?.detail || 'Erro ao cancelar inscrição.', tone: 'error' })
+        }
+      },
+    })
+  }
+
+  function excluirRascunho(inscricao) {
+    confirmar({
+      title: 'Cancelar inscrição',
+      message:
+        'Tem certeza? O rascunho e os documentos já anexados serão descartados definitivamente.',
+      confirmLabel: 'Cancelar Inscrição',
+      tone: 'danger',
+      onConfirm: async () => {
+        const res = await inscricoesFetch(`/${inscricao.id}/`, { method: 'DELETE' })
+        if (res.ok) {
+          toast({ message: 'Rascunho descartado.', tone: 'success' })
+          forcarRecarga()
+        } else {
+          const corpo = await res.json().catch(() => null)
+          toast({ message: corpo?.detail || 'Erro ao cancelar inscrição.', tone: 'error' })
+        }
+      },
+    })
+  }
+
+  async function interporRecurso(inscricao) {
+    if (consultandoRecurso) return
+    setConsultandoRecurso(true)
+    setErro('')
+    try {
+      const res = await inscricoesFetch(`/${inscricao.id}/recursos/`)
+      const dados = await res.json()
+      if (!res.ok) throw new Error(dados.detail || 'Não foi possível consultar o prazo.')
+      if (!dados.pode_enviar) {
+        setErro(dados.motivo_bloqueio)
+        return
+      }
+      setRecursoInscricaoId(inscricao.id)
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setConsultandoRecurso(false)
+    }
+  }
+
+  function acoesPorInscricao(inscricao) {
+    const prazoEncerrado = inscricao.prazo_inscricao_encerrado
+
+    if (inscricao.status === 'RASCUNHO') {
+      const acoes = []
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Continuar', onClick: () => setEdicaoAberta(inscricao) })
+      }
+      acoes.push({
+        label: 'Cancelar',
+        variant: 'danger',
+        onClick: () => excluirRascunho(inscricao),
+      })
+      return acoes
+    }
+    if (inscricao.status === 'PENDENTE') {
+      const acoes = [{ label: 'Ver comprovante', onClick: () => setComprovante(inscricao) }]
+      if (!prazoEncerrado) {
+        acoes.push({ label: 'Editar', onClick: () => setEdicaoAberta(inscricao) })
+        acoes.push({
+          label: 'Cancelar',
+          variant: 'danger',
+          onClick: () => cancelarInscricao(inscricao),
+        })
+      }
+      return acoes
+    }
+    if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
+      return [
+        { label: 'Ver resultado', onClick: () => setComprovante(inscricao) },
+        ...(inscricao.status === 'INDEFERIDA'
+          ? [{ label: 'Interpor Recursos', onClick: () => interporRecurso(inscricao) }]
+          : []),
+        { label: 'Histórico de recursos', onClick: onHistorico },
+      ]
+    }
+    return []
+  }
+
+  const [lendoNotificacao, setLendoNotificacao] = useState(null)
+
+  async function marcarLida(id) {
+    setLendoNotificacao(id)
+    try {
+      const res = await inscricoesFetch(`/notificacoes/${id}/ler/`, { method: 'POST' })
+      if (!res.ok) throw new Error('Não foi possível marcar a notificação como lida.')
+      forcarRecarga()
+    } catch (e) {
+      toast({ message: e.message, tone: 'error' })
+    } finally {
+      setLendoNotificacao(null)
+    }
+  }
+
+  const notificacoes = inscricoes
+    .flatMap((inscricao) => (inscricao.notificacoes || []).map((item) => ({ ...item, inscricao })))
+    .filter((item) => !item.lida_em)
+
+  const linhas = inscricoes.map((inscricao) => [
+    inscricao.projeto_titulo,
+    inscricao.bolsa_tipo_display,
+    inscricao.edital_nome,
+    <Badge key="status" status={inscricao.status} />,
+    <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
+  ])
+
+  if (bolsaInscricao)
+    return (
+      <BolsaDetalhe
+        key={bolsaInscricao.id}
+        inscricaoId={bolsaInscricao.id}
+        bolsaId={bolsaInscricao.bolsa}
+        onVoltar={() => setBolsaInscricao(null)}
+      />
+    )
+
+  return (
+    <>
+      <PageHeader title="Minhas Inscrições" />
+
+      {erro && <Alert tone="error">{erro}</Alert>}
+      {notificacoes.length > 0 && (
+        <section aria-label="Notificações das inscrições">
+          <h3>Novas notificações</h3>
+          {notificacoes.map((item) => (
+            <Alert key={item.id} tone="warning">
+              <p>{item.mensagem}</p>
+              <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
+              <Button
+                size="sm"
+                disabled={lendoNotificacao !== null}
+                onClick={() => marcarLida(item.id)}
+              >
+                Marcar como lida
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBolsaInscricao(item.inscricao)}>
+                Ir para a bolsa
+              </Button>
+            </Alert>
+          ))}
+        </section>
+      )}
+
+      {carregando ? (
+        <p role="status">Carregando inscrições...</p>
+      ) : (
+        <DataTable
+          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Ações']}
+          rows={linhas}
+          emptyMessage="Você ainda não tem nenhuma inscrição."
+        />
+      )}
+
+      {edicaoAberta && (
+        <InscricaoWizard
+          inscricaoExistente={edicaoAberta}
+          onFechar={() => {
+            setEdicaoAberta(null)
+            forcarRecarga()
+          }}
+          onConcluida={() => {
+            setEdicaoAberta(null)
+            forcarRecarga()
+          }}
+        />
+      )}
+
+      {recursoInscricaoId && (
+        <RecursosModal
+          key={recursoInscricaoId}
+          inscricaoId={recursoInscricaoId}
+          onFechar={() => setRecursoInscricaoId(null)}
+          onAtualizar={forcarRecarga}
+        />
+      )}
+      {comprovante && (
+        <ComprovanteModal inscricao={comprovante} onFechar={() => setComprovante(null)} />
+      )}
+    </>
+  )
+}
+
+function ComprovanteModal({ inscricao, onFechar }) {
+  return (
+    <Modal title={`Comprovante — ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
+      <p>
+        <strong>Edital:</strong> {inscricao.edital_nome}
+      </p>
+      <p>
+        <strong>Status:</strong> <Badge status={inscricao.status} />
+      </p>
+      <p>
+        <strong>Enviada em:</strong>{' '}
+        {inscricao.data_envio ? new Date(inscricao.data_envio).toLocaleString('pt-BR') : '—'}
+      </p>
+
+      {inscricao.justificativa_indeferimento && (
+        <Alert tone="error">Motivo do indeferimento: {inscricao.justificativa_indeferimento}</Alert>
+      )}
+      {inscricao.data_decisao && (
+        <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
+      )}
+      <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
+      <ul style={{ paddingLeft: 20 }}>
+        {inscricao.documentos.map((doc) => (
+          <li key={doc.id}>
+            <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
+              {doc.tipo_display}: {doc.nome_original}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {inscricao.link_lattes && (
+        <p style={{ marginTop: 8 }}>
+          <strong>Lattes:</strong>{' '}
+          <a href={inscricao.link_lattes} target="_blank" rel="noopener noreferrer">
+            {inscricao.link_lattes}
+          </a>
+        </p>
+      )}
+
+      <FormActions>
+        <Button variant="outline" onClick={onFechar}>
+          Fechar
+        </Button>
+      </FormActions>
+    </Modal>
+  )
+}
