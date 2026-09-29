@@ -13,6 +13,7 @@ ETAPAS = [
     ("data_recurso_homologacao_inicio", "Início dos recursos"),
     ("data_recurso_homologacao_fim", "Fim dos recursos"),
     ("data_resultado", "Resultado"),
+    ("data_maxima_preenchimento_vagas", "Data máxima para preenchimento das vagas"),
     ("data_entrega_relatorios", "Entrega de relatórios"),
 ]
 
@@ -190,7 +191,9 @@ class EditalDetalheSerializer(EditalSerializer):
                 {
                     "data_anterior": alt.data_anterior.isoformat() if alt.data_anterior else None,
                     "data_nova": alt.data_nova.isoformat() if alt.data_nova else None,
-                    "responsavel": alt.responsavel.get_full_name() or alt.responsavel.username
+                    "responsavel": alt.responsavel.nome
+                    or alt.responsavel.get_full_name()
+                    or alt.responsavel.username
                     if alt.responsavel
                     else None,
                     "alterado_em": alt.alterado_em.isoformat(),

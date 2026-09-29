@@ -58,7 +58,6 @@ INSTALLED_APPS = [
     "projetos",
     "bolsas",
     "inscricoes",
-    "auditoria.apps.AuditoriaConfig",
 ]
 
 MIDDLEWARE = [

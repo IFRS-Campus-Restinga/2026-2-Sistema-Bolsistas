@@ -9,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.auditoria import registrar_acao
 from accounts.models import Usuario
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 
@@ -166,8 +165,6 @@ class AprovarBolsaView(APIView):
         bolsa.data_decisao = timezone.now()
         bolsa.save(update_fields=["status", "coordenador_area", "data_decisao"])
 
-        registrar_acao(request.user, "Bolsa aprovada", bolsa)
-
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
@@ -204,8 +201,6 @@ class RejeitarBolsaView(APIView):
             update_fields=["status", "coordenador_area", "data_decisao", "justificativa_decisao"]
         )
 
-        registrar_acao(request.user, "Bolsa rejeitada", bolsa, detalhe=justificativa)
-
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
@@ -228,8 +223,6 @@ class CancelarBolsaView(APIView):
         bolsa.status = StatusBolsa.CANCELADA
         bolsa.justificativa_decisao = motivo_cancelamento
         bolsa.save(update_fields=["status", "justificativa_decisao"])
-
-        registrar_acao(request.user, "Bolsa cancelada", bolsa, detalhe=motivo_cancelamento)
 
         return Response(
             BolsaSerializer(bolsa, context={"request": request}).data, status=status.HTTP_200_OK
@@ -381,12 +374,5 @@ class LancarFrequenciaView(APIView):
             frequencia.lancada_em = timezone.now()
             frequencia.lancada_por = request.user
             frequencia.save(update_fields=["status", "lancada_em", "lancada_por"])
-
-        registrar_acao(
-            request.user,
-            "Frequência lançada",
-            frequencia,
-            detalhe=f"{mes_referencia:%m/%Y}",
-        )
 
         return Response(FrequenciaSerializer(frequencia).data)

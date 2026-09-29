@@ -7,10 +7,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.auditoria import editais_no_escopo, registrar_acao
 from accounts.models import Usuario
 from accounts.permissions import IsAdministrador, IsCoordenadorArea, IsCoordenadorProjeto
-from bolsas.models import StatusBolsa
+from bolsas.models import StatusBolsa, TipoBolsa
 
 from .models import Edital
 from .serializers import (
@@ -28,6 +27,15 @@ STATUS_ATIVOS_BOLSA = [
     StatusBolsa.ABERTA,
     StatusBolsa.EM_SELECAO,
 ]
+
+
+def _editais_no_escopo(usuario):
+    try:
+        tipo_area = usuario.perfil_coordenador_area.tipo_area
+    except AttributeError:
+        return Edital.objects.none()
+
+    return Edital.objects.filter(bolsas__tipo__in=[tipo_area, TipoBolsa.INDISSOCIAVEL]).distinct()
 
 
 class EditalListCreateView(generics.ListCreateAPIView):
@@ -75,8 +83,6 @@ class PublicarEditalView(APIView):
         edital.status = Edital.Status.EM_VIGOR
         edital.save(update_fields=["status"])
 
-        registrar_acao(request.user, "Edital publicado", edital)
-
         return Response(EditalSerializer(edital).data)
 
 
@@ -111,17 +117,8 @@ class EncerrarEditalView(APIView):
             bolsa.status = StatusBolsa.CANCELADA
             bolsa.justificativa_decisao = "Cancelada automaticamente: edital encerrado."
             bolsa.save(update_fields=["status", "justificativa_decisao"])
-            registrar_acao(
-                request.user,
-                "Bolsa cancelada automaticamente",
-                bolsa,
-                detalhe="Edital encerrado.",
-            )
-
         edital.status = Edital.Status.ENCERRADO
         edital.save(update_fields=["status"])
-
-        registrar_acao(request.user, "Edital encerrado", edital)
 
         return Response(EditalSerializer(edital).data)
 
@@ -153,7 +150,7 @@ class CronogramaConsolidadoView(generics.ListAPIView):
 
         return (
             Edital.objects.filter(
-                Q(id__in=editais_no_escopo(usuario).values("id")) | Q(bolsas__isnull=True)
+                Q(id__in=_editais_no_escopo(usuario).values("id")) | Q(bolsas__isnull=True)
             )
             .distinct()
             .prefetch_related("bolsas")
@@ -178,6 +175,5 @@ class ArquivarEditalView(APIView):
         if edital.status != Edital.Status.ENCERRADO:
             edital.status = Edital.Status.ENCERRADO
             edital.save(update_fields=["status"])
-            registrar_acao(request.user, "Edital encerrado", edital)
 
         return Response(EditalSerializer(edital).data)

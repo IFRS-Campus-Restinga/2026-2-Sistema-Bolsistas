@@ -20,7 +20,6 @@ import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from accounts.auditoria import registrar_acao
 from bolsas.models import Frequencia, StatusFrequencia, StatusVinculo, VinculoBolsista
 
 
@@ -96,13 +95,6 @@ class Command(BaseCommand):
                     mes_referencia=mes_referencia,
                     status=StatusFrequencia.NAO_INFORMADA,
                 )
-
-            registrar_acao(
-                ator=vinculo.aluno,  # ator = bolsista afetado (sistema gerou)
-                acao="Frequência marcada como Não Informado (automático)",
-                objeto=frequencia,
-                detalhe=f"Prazo: dia {dia_limite} de {mes_referencia:%m/%Y}.",
-            )
             geradas += 1
 
         self.stdout.write(
