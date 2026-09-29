@@ -1,6 +1,7 @@
 import re
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import AlteracaoCronograma, Edital
@@ -42,6 +43,8 @@ def validar_cronograma(attrs, instance=None, obrigatorio=False):
 
 
 class EditalSerializer(serializers.ModelSerializer):
+    prazo_inscricao_encerrado = serializers.SerializerMethodField()
+
     class Meta:
         model = Edital
         fields = [
@@ -50,9 +53,15 @@ class EditalSerializer(serializers.ModelSerializer):
             "ano_codigo",
             "link_documento_oficial",
             "status",
+            "prazo_inscricao_encerrado",
             *CAMPOS_CRONOGRAMA,
         ]
         read_only_fields = ["id", "status"]
+
+    def get_prazo_inscricao_encerrado(self, edital):
+        if edital.data_fechamento_inscricoes is None:
+            return False
+        return timezone.localdate() > edital.data_fechamento_inscricoes
 
     def validate_ano_codigo(self, value):
         if not re.fullmatch(r"[0-9]{4}-[0-9]{3}", value):

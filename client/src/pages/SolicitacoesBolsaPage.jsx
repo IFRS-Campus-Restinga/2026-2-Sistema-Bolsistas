@@ -115,16 +115,17 @@ export default function SolicitacoesBolsaPage() {
     bolsa.projeto_titulo,
     TIPO_LABEL[bolsa.tipo] || bolsa.tipo,
     bolsa.edital_nome,
+    bolsa.quantidade_vagas,
     `R$ ${bolsa.valor_mensal}`,
     <Badge key="status" status={bolsa.status} />,
-    <AcoesCell key="acoes" mostrar={bolsa.status === 'SOLICITADA'}>
-      <Button size="sm" variant="accent" onClick={() => confirmarAprovar(bolsa)}>
-        Aprovar
-      </Button>
-      <Button size="sm" variant="danger" onClick={() => abrirModalRejeitar(bolsa)}>
-        Rejeitar
-      </Button>
-    </AcoesCell>,
+    <AcoesCell
+      key="acoes"
+      mostrar={bolsa.status === 'SOLICITADA'}
+      acoes={[
+        { label: 'Aprovar', variant: 'accent', onClick: () => confirmarAprovar(bolsa) },
+        { label: 'Rejeitar', variant: 'danger', onClick: () => abrirModalRejeitar(bolsa) },
+      ]}
+    />,
   ])
 
   return (
@@ -137,7 +138,7 @@ export default function SolicitacoesBolsaPage() {
         <p role="status">Carregando solicitações...</p>
       ) : (
         <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Valor', 'Status', 'Ações']}
+          columns={['Projeto', 'Tipo', 'Edital', 'Vagas', 'Valor', 'Status', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhuma bolsa da sua área."
         />

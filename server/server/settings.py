@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "editais",
     "projetos",
     "bolsas",
+    "inscricoes",
 ]
 
 MIDDLEWARE = [
@@ -127,6 +128,10 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "timeout": 20,
+            "init_command": "PRAGMA journal_mode=WAL;",
+        },
     }
 }
 
@@ -166,6 +171,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "assets/"
+
+# Uploads (documentos de inscrição, ementa das bolsas)
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 STATICFILES_DIRS = [
     BASE_DIR.parent / "client" / "dist" / "assets",
