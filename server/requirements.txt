@@ -6,3 +6,5 @@ djangorestframework==3.17.1
 djangorestframework-simplejwt==5.5.1
 FS_auth_middleware @ git+https://github.com/Cassio-de-Paula/FS_auth_middleware.git@v0.2.0#egg=fs-auth-middleware
 requests==2.32.3
+django-simple-history==3.13.0
+django-auditlog==3.4.1

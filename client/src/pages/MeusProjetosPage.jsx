@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CandidatosPage from './CandidatosPage'
 import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
 import {
   AcoesCell,
@@ -308,6 +309,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const confirmar = useConfirm()
   const toast = useToast()
 
+  const [bolsaCandidatos, setBolsaCandidatos] = useState(null)
   const [projeto, setProjeto] = useState(null)
   const [bolsas, setBolsas] = useState([])
   const [editais, setEditais] = useState([])
@@ -382,6 +384,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
   const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
   const editalSelecionadoComPrazoEncerrado = !!editalSelecionado?.prazo_inscricao_encerrado
+  const tipoBloqueado = !!bolsaEditando
+
   function dadosDoFormulario() {
     return {
       tipo: form.tipo,
@@ -391,37 +395,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       quantidade_vagas: Number(form.quantidadeVagas),
       prerequisitos: form.prerequisitos,
       metodologia_avaliacao: form.metodologiaAvaliacao,
-      nota_minima: form.notaMinima !== '' ? Number(form.notaMinima) : null,
-    }
-  }
-
-  function salvarBolsa() {
-    return bolsaEditando ? editarBolsa() : solicitarBolsa()
-  }
-
-  async function editarBolsa() {
-    setSalvando(true)
-    setErroSalvar('')
-    try {
-      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosDoFormulario()),
-      })
-
-      if (!res.ok) {
-        const corpo = await res.json().catch(() => null)
-        throw new Error(mensagemDeErro(corpo, 'Erro ao salvar a bolsa.'))
-      }
-
-      const atualizada = await res.json()
-      setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
-      setModalAberto(false)
-      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
-    } catch (e) {
-      setErroSalvar(e.message)
-    } finally {
-      setSalvando(false)
+      nota_minima: form.notaMinima !== '' ? form.notaMinima : null,
     }
   }
 
@@ -452,6 +426,38 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       setErroSalvar(e.message)
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function editarBolsa() {
+    setSalvando(true)
+    setErroSalvar('')
+    try {
+      const res = await bolsasFetch(`/${bolsaEditando.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosDoFormulario()),
+      })
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null)
+        throw new Error(mensagemDeErro(corpo, 'Erro ao editar bolsa.'))
+      }
+      const atualizada = await res.json()
+      setBolsas((atuais) => atuais.map((b) => (b.id === atualizada.id ? atualizada : b)))
+      setModalAberto(false)
+      toast({ message: 'Bolsa atualizada com sucesso.', tone: 'success' })
+    } catch (e) {
+      setErroSalvar(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  function salvarBolsa() {
+    if (bolsaEditando) {
+      editarBolsa()
+    } else {
+      solicitarBolsa()
     }
   }
 
@@ -490,12 +496,26 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     )
   }
 
-  const tipoBloqueado = !!bolsaEditando && bolsaEditando.status !== 'SOLICITADA'
+  if (bolsaCandidatos) {
+    return (
+      <CandidatosPage
+        key={bolsaCandidatos.id}
+        bolsa={bolsaCandidatos}
+        projetoTitulo={projeto.titulo}
+        onVoltar={() => setBolsaCandidatos(null)}
+      />
+    )
+  }
 
   const podeCancelar = (bolsa) => !['CANCELADA', 'REJEITADA', 'ENCERRADA'].includes(bolsa.status)
 
   const linhasBolsas = bolsas.map((bolsa) => [
     bolsa.edital_nome,
+    bolsa.edital_data_maxima_preenchimento_vagas
+      ? new Date(bolsa.edital_data_maxima_preenchimento_vagas + 'T00:00:00').toLocaleDateString(
+          'pt-BR'
+        )
+      : '—',
     opcaoLabel(TIPO_OPTIONS, bolsa.tipo),
     opcaoLabel(MODALIDADE_OPTIONS, bolsa.modalidade),
     bolsa.quantidade_vagas,
@@ -504,20 +524,13 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     <AcoesCell
       key="acoes"
       acoes={[
+        { label: 'Candidatos', onClick: () => setBolsaCandidatos(bolsa) },
         ...(STATUS_COM_ETAPAS.includes(bolsa.status)
-          ? [
-              {
-                label: 'Etapas de avaliação',
-                variant: 'outline',
-                onClick: () => setBolsaEtapas(bolsa),
-              },
-            ]
-          : []),
-        ...(bolsa.pode_editar
-          ? [{ label: 'Editar', variant: 'outline', onClick: () => abrirModalEditarBolsa(bolsa) }]
+          ? [{ label: 'Etapas', onClick: () => setBolsaEtapas(bolsa) }]
           : []),
         ...(podeCancelar(bolsa)
           ? [
+              { label: 'Editar', onClick: () => abrirModalEditarBolsa(bolsa) },
               {
                 label: 'Cancelar Bolsa',
                 variant: 'danger',
@@ -567,7 +580,16 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       )}
 
       <DataTable
-        columns={['Edital', 'Tipo', 'Modalidade', 'Vagas', 'Valor', 'Status', 'Ações']}
+        columns={[
+          'Edital',
+          'Prazo para preenchimento de vagas',
+          'Tipo',
+          'Modalidade',
+          'Vagas',
+          'Valor',
+          'Status',
+          'Ações',
+        ]}
         rows={linhasBolsas}
         emptyMessage="Nenhuma bolsa solicitada para este projeto."
       />
@@ -618,13 +640,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             </Alert>
           )}
 
-          <FormField
-            label={
-              tipoBloqueado
-                ? 'Tipo da bolsa (não pode ser alterado depois da aprovação)'
-                : 'Tipo da bolsa (define o Coordenador de Área responsável)'
-            }
-          >
+          <FormField label="Tipo da bolsa (define o Coordenador de Área responsável)">
             <Select
               value={form.tipo}
               onChange={(e) => atualizarCampo('tipo', e.target.value)}

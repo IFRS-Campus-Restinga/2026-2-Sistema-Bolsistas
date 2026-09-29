@@ -22,13 +22,7 @@ function dataLocal(data) {
   return data ? data.split('-').reverse().join('/') : 'Não definida'
 }
 
-export default function RecursosModal({
-  inscricaoId,
-  coordenador = false,
-  somenteHistorico = false,
-  onFechar,
-  onAtualizar,
-}) {
+export default function RecursosModal({ inscricaoId, coordenador = false, onFechar, onAtualizar }) {
   const [dados, setDados] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -138,17 +132,7 @@ export default function RecursosModal({
   }
 
   return (
-    <Modal
-      title={
-        coordenador
-          ? 'Análise de recursos'
-          : somenteHistorico
-            ? 'Histórico de recursos'
-            : 'Interpor Recursos'
-      }
-      onClose={fechar}
-      width={800}
-    >
+    <Modal title="Recursos da homologação" onClose={fechar} width={800}>
       <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: 4 }}>
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
@@ -166,7 +150,7 @@ export default function RecursosModal({
         ) : (
           <>
             <p>
-              <strong>Aluno:</strong> {dados.inscricao.aluno_nome}{' '}
+              <strong>Inscrição #{dados.inscricao.id}:</strong> {dados.inscricao.aluno_nome}{' '}
               <Badge status={dados.inscricao.status} />
             </p>
             <p>
@@ -195,7 +179,6 @@ export default function RecursosModal({
               )}
             </details>
             {!coordenador &&
-              !somenteHistorico &&
               (dados.pode_enviar ? (
                 <form onSubmit={enviar}>
                   <h3>Novo recurso</h3>
@@ -252,7 +235,7 @@ export default function RecursosModal({
                 style={{ borderTop: '1px solid #d9d9d9', paddingTop: 12, marginTop: 12 }}
               >
                 <h4>
-                  Recurso de homologação <Badge status={recurso.status} />
+                  Recurso #{recurso.id} <Badge status={recurso.status} />
                 </h4>
                 <p>Enviado em {new Date(recurso.criado_em).toLocaleString('pt-BR')}.</p>
                 <p style={{ whiteSpace: 'pre-wrap' }}>
@@ -280,7 +263,7 @@ export default function RecursosModal({
                   </p>
                 )}
                 {coordenador &&
-                  ['PENDENTE', 'EXPIRADO'].includes(recurso.status) &&
+                  recurso.status === 'PENDENTE' &&
                   (julgamento === recurso.id ? (
                     <form
                       onSubmit={(e) => {
@@ -301,7 +284,7 @@ export default function RecursosModal({
                       </FormField>
                       <FormActions>
                         <Button disabled={salvando} onClick={() => setJulgamento(null)}>
-                          Voltar à análise
+                          Voltar
                         </Button>
                         <Button
                           type="submit"
@@ -309,9 +292,6 @@ export default function RecursosModal({
                           disabled={salvando || !motivo.trim()}
                         >
                           Confirmar indeferimento
-                        </Button>
-                        <Button disabled={salvando} onClick={fechar}>
-                          Fechar
                         </Button>
                       </FormActions>
                     </form>
@@ -337,13 +317,11 @@ export default function RecursosModal({
           </>
         )}
       </div>
-      {!julgamento && (
-        <FormActions>
-          <Button disabled={salvando} onClick={fechar}>
-            Fechar
-          </Button>
-        </FormActions>
-      )}
+      <FormActions>
+        <Button disabled={salvando} onClick={fechar}>
+          Fechar
+        </Button>
+      </FormActions>
     </Modal>
   )
 }

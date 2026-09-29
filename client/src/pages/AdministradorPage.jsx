@@ -9,6 +9,7 @@ import {
   IconBriefcase,
   IconUsers,
 } from '../components'
+import EditaisPage from './EditaisPage'
 import UsuariosPage from './admin/UsuariosPage'
 
 const menuItems = [
@@ -60,6 +61,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
         </>
       )}
       {active === 'usuarios' && <UsuariosPage />}
+      {active === 'editais' && <EditaisPage />}
     </Layout>
   )
 }

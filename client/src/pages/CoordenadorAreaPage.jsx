@@ -9,12 +9,11 @@ import {
   IconUsers,
 } from '../components'
 import EditaisPage from './EditaisPage'
-import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
+  { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
 ]
 
 const AREA_LABELS = {
@@ -38,9 +37,9 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      {active === 'editais' && <EditaisPage />}
-
-      {active === 'dashboard' && (
+      {active === 'editais' ? (
+        <EditaisPage />
+      ) : (
         <>
           <PageHeader title={`Painel Coordenação de ${areaLabel}`} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -50,8 +49,6 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
           </div>
         </>
       )}
-
-      {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
     </Layout>
   )
 }

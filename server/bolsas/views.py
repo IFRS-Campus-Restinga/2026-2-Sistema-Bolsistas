@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -10,11 +12,21 @@ from rest_framework.views import APIView
 from accounts.models import Usuario
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
 
-from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
+from .models import (
+    Bolsa,
+    EtapaAvaliacao,
+    Frequencia,
+    StatusBolsa,
+    StatusFrequencia,
+    TipoBolsa,
+    VinculoBolsista,
+)
 from .serializers import (
     BolsaEdicaoSerializer,
     BolsaSerializer,
     EtapaAvaliacaoSerializer,
+    FrequenciaSerializer,
+    LancarFrequenciaSerializer,
 )
 
 STATUS_BLOQUEIAM_CANCELAMENTO = [
@@ -22,6 +34,20 @@ STATUS_BLOQUEIAM_CANCELAMENTO = [
     StatusBolsa.REJEITADA,
     StatusBolsa.ENCERRADA,
 ]
+
+
+def _validar_data_maxima_preenchimento(bolsa):
+    """Verifica se bolsa pode transicionar para PREENCHIDA dado o prazo do edital."""
+    if (
+        bolsa.edital.data_maxima_preenchimento_vagas
+        and date.today() > bolsa.edital.data_maxima_preenchimento_vagas
+    ):
+        raise ValidationError(
+            {
+                "detail": f"Prazo máximo para preenchimento ({bolsa.edital.data_maxima_preenchimento_vagas.strftime('%d/%m/%Y')}) foi ultrapassado. "
+                "Prorogue a data no cronograma do edital para continuar."
+            }
+        )
 
 
 def _area_permitida(bolsa, usuario):
@@ -132,6 +158,8 @@ class AprovarBolsaView(APIView):
                 }
             )
 
+        _validar_data_maxima_preenchimento(bolsa)
+
         bolsa.status = StatusBolsa.ABERTA
         bolsa.coordenador_area = request.user.perfil_coordenador_area
         bolsa.data_decisao = timezone.now()
@@ -191,8 +219,9 @@ class CancelarBolsaView(APIView):
                 {"detail": f'Uma bolsa "{bolsa.get_status_display()}" não pode mais ser cancelada.'}
             )
 
+        motivo_cancelamento = (request.data.get("motivo") or "").strip()
         bolsa.status = StatusBolsa.CANCELADA
-        bolsa.justificativa_decisao = (request.data.get("motivo") or "").strip()
+        bolsa.justificativa_decisao = motivo_cancelamento
         bolsa.save(update_fields=["status", "justificativa_decisao"])
 
         return Response(
@@ -243,3 +272,107 @@ class EtapaAvaliacaoDetailView(_EtapasDaBolsaMixin, generics.RetrieveUpdateDestr
     def perform_destroy(self, instance):
         self.garantir_editavel()
         instance.delete()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# US15 — Frequência mensal
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class FrequenciaListView(generics.ListAPIView):
+    """
+    GET /api/bolsas/frequencias/
+
+    Lista frequências dos vínculos do Coordenador de Projeto logado.
+    Filtros: ?vinculo=<id>, ?mes=YYYY-MM
+    """
+
+    serializer_class = FrequenciaSerializer
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get_queryset(self):
+        usuario = self.request.user
+        queryset = Frequencia.objects.filter(
+            vinculo__bolsa__projeto__coordenador_projeto__usuario=usuario
+        ).select_related("vinculo__bolsa__edital", "vinculo__aluno", "lancada_por")
+
+        vinculo_id = self.request.query_params.get("vinculo")
+        if vinculo_id:
+            queryset = queryset.filter(vinculo_id=vinculo_id)
+
+        mes = self.request.query_params.get("mes")
+        if mes:
+            try:
+                ano, numero_mes = map(int, mes.split("-"))
+                import datetime
+
+                queryset = queryset.filter(mes_referencia=datetime.date(ano, numero_mes, 1))
+            except (ValueError, TypeError):
+                pass
+
+        return queryset
+
+
+class LancarFrequenciaView(APIView):
+    """
+    POST /api/bolsas/vinculos/<vinculo_pk>/frequencias/
+
+    Lança ou atualiza a frequência de um mês para um vínculo.
+    Só o Coordenador de Projeto do projeto da bolsa pode lançar.
+    Bloqueia após o dia_limite_frequencia do edital.
+    """
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, vinculo_pk):
+        try:
+            vinculo = VinculoBolsista.objects.select_related("bolsa__edital", "aluno").get(
+                pk=vinculo_pk,
+                bolsa__projeto__coordenador_projeto__usuario=request.user,
+            )
+        except VinculoBolsista.DoesNotExist as err:
+            raise PermissionDenied(
+                "Vínculo não encontrado ou você não é o coordenador deste projeto."
+            ) from err
+
+        serializer = LancarFrequenciaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        mes_referencia = serializer.validated_data["mes_referencia"]
+
+        edital = vinculo.bolsa.edital
+        dia_limite = edital.dia_limite_frequencia
+
+        if dia_limite is not None:
+            import calendar
+
+            ultimo_dia = calendar.monthrange(mes_referencia.year, mes_referencia.month)[1]
+            dia_limite_efetivo = min(dia_limite, ultimo_dia)
+            from datetime import date
+
+            data_limite = mes_referencia.replace(day=dia_limite_efetivo)
+            if date.today() > data_limite:
+                raise ValidationError(
+                    {
+                        "detail": f"O prazo para lançamento da frequência de "
+                        f"{mes_referencia:%m/%Y} encerrou no dia {dia_limite_efetivo}."
+                    }
+                )
+
+        frequencia, criada = Frequencia.objects.get_or_create(
+            vinculo=vinculo,
+            mes_referencia=mes_referencia,
+            defaults={
+                "status": StatusFrequencia.INFORMADA,
+                "lancada_em": timezone.now(),
+                "lancada_por": request.user,
+            },
+        )
+
+        if not criada:
+            frequencia.status = StatusFrequencia.INFORMADA
+            frequencia.lancada_em = timezone.now()
+            frequencia.lancada_por = request.user
+            frequencia.save(update_fields=["status", "lancada_em", "lancada_por"])
+
+        return Response(FrequenciaSerializer(frequencia).data)

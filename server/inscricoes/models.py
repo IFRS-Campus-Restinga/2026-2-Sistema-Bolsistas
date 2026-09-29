@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
+from simple_history.models import HistoricalRecords
 
 from bolsas.models import Bolsa
 
@@ -48,6 +49,8 @@ class Inscricao(models.Model):
             )
         ]
 
+    history = HistoricalRecords()
+
     def __str__(self):
         return f"{self.aluno} -> {self.bolsa} ({self.get_status_display()})"
 
@@ -69,6 +72,9 @@ class Documento(models.Model):
     arquivo = models.FileField(upload_to=caminho_documento)
     enviado_em = models.DateTimeField(auto_now_add=True)
 
+    # Rastrear só metadados (tipo, nome) — não o campo binário arquivo
+    history = HistoricalRecords(excluded_fields=["arquivo"])
+
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.inscricao_id}"
 
@@ -83,6 +89,8 @@ class NotificacaoInscricao(models.Model):
     mensagem = models.TextField()
     criada_em = models.DateTimeField(auto_now_add=True)
     lida_em = models.DateTimeField(null=True, blank=True)
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-criada_em", "-id"]
@@ -132,6 +140,8 @@ class Recurso(models.Model):
             )
         ]
 
+    history = HistoricalRecords()
+
     def __str__(self):
         return f"Recurso {self.pk} da inscrição {self.inscricao_id}"
 
@@ -144,6 +154,9 @@ class AnexoRecurso(models.Model):
     recurso = models.ForeignKey(Recurso, on_delete=models.CASCADE, related_name="anexos")
     nome_original = models.CharField(max_length=255)
     arquivo = models.FileField(upload_to=caminho_anexo_recurso)
+
+    # Rastrear só metadados — não o campo binário arquivo
+    history = HistoricalRecords(excluded_fields=["arquivo"])
 
     def __str__(self):
         return self.nome_original

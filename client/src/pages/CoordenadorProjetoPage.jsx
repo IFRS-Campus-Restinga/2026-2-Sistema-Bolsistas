@@ -10,7 +10,6 @@ import {
   IconFileText,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
-import MeusCandidatosPage from './MeusCandidatosPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -46,7 +45,6 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       )}
 
       {active === 'projetos' && <MeusProjetosPage />}
-      {active === 'candidatos' && <MeusCandidatosPage />}
     </Layout>
   )
 }

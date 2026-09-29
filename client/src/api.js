@@ -28,7 +28,7 @@ async function refreshHubSession() {
   return res.ok
 }
 
-async function fetchWithRefresh(base, path, options = {}) {
+export async function apiFetch(path, options = {}, base = API_BASE) {
   const doFetch = () => fetch(`${base}${path}`, { ...options, credentials: 'include' })
 
   let res = await doFetch()
@@ -42,28 +42,28 @@ async function fetchWithRefresh(base, path, options = {}) {
   return res
 }
 
-export async function apiFetch(path, options = {}) {
-  return fetchWithRefresh(API_BASE, path, options)
+function fetchWithRefresh(base, path = '/', options = {}) {
+  return apiFetch(path, options, base)
 }
 
-async function adminFetch(path, options = {}) {
-  return fetchWithRefresh(ADMIN_BASE, path, options)
+function adminFetch(path, options) {
+  return apiFetch(path, options, ADMIN_BASE)
 }
 
 export function editaisFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/editais`, path, options)
-}
-
-export function bolsasFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/bolsas`, path, options)
-}
-
-export function projetosFetch(path = '/', options = {}) {
-  return fetchWithRefresh(`${DJANGO_HOST}/api/projetos`, path, options)
+  return apiFetch(path, options, `${DJANGO_HOST}/api/editais`)
 }
 
 export function inscricoesFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
+}
+
+export function bolsasFetch(path = '/', options = {}) {
+  return apiFetch(path, options, `${DJANGO_HOST}/api/bolsas`)
+}
+
+export function projetosFetch(path = '/', options = {}) {
+  return apiFetch(path, options, `${DJANGO_HOST}/api/projetos`)
 }
 
 export { SessaoExpiradaError }
@@ -110,4 +110,32 @@ export async function patchEmailCoordenador(id, email, tipoArea) {
 
 export async function deleteEmailCoordenador(id) {
   return adminFetch(`/emails-coordenadores/${id}/`, { method: 'DELETE' })
+}
+
+// ── Editais — ações extras ────────────────────────────────────────────────
+
+export async function arquivarEdital(id) {
+  return editaisFetch(`/${id}/arquivar/`, { method: 'POST' })
+}
+
+export async function getCronogramaConsolidado() {
+  return editaisFetch('/cronograma-consolidado/')
+}
+
+// ── Frequência ────────────────────────────────────────────────────────────
+
+export async function getFrequencias({ vinculoId, mes } = {}) {
+  const params = new URLSearchParams()
+  if (vinculoId) params.set('vinculo', vinculoId)
+  if (mes) params.set('mes', mes)
+  const query = params.toString() ? `?${params}` : ''
+  return bolsasFetch(`/frequencias/${query}`)
+}
+
+export async function lancarFrequencia(vinculoId, mesReferencia) {
+  return bolsasFetch(`/vinculos/${vinculoId}/frequencias/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mes_referencia: mesReferencia }),
+  })
 }

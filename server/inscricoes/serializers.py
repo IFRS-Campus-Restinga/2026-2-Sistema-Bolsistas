@@ -1,5 +1,3 @@
-import re
-
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers
@@ -37,23 +35,6 @@ class DocumentoSerializer(serializers.ModelSerializer):
 
 
 class NotificacaoInscricaoSerializer(serializers.ModelSerializer):
-    mensagem = serializers.SerializerMethodField()
-
-    def get_mensagem(self, notificacao):
-        # Compatibilidade com notificações antigas, sem modificar o motivo escrito.
-        mensagem = notificacao.mensagem
-        mensagem = re.sub(
-            r"^Seu recurso #\d+ de homologação", "Seu recurso de homologação", mensagem
-        )
-        prefixo, separador, restante = mensagem.partition(" foi ")
-        prefixo = re.sub(r" \(bolsa #\d+\)", "", prefixo)
-        prefixo = re.sub(
-            r", na bolsa #\d+,",
-            lambda _: f', na bolsa do projeto "{notificacao.inscricao.bolsa.projeto.titulo}",',
-            prefixo,
-        )
-        return prefixo + separador + restante
-
     class Meta:
         model = NotificacaoInscricao
         fields = ["id", "mensagem", "criada_em", "lida_em"]
@@ -237,33 +218,12 @@ class AnexoRecursoSerializer(serializers.ModelSerializer):
 
 
 class RecursoSerializer(serializers.ModelSerializer):
-    status = serializers.SerializerMethodField()
-    inscricao = serializers.IntegerField(source="inscricao_id", read_only=True)
-    projeto_titulo = serializers.CharField(source="inscricao.bolsa.projeto.titulo", read_only=True)
-    edital_nome = serializers.CharField(source="inscricao.bolsa.edital.nome", read_only=True)
-    aluno_nome = serializers.SerializerMethodField()
-
-    def get_status(self, recurso):
-        # Expiração é derivada do prazo; o recurso continua aguardando julgamento.
-        fim = recurso.inscricao.bolsa.edital.data_recurso_homologacao_fim
-        if recurso.status == StatusRecurso.PENDENTE and fim and timezone.localdate() > fim:
-            return "EXPIRADO"
-        return recurso.status
-
-    def get_aluno_nome(self, recurso):
-        aluno = recurso.inscricao.aluno
-        return aluno.nome or aluno.get_full_name() or aluno.username
-
     anexos = AnexoRecursoSerializer(many=True, read_only=True)
 
     class Meta:
         model = Recurso
         fields = [
             "id",
-            "inscricao",
-            "projeto_titulo",
-            "edital_nome",
-            "aluno_nome",
             "etapa",
             "justificativa",
             "motivo_contestado",

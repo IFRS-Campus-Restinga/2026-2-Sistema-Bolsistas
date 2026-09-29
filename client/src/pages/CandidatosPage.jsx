@@ -2,9 +2,18 @@ import { useEffect, useState } from 'react'
 import { inscricoesFetch } from '../api'
 import CandidatoAnaliseModal from './CandidatoAnaliseModal'
 import RecursosModal from './RecursosModal'
-import { AcoesCell, useToast, Alert, Badge, Button, DataTable } from '../components'
+import {
+  AcoesCell,
+  useToast,
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  IconArrowLeft,
+  PageHeader,
+} from '../components'
 
-export default function CandidatosPage({ bolsa }) {
+export default function CandidatosPage({ bolsa, projetoTitulo, onVoltar }) {
   const [consulta, setConsulta] = useState({ carregando: true, candidatos: [], erro: '' })
   const [tentativa, setTentativa] = useState(0)
   const [candidatoId, setCandidatoId] = useState(null)
@@ -48,12 +57,13 @@ export default function CandidatosPage({ bolsa }) {
   }
 
   const linhas = consulta.candidatos.map((candidato) => [
-    <span key="nome" style={{ whiteSpace: 'nowrap' }}>
-      {candidato.aluno_nome}
-    </span>,
+    candidato.aluno_nome,
     candidato.aluno_email || 'Não informado',
     <Badge key={`status-${candidato.id}`} status={candidato.status} />,
     candidato.data_envio ? new Date(candidato.data_envio).toLocaleString('pt-BR') : 'Não informado',
+    candidato.documentacao_completa
+      ? 'Documentos obrigatórios enviados'
+      : 'Documentos obrigatórios faltantes',
     <AcoesCell
       key={`acoes-${candidato.id}`}
       acoes={[
@@ -70,6 +80,15 @@ export default function CandidatosPage({ bolsa }) {
 
   return (
     <>
+      <Button variant="outline" size="sm" onClick={onVoltar}>
+        <IconArrowLeft /> Voltar às bolsas do projeto
+      </Button>
+      <PageHeader title="Candidatos inscritos" />
+      <p>
+        {projetoTitulo} — {bolsa.edital_nome} — {bolsa.modalidade} (Bolsa #{bolsa.id})
+      </p>
+      <p>A presença dos documentos não significa que a inscrição foi homologada.</p>
+
       {consulta.carregando ? (
         <p role="status">Carregando candidatos...</p>
       ) : consulta.erro ? (
@@ -81,7 +100,7 @@ export default function CandidatosPage({ bolsa }) {
         </>
       ) : (
         <DataTable
-          columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Ações']}
+          columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Documentação', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhum candidato com inscrição enviada para esta bolsa."
         />

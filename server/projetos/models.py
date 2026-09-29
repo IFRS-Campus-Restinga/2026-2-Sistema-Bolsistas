@@ -2,6 +2,7 @@ from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
+from simple_history.models import HistoricalRecords
 
 from accounts.models import CoordenadorProjeto
 
@@ -38,6 +39,8 @@ class Projeto(models.Model):
     )
     nome_original_arquivo = models.CharField(max_length=255, blank=True, default="")
     criado_em = models.DateTimeField(auto_now_add=True)
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-criado_em"]

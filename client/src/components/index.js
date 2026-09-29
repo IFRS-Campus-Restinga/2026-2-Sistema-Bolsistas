@@ -27,16 +27,12 @@ export { Badge } from './Badge'
 export { Banner } from './Banner'
 export { PageHeader } from './PageHeader'
 export { Alert } from './Alert'
-export { AcoesCell } from './AcoesCell'
-export { LocalEtapa } from './LocalEtapa'
 
 // Form / Input (#179)
 export { FormField, FormActions, TextInput, TextArea, Select, FileField } from './FormField'
 export { Modal } from './Modal'
 export { ConfirmProvider } from './Confirm'
 export { useConfirm } from './useConfirm'
-export { ToastProvider } from './Toast'
 export { useToast } from './useToast'
-
-// Rotas (#182)
-export { default as ProtectedRoute } from './ProtectedRoute'
+export { AcoesCell } from './AcoesCell'
+export { LocalEtapa } from './LocalEtapa'

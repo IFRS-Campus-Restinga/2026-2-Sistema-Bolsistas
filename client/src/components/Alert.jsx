@@ -1,18 +1,12 @@
 import './Alert.css'
 
-const ICON_POR_TONE = {
-  error: '⚠',
-  warning: '⚠',
-  success: '✓',
-}
-
 /**
- * Alerta visual de erro, aviso ou sucesso.
+ * Alerta visual de erro ou sucesso.
  *
- * Uso: <Alert tone="warning">Mensagem de aviso</Alert>
+ * Uso: <Alert tone="error">Mensagem de erro</Alert>
  */
 export function Alert({ tone, children }) {
-  const icon = ICON_POR_TONE[tone] ?? '✓'
+  const icon = tone === 'error' ? '⚠' : tone === 'warning' ? '⚠' : '✓'
   return (
     <div className={`alert alert--${tone}`}>
       <span className="alert__icon">{icon}</span>

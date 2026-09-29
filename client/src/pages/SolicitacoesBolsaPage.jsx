@@ -122,8 +122,16 @@ export default function SolicitacoesBolsaPage() {
       key="acoes"
       mostrar={bolsa.status === 'SOLICITADA'}
       acoes={[
-        { label: 'Aprovar', variant: 'accent', onClick: () => confirmarAprovar(bolsa) },
-        { label: 'Rejeitar', variant: 'danger', onClick: () => abrirModalRejeitar(bolsa) },
+        {
+          label: 'Aprovar',
+          variant: 'accent',
+          onClick: () => confirmarAprovar(bolsa),
+        },
+        {
+          label: 'Rejeitar',
+          variant: 'danger',
+          onClick: () => abrirModalRejeitar(bolsa),
+        },
       ]}
     />,
   ])

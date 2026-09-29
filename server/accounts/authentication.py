@@ -1,4 +1,5 @@
 import jwt
+from auditlog.context import disable_auditlog
 from django.conf import settings
 from django.db import transaction
 from django.db.models import ProtectedError
@@ -33,6 +34,10 @@ class HubJWTAuthentication(BaseAuthentication):
         return "Bearer"
 
     def authenticate(self, request):
+        usuario_cache = getattr(request, "_hub_authenticated_user", None)
+        if usuario_cache is not None:
+            return (usuario_cache, None)
+
         token = request.COOKIES.get(settings.AUTH_COOKIE_NAME)
         if not token:
             return None
@@ -76,15 +81,16 @@ class HubJWTAuthentication(BaseAuthentication):
             return usuario
 
         with transaction.atomic():
-            if usuario is None:
-                usuario = Usuario.objects.create(
-                    id=user_id, username=str(user_id), email=email, nome=nome, role=role
-                )
-            else:
-                usuario.role, usuario.email, usuario.nome = role, email, nome
-                usuario.save(update_fields=["role", "email", "nome"])
+            with disable_auditlog():
+                if usuario is None:
+                    usuario = Usuario.objects.create(
+                        id=user_id, username=str(user_id), email=email, nome=nome, role=role
+                    )
+                else:
+                    usuario.role, usuario.email, usuario.nome = role, email, nome
+                    usuario.save(update_fields=["role", "email", "nome"])
 
-            self._sync_perfil(usuario, role, tipo_area)
+                self._sync_perfil(usuario, role, tipo_area)
 
         return usuario
 

@@ -6,7 +6,7 @@ from rest_framework import serializers
 from editais.models import Edital
 from projetos.models import StatusProjeto
 
-from .models import PESO_TOTAL, Bolsa, EtapaAvaliacao, StatusBolsa
+from .models import PESO_TOTAL, Bolsa, EtapaAvaliacao, Frequencia, StatusBolsa, VinculoBolsista
 
 
 def _decimal_str(valor):
@@ -20,6 +20,9 @@ class BolsaSerializer(serializers.ModelSerializer):
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
     edital_link_documento_oficial = serializers.URLField(
         source="edital.link_documento_oficial", read_only=True
+    )
+    edital_data_maxima_preenchimento_vagas = serializers.DateField(
+        source="edital.data_maxima_preenchimento_vagas", read_only=True
     )
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
     minha_inscricao_status = serializers.SerializerMethodField()
@@ -42,6 +45,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "edital",
             "edital_nome",
             "edital_link_documento_oficial",
+            "edital_data_maxima_preenchimento_vagas",
             "minha_inscricao_status",
             "pode_editar",
             "pode_editar_etapas",
@@ -75,6 +79,7 @@ class BolsaSerializer(serializers.ModelSerializer):
             "data_decisao",
             "justificativa_decisao",
             "coordenador_area",
+            "edital_data_maxima_preenchimento_vagas",
         ]
 
     def get_minha_inscricao_status(self, bolsa):
@@ -195,3 +200,59 @@ class EtapaAvaliacaoSerializer(serializers.ModelSerializer):
                 f"o máximo para esta etapa é {disponivel}%."
             )
         return peso
+
+
+class VinculoBolsistaSerializer(serializers.ModelSerializer):
+    aluno_nome = serializers.CharField(source="aluno.nome", read_only=True)
+    bolsa_display = serializers.CharField(source="bolsa.__str__", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = VinculoBolsista
+        fields = [
+            "id",
+            "bolsa",
+            "bolsa_display",
+            "aluno",
+            "aluno_nome",
+            "status",
+            "status_display",
+            "data_inicio",
+            "data_fim",
+        ]
+        read_only_fields = ["id", "status"]
+
+
+class FrequenciaSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    aluno_nome = serializers.CharField(source="vinculo.aluno.nome", read_only=True)
+    dia_limite = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Frequencia
+        fields = [
+            "id",
+            "vinculo",
+            "aluno_nome",
+            "mes_referencia",
+            "status",
+            "status_display",
+            "lancada_em",
+            "lancada_por",
+            "dia_limite",
+        ]
+        read_only_fields = ["id", "status", "lancada_em", "lancada_por"]
+
+    def get_dia_limite(self, frequencia):
+        return frequencia.vinculo.bolsa.edital.dia_limite_frequencia
+
+
+class LancarFrequenciaSerializer(serializers.Serializer):
+    """Payload para lançar/atualizar frequência de um mês."""
+
+    mes_referencia = serializers.DateField(help_text="Primeiro dia do mês (ex.: 2026-09-01).")
+
+    def validate_mes_referencia(self, valor):
+        if valor.day != 1:
+            raise serializers.ValidationError("Informe o primeiro dia do mês (ex.: 2026-09-01).")
+        return valor

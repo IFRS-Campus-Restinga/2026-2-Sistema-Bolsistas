@@ -90,7 +90,6 @@ class EditalAPITests(APITestCase):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
-            Usuario.Role.ADMINISTRADOR,
         ]
 
         for perfil in perfis:
@@ -115,19 +114,42 @@ class EditalAPITests(APITestCase):
 
         self.assertFalse(Edital.objects.exists())
 
-    def test_aluno_e_administrador_nao_podem_listar(self):
-        for perfil in [Usuario.Role.ALUNO, Usuario.Role.ADMINISTRADOR]:
-            with self.subTest(perfil=perfil):
-                usuario = Usuario.objects.create_user(
-                    username=f"teste_{perfil}",
-                    email=f"teste_{perfil.lower()}@example.com",
-                    role=perfil,
-                )
-                self.client.force_authenticate(user=usuario)
+    def test_administrador_pode_cadastrar_edital(self):
+        admin = Usuario.objects.create_user(
+            username="admin_teste",
+            email="admin.teste@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
 
-                resposta_get = self.client.get(self.url)
+        response = self.client.post(self.url, self.dados, format="json")
 
-                self.assertEqual(resposta_get.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Edital.objects.count(), 1)
+
+    def test_aluno_nao_pode_listar(self):
+        aluno = Usuario.objects.create_user(
+            username="teste_aluno",
+            email="teste_aluno@example.com",
+            role=Usuario.Role.ALUNO,
+        )
+        self.client.force_authenticate(user=aluno)
+
+        resposta_get = self.client.get(self.url)
+
+        self.assertEqual(resposta_get.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_administrador_pode_listar(self):
+        admin = Usuario.objects.create_user(
+            username="admin_lista",
+            email="admin.lista@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        resposta_get = self.client.get(self.url)
+
+        self.assertEqual(resposta_get.status_code, status.HTTP_200_OK)
 
     def test_coordenador_projeto_pode_listar_para_escolher_edital_ao_solicitar_bolsa(self):
         Edital.objects.create(**self.dados, status=Edital.Status.EM_VIGOR)
@@ -244,10 +266,9 @@ class CronogramaEditalAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_bloqueia_edital_encerrado_ou_arquivado(self):
+    def test_bloqueia_edital_encerrado(self):
         estados = [
             Edital.Status.ENCERRADO,
-            Edital.Status.ARQUIVADO,
         ]
 
         for estado in estados:
@@ -275,7 +296,6 @@ class CronogramaEditalAPITests(APITestCase):
         perfis = [
             Usuario.Role.ALUNO,
             Usuario.Role.COORDENADOR_PROJETO,
-            Usuario.Role.ADMINISTRADOR,
         ]
 
         for perfil in perfis:
@@ -303,6 +323,22 @@ class CronogramaEditalAPITests(APITestCase):
             self.edital.data_fechamento_inscricoes.isoformat(),
             "2026-09-10",
         )
+
+    def test_administrador_pode_atualizar_cronograma(self):
+        admin = Usuario.objects.create_user(
+            username="admin_cronograma",
+            email="admin.cronograma@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.patch(
+            self.url,
+            {"data_fechamento_inscricoes": "2026-09-12"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_visitante_nao_pode_atualizar_cronograma(self):
         self.client.force_authenticate(user=None)

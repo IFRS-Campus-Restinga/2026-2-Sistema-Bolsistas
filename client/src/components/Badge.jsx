@@ -31,7 +31,11 @@ const STATUS_STYLE = {
   EM_ANALISE: 'badge--blue',
   EXPIRADO: 'badge--gray',
   EM_VIGOR: 'badge--green',
-  ARQUIVADO: 'badge--gray',
+  Criação: 'badge--green',
+  Alteração: 'badge--blue',
+  Edição: 'badge--blue',
+  Exclusão: 'badge--red',
+  Acesso: 'badge--gray',
 }
 
 const STATUS_LABEL = {
@@ -59,7 +63,11 @@ const STATUS_LABEL = {
   EM_ANALISE: 'Em Análise',
   EXPIRADO: 'Expirado',
   EM_VIGOR: 'Em vigor',
-  ARQUIVADO: 'Arquivado',
+  Criação: 'Criação',
+  Alteração: 'Alteração',
+  Edição: 'Edição',
+  Exclusão: 'Exclusão',
+  Acesso: 'Acesso',
 }
 
 export function Badge({ status }) {

@@ -2,7 +2,6 @@ from django.urls import path
 
 from .views import (
     AnexoRecursoArquivoView,
-    BolsaInscricaoDetailView,
     CancelarInscricaoView,
     CandidatoDetailView,
     CandidatoListView,
@@ -17,14 +16,11 @@ from .views import (
     JulgarRecursoView,
     LerNotificacaoView,
     RecursosInscricaoView,
-    RecursosListView,
 )
 
 app_name = "inscricoes"
 
 urlpatterns = [
-    path("recursos/", RecursosListView.as_view(), name="recursos-lista"),
-    path("<int:pk>/bolsa/", BolsaInscricaoDetailView.as_view(), name="inscricao-bolsa"),
     path("<int:inscricao_pk>/recursos/", RecursosInscricaoView.as_view(), name="recursos"),
     path("recursos/<int:pk>/julgar/", JulgarRecursoView.as_view(), name="recurso-julgar"),
     path(

@@ -14,11 +14,11 @@ import {
 } from '../components'
 import InscricaoWizard from './InscricaoWizard'
 import RecursosModal from './RecursosModal'
-import { BolsaDetalhe } from './BolsasDisponiveisPage'
 
-export default function MinhasInscricoesPage({ onHistorico }) {
+export default function MinhasInscricoesPage() {
   const confirmar = useConfirm()
   const toast = useToast()
+
   const [inscricoes, setInscricoes] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -26,8 +26,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   const [edicaoAberta, setEdicaoAberta] = useState(null)
   const [comprovante, setComprovante] = useState(null)
   const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
-  const [bolsaInscricao, setBolsaInscricao] = useState(null)
-  const [consultandoRecurso, setConsultandoRecurso] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -97,26 +95,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     })
   }
 
-  async function interporRecurso(inscricao) {
-    if (consultandoRecurso) return
-    setConsultandoRecurso(true)
-    setErro('')
-    try {
-      const res = await inscricoesFetch(`/${inscricao.id}/recursos/`)
-      const dados = await res.json()
-      if (!res.ok) throw new Error(dados.detail || 'Não foi possível consultar o prazo.')
-      if (!dados.pode_enviar) {
-        setErro(dados.motivo_bloqueio)
-        return
-      }
-      setRecursoInscricaoId(inscricao.id)
-    } catch (e) {
-      setErro(e.message)
-    } finally {
-      setConsultandoRecurso(false)
-    }
-  }
-
   function acoesPorInscricao(inscricao) {
     const prazoEncerrado = inscricao.prazo_inscricao_encerrado
 
@@ -147,10 +125,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     if (['HOMOLOGADA', 'INDEFERIDA'].includes(inscricao.status)) {
       return [
         { label: 'Ver resultado', onClick: () => setComprovante(inscricao) },
-        ...(inscricao.status === 'INDEFERIDA'
-          ? [{ label: 'Interpor Recursos', onClick: () => interporRecurso(inscricao) }]
-          : []),
-        { label: 'Histórico de recursos', onClick: onHistorico },
+        { label: 'Recursos', onClick: () => setRecursoInscricaoId(inscricao.id) },
       ]
     }
     return []
@@ -172,7 +147,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   }
 
   const notificacoes = inscricoes
-    .flatMap((inscricao) => (inscricao.notificacoes || []).map((item) => ({ ...item, inscricao })))
+    .flatMap((item) => item.notificacoes || [])
     .filter((item) => !item.lida_em)
 
   const linhas = inscricoes.map((inscricao) => [
@@ -182,16 +157,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     <Badge key="status" status={inscricao.status} />,
     <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])
-
-  if (bolsaInscricao)
-    return (
-      <BolsaDetalhe
-        key={bolsaInscricao.id}
-        inscricaoId={bolsaInscricao.id}
-        bolsaId={bolsaInscricao.bolsa}
-        onVoltar={() => setBolsaInscricao(null)}
-      />
-    )
 
   return (
     <>
@@ -211,9 +176,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
                 onClick={() => marcarLida(item.id)}
               >
                 Marcar como lida
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setBolsaInscricao(item.inscricao)}>
-                Ir para a bolsa
               </Button>
             </Alert>
           ))}

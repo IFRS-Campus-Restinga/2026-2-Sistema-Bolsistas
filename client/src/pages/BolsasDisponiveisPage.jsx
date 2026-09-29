@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { bolsasFetch, inscricoesFetch } from '../api'
+import { bolsasFetch } from '../api'
 import {
   Alert,
   Badge,
@@ -106,7 +106,7 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
   )
 }
 
-export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
+function BolsaDetalhe({ bolsaId, onVoltar }) {
   const [bolsa, setBolsa] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -117,9 +117,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
 
     async function carregarBolsa() {
       try {
-        const res = await (inscricaoId
-          ? inscricoesFetch(`/${inscricaoId}/bolsa/`)
-          : bolsasFetch(`/disponiveis/${bolsaId}/`))
+        const res = await bolsasFetch(`/disponiveis/${bolsaId}/`)
         if (!res.ok) throw new Error('Não foi possível carregar os detalhes da bolsa.')
         const dados = await res.json()
         if (ativo) setBolsa(dados)
@@ -135,7 +133,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
     return () => {
       ativo = false
     }
-  }, [bolsaId, inscricaoId])
+  }, [bolsaId])
 
   if (carregando) return <p role="status">Carregando bolsa...</p>
 
@@ -150,7 +148,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
     )
   }
 
-  const jaInscrito = !!inscricaoId || !!bolsa.minha_inscricao_status
+  const jaInscrito = !!bolsa.minha_inscricao_status
   const mensagemJaInscrito =
     bolsa.minha_inscricao_status === 'RASCUNHO'
       ? 'Você já iniciou uma inscrição para esta bolsa, continue em Minhas Inscrições.'
