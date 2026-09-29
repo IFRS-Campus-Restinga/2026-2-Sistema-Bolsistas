@@ -46,6 +46,10 @@ export function editaisFetch(path = '/', options = {}) {
   return apiFetch(path, options, `${DJANGO_HOST}/api/editais`)
 }
 
+export function inscricoesFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

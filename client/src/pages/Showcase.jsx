@@ -241,7 +241,11 @@ function ShowcaseContent() {
               <TextArea rows={4} placeholder="Observações gerais..." />
             </FormField>
             <FormField label="Documento">
-              <FileField value={fileName} onChange={setFileName} accept=".pdf,.doc,.docx" />
+              <FileField
+                value={fileName}
+                onChange={(file) => setFileName(file?.name ?? '')}
+                accept=".pdf,.doc,.docx"
+              />
             </FormField>
             <FormField label="Campo desabilitado">
               <TextInput type="text" defaultValue="Somente leitura" disabled />
