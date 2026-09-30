@@ -2,7 +2,6 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.utils import timezone
 
 from editais.models import Edital
 from projetos.models import Projeto
@@ -99,11 +98,11 @@ class Bolsa(models.Model):
         if self.status not in STATUS_EDITAVEIS:
             return f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada.'
 
-        fechamento = self.edital.data_fechamento_inscricoes
-        if fechamento and timezone.localdate() > fechamento:
+        if self.edital.inscricoes_encerradas():
             return (
                 "O prazo de inscrições do edital terminou em "
-                f"{fechamento:%d/%m/%Y}; a bolsa não pode mais ser editada."
+                f"{self.edital.data_fechamento_inscricoes:%d/%m/%Y}; "
+                "a bolsa não pode mais ser editada."
             )
         return ""
 

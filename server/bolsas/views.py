@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Usuario
-from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
@@ -66,6 +66,7 @@ def _bolsas_disponiveis_qs():
 
 class BolsasDisponiveisView(generics.ListAPIView):
     serializer_class = BolsaSerializer
+    permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
         return _bolsas_disponiveis_qs()
@@ -73,6 +74,7 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
     serializer_class = BolsaSerializer
+    permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
         return _bolsas_disponiveis_qs()

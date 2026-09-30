@@ -328,7 +328,7 @@ class HomologacaoTests(APITestCase):
                 ).status_code,
                 400,
             )
-            arquivo = SimpleUploadedFile("teste.txt", b"teste")
+            arquivo = SimpleUploadedFile("teste.pdf", b"teste")
             response = self.client.post(
                 reverse("inscricoes:documentos", kwargs={"inscricao_pk": self.inscricao.pk}),
                 {"tipo": "ADICIONAL", "arquivo": arquivo},
@@ -463,7 +463,7 @@ class RecursosTests(APITestCase):
         dados.update(campos)
         if arquivos:
             dados["anexos"] = [
-                SimpleUploadedFile(f"documento{i}.txt", b"corrigido") for i in range(arquivos)
+                SimpleUploadedFile(f"documento{i}.pdf", b"corrigido") for i in range(arquivos)
             ]
         return self.client.post(self.url, dados, format="multipart")
 
@@ -514,7 +514,7 @@ class RecursosTests(APITestCase):
     def test_arquivo_vazio_nao_cria_recurso(self):
         response = self.client.post(
             self.url,
-            {"justificativa": "Motivo", "anexos": [SimpleUploadedFile("vazio.txt", b"")]},
+            {"justificativa": "Motivo", "anexos": [SimpleUploadedFile("vazio.pdf", b"")]},
             format="multipart",
         )
         self.assertEqual(response.status_code, 400)
@@ -815,3 +815,130 @@ class RecursosTests(APITestCase):
         self.julgar(Recurso.objects.get())
         texto = NotificacaoInscricao.objects.order_by("-id").first().mensagem
         self.assertNotIn("#", texto)
+
+
+class UploadDocumentoTests(APITestCase):
+    """Cobre a validação de tipo/tamanho dos arquivos enviados pelo aluno."""
+
+    def setUp(self):
+        self.media = TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        configuracao = override_settings(MEDIA_ROOT=self.media.name)
+        configuracao.enable()
+        self.addCleanup(configuracao.disable)
+
+        self.aluno = Usuario.objects.create_user(
+            username="aluno", email="aluno@example.com", role=Usuario.Role.ALUNO
+        )
+        coordenador = Usuario.objects.create_user(
+            username="coord", email="coord@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        perfil = CoordenadorProjeto.objects.create(usuario=coordenador)
+        projeto = Projeto.objects.create(titulo="Projeto", coordenador_projeto=perfil)
+        hoje = timezone.localdate()
+        edital = Edital.objects.create(
+            nome="Edital",
+            ano_codigo="2026-020",
+            link_documento_oficial="https://example.com/edital",
+            status="EM_VIGOR",
+            data_abertura_inscricoes=hoje - timedelta(days=1),
+            data_fechamento_inscricoes=hoje + timedelta(days=1),
+        )
+        bolsa = Bolsa.objects.create(
+            projeto=projeto,
+            edital=edital,
+            tipo="ENSINO",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status="ABERTA",
+        )
+        self.inscricao = Inscricao.objects.create(aluno=self.aluno, bolsa=bolsa)
+        self.url = reverse("inscricoes:documentos", kwargs={"inscricao_pk": self.inscricao.pk})
+        self.client.force_authenticate(self.aluno)
+
+    def enviar(self, arquivo, tipo="ADICIONAL"):
+        return self.client.post(self.url, {"tipo": tipo, "arquivo": arquivo}, format="multipart")
+
+    def test_aceita_pdf_e_imagem(self):
+        for nome in ["historico.pdf", "foto.jpg", "foto.jpeg", "print.PNG"]:
+            with self.subTest(nome=nome):
+                resposta = self.enviar(SimpleUploadedFile(nome, b"conteudo"))
+                self.assertEqual(resposta.status_code, 201, resposta.data)
+
+    def test_recusa_extensao_nao_permitida(self):
+        for nome in ["documento.txt", "planilha.xlsx", "script.exe", "sem_extensao"]:
+            with self.subTest(nome=nome):
+                resposta = self.enviar(SimpleUploadedFile(nome, b"conteudo"))
+                self.assertEqual(resposta.status_code, 400)
+        self.assertFalse(Documento.objects.exists())
+
+    def test_recusa_arquivo_acima_do_limite(self):
+        grande = SimpleUploadedFile("historico.pdf", b"x" * (10 * 1024 * 1024 + 1))
+        resposta = self.enviar(grande)
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("10 MB", str(resposta.data))
+        self.assertFalse(Documento.objects.exists())
+
+
+class PrazoSemDataDefinidaTests(APITestCase):
+    """Edital sem data de fechamento não deve derrubar os endpoints (antes dava 500)."""
+
+    def setUp(self):
+        self.aluno = Usuario.objects.create_user(
+            username="aluno", email="aluno@example.com", role=Usuario.Role.ALUNO
+        )
+        coordenador = Usuario.objects.create_user(
+            username="coord", email="coord@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        perfil = CoordenadorProjeto.objects.create(usuario=coordenador)
+        projeto = Projeto.objects.create(titulo="Projeto", coordenador_projeto=perfil)
+        self.edital = Edital.objects.create(
+            nome="Edital sem cronograma",
+            ano_codigo="2026-021",
+            link_documento_oficial="https://example.com/edital",
+            status="EM_VIGOR",
+        )
+        self.bolsa = Bolsa.objects.create(
+            projeto=projeto,
+            edital=self.edital,
+            tipo="ENSINO",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status="ABERTA",
+        )
+        self.client.force_authenticate(self.aluno)
+
+    def test_listagem_nao_quebra_e_prazo_nao_esta_encerrado(self):
+        Inscricao.objects.create(aluno=self.aluno, bolsa=self.bolsa)
+        resposta = self.client.get(reverse("inscricoes:lista-criacao"))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(resposta.data[0]["prazo_inscricao_encerrado"])
+
+    def test_edicao_de_rascunho_nao_quebra(self):
+        inscricao = Inscricao.objects.create(aluno=self.aluno, bolsa=self.bolsa)
+        resposta = self.client.patch(
+            reverse("inscricoes:detalhe", kwargs={"pk": inscricao.pk}),
+            {"link_lattes": "https://lattes.cnpq.br/123"},
+            format="json",
+        )
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_cancelamento_nao_quebra(self):
+        inscricao = Inscricao.objects.create(
+            aluno=self.aluno,
+            bolsa=self.bolsa,
+            status=StatusInscricao.PENDENTE,
+            data_envio=timezone.now(),
+        )
+        resposta = self.client.post(reverse("inscricoes:cancelar", kwargs={"pk": inscricao.pk}))
+        self.assertEqual(resposta.status_code, 200)
+        inscricao.refresh_from_db()
+        self.assertEqual(inscricao.status, StatusInscricao.CANCELADA)
+
+    def test_criacao_bloqueada_sem_janela_definida(self):
+        resposta = self.client.post(
+            reverse("inscricoes:lista-criacao"), {"bolsa": self.bolsa.pk}, format="json"
+        )
+        self.assertEqual(resposta.status_code, 400)

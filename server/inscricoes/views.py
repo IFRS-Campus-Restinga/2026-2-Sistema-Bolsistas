@@ -48,8 +48,7 @@ def _garantir_editavel(inscricao):
     if inscricao.status not in (StatusInscricao.RASCUNHO, StatusInscricao.PENDENTE):
         raise ValidationError({"detail": "Uma inscrição já analisada não pode ser alterada."})
 
-    hoje = timezone.localdate()
-    if hoje > inscricao.bolsa.edital.data_fechamento_inscricoes:
+    if inscricao.bolsa.edital.inscricoes_encerradas():
         raise ValidationError({"detail": "O prazo de inscrição deste edital já foi encerrado."})
 
 
@@ -144,7 +143,7 @@ class CancelarInscricaoView(APIView):
         if inscricao.status != StatusInscricao.PENDENTE:
             raise ValidationError({"detail": 'Só é possível cancelar uma inscrição "Pendente".'})
 
-        if timezone.localdate() > inscricao.bolsa.edital.data_fechamento_inscricoes:
+        if inscricao.bolsa.edital.inscricoes_encerradas():
             raise ValidationError({"detail": "O prazo de inscrição deste edital já foi encerrado."})
 
         inscricao.status = StatusInscricao.CANCELADA
@@ -277,8 +276,7 @@ class DecisaoInscricaoView(APIView):
                 {"detail": "O edital precisa estar em vigor para analisar inscrições."}
             )
 
-        fechamento = inscricao.bolsa.edital.data_fechamento_inscricoes
-        if fechamento is None or timezone.localdate() <= fechamento:
+        if not inscricao.bolsa.edital.inscricoes_encerradas():
             raise ValidationError(
                 {
                     "detail": "A homologação e o indeferimento só são permitidos após o encerramento das inscrições."
@@ -371,11 +369,9 @@ def motivo_bloqueio_recurso(inscricao):
         StatusBolsa.EM_SELECAO,
     ]:
         return "O edital ou a bolsa não está disponível para receber recursos."
-    inicio = edital.data_recurso_homologacao_inicio
-    fim = edital.data_recurso_homologacao_fim
-    if fim and timezone.localdate() > fim:
+    if edital.recursos_homologacao_encerrados():
         return "O período de interpor recursos encerrou."
-    if not inicio or not fim or not inicio <= timezone.localdate() <= fim:
+    if not edital.janela_recurso_homologacao_aberta():
         return "O período de recursos da homologação não está aberto."
     if inscricao.recursos.filter(
         etapa=EtapaRecurso.HOMOLOGACAO, status=StatusRecurso.PENDENTE
