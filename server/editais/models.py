@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Edital(models.Model):
@@ -69,6 +70,28 @@ class Edital(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.ano_codigo})"
+
+    def inscricoes_encerradas(self):
+        fechamento = self.data_fechamento_inscricoes
+        return bool(fechamento and timezone.localdate() > fechamento)
+
+    def janela_inscricao_aberta(self):
+        abertura = self.data_abertura_inscricoes
+        fechamento = self.data_fechamento_inscricoes
+        if not abertura or not fechamento:
+            return False
+        return abertura <= timezone.localdate() <= fechamento
+
+    def recursos_homologacao_encerrados(self):
+        fim = self.data_recurso_homologacao_fim
+        return bool(fim and timezone.localdate() > fim)
+
+    def janela_recurso_homologacao_aberta(self):
+        inicio = self.data_recurso_homologacao_inicio
+        fim = self.data_recurso_homologacao_fim
+        if not inicio or not fim:
+            return False
+        return inicio <= timezone.localdate() <= fim
 
 
 class AlteracaoCronograma(models.Model):

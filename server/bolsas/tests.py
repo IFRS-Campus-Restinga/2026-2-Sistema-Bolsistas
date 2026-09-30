@@ -261,3 +261,48 @@ class CancelarBolsaAPITests(APITestCase):
         resposta = self.client.post(reverse("bolsas:cancelar", args=[self.bolsa.id]))
 
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class BolsasDisponiveisPermissaoTests(APITestCase):
+    """As telas de bolsas disponíveis são do Aluno; os demais papéis não devem listar."""
+
+    def setUp(self):
+        self.coordenador_projeto = cria_coordenador_projeto("coord_projeto", "cp@test.com")
+        self.coordenador_area = cria_coordenador_area(
+            "coord_area", "ca@test.com", TipoArea.PESQUISA
+        )
+        self.aluno = cria_usuario("aluno", "aluno@test.com", Usuario.Role.ALUNO)
+        projeto = Projeto.objects.create(
+            titulo="Projeto A",
+            coordenador_projeto=self.coordenador_projeto.perfil_coordenador_projeto,
+        )
+        self.bolsa = Bolsa.objects.create(
+            projeto=projeto,
+            edital=cria_edital(),
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="700.00",
+            status=StatusBolsa.ABERTA,
+        )
+
+    def test_aluno_lista(self):
+        self.client.force_authenticate(user=self.aluno)
+        self.assertEqual(
+            self.client.get(reverse("bolsas:disponiveis")).status_code, status.HTTP_200_OK
+        )
+
+    def test_outros_papeis_nao_listam(self):
+        for usuario in [self.coordenador_projeto, self.coordenador_area]:
+            with self.subTest(role=usuario.role):
+                self.client.force_authenticate(user=usuario)
+                self.assertEqual(
+                    self.client.get(reverse("bolsas:disponiveis")).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+                self.assertEqual(
+                    self.client.get(
+                        reverse("bolsas:disponivel-detalhe", args=[self.bolsa.id])
+                    ).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )

@@ -58,6 +58,9 @@ class TipoDocumento(models.TextChoices):
     ADICIONAL = "ADICIONAL", "Documento adicional"
 
 
+EXTENSOES_DOCUMENTO = ["pdf", "jpg", "jpeg", "png"]
+
+
 def caminho_documento(instance, filename):
     return f"inscricoes/{instance.inscricao_id}/{instance.tipo}/{filename}"
 
@@ -147,3 +150,8 @@ class AnexoRecurso(models.Model):
 
     def __str__(self):
         return self.nome_original
+
+
+@receiver(pre_delete, sender=AnexoRecurso)
+def _remover_anexo_recurso_do_disco(sender, instance, **kwargs):
+    instance.arquivo.delete(save=False)

@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from server.validators import validar_upload
+
 from .models import EXTENSOES_ARQUIVO_EMENTA, TAMANHO_MAX_ARQUIVO_EMENTA_MB, Projeto
 
 
@@ -31,12 +33,4 @@ class ArquivoEmentaSerializer(serializers.Serializer):
     arquivo = serializers.FileField()
 
     def validate_arquivo(self, arquivo):
-        extensao = arquivo.name.rsplit(".", 1)[-1].lower() if "." in arquivo.name else ""
-        if extensao not in EXTENSOES_ARQUIVO_EMENTA:
-            permitidas = ", ".join(f".{ext}" for ext in EXTENSOES_ARQUIVO_EMENTA)
-            raise serializers.ValidationError(f"Formato não permitido. Envie {permitidas}.")
-        if arquivo.size > TAMANHO_MAX_ARQUIVO_EMENTA_MB * 1024 * 1024:
-            raise serializers.ValidationError(
-                f"O arquivo deve ter no máximo {TAMANHO_MAX_ARQUIVO_EMENTA_MB} MB."
-            )
-        return arquivo
+        return validar_upload(arquivo, EXTENSOES_ARQUIVO_EMENTA, TAMANHO_MAX_ARQUIVO_EMENTA_MB)

@@ -12,8 +12,6 @@ import AlunoPage from './pages/AlunoPage'
 import CoordenadorProjetoPage from './pages/CoordenadorProjetoPage'
 import CoordenadorAreaPage from './pages/CoordenadorAreaPage'
 
-import './styles/global.css'
-
 function RedirecionaPorRole() {
   const { me, carregando } = useAuth()
 
