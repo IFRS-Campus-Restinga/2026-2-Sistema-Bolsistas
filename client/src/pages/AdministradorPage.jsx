@@ -9,12 +9,10 @@ import {
   IconBriefcase,
   IconUsers,
 } from '../components'
-import UsuariosPage from './admin/UsuariosPage'
+import UsuariosPage from './UsuariosPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
   { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
 ]
 

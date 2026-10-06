@@ -7,7 +7,7 @@ import {
   IconBriefcase,
   IconUsers,
   IconCheck,
-  IconPaperclip,
+  IconMail,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusCandidatosPage from './MeusCandidatosPage'
@@ -17,7 +17,7 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'projetos', label: 'Meus Projetos', icon: <IconBriefcase /> },
   { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
-  { id: 'convites', label: 'Meus Convites', icon: <IconPaperclip /> },
+  { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {

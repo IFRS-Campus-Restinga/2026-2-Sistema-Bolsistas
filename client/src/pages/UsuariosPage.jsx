@@ -10,9 +10,9 @@ import {
   FormActions,
   DataTable,
   PageHeader,
-} from '../../components'
-import { useConfirm } from '../../components/useConfirm'
-import { useToast } from '../../components/useToast'
+} from '../components'
+import { useConfirm } from '../components/useConfirm'
+import { useToast } from '../components/useToast'
 import {
   deleteEmailCoordenador,
   getEmailsCoordenadores,
@@ -21,7 +21,7 @@ import {
   patchStatusUsuario,
   patchTipoArea,
   postEmailCoordenador,
-} from '../../api'
+} from '../api'
 
 const ROLE_LABEL = {
   ADMINISTRADOR: 'Administrador',

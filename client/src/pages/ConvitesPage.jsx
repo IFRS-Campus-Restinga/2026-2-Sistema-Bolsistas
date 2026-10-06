@@ -111,7 +111,18 @@ export default function ConvitesPage() {
 
   const linhas = convites.map((convite) => [
     convite.projeto_titulo,
-    convite.edital_nome,
+    convite.edital_link_documento_oficial ? (
+      <a
+        key="edital"
+        href={convite.edital_link_documento_oficial}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {convite.edital_nome}
+      </a>
+    ) : (
+      convite.edital_nome
+    ),
     convite.bolsa_tipo_display,
     <Badge key="status" status={convite.status} />,
     <AcoesCell key="acoes" acoes={acoesPorConvite(convite)} />,
@@ -160,7 +171,18 @@ export default function ConvitesPage() {
             <strong>Projeto:</strong> {detalhe.projeto_titulo}
           </p>
           <p>
-            <strong>Edital:</strong> {detalhe.edital_nome}
+            <strong>Edital:</strong>{' '}
+            {detalhe.edital_link_documento_oficial ? (
+              <a
+                href={detalhe.edital_link_documento_oficial}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {detalhe.edital_nome}
+              </a>
+            ) : (
+              detalhe.edital_nome
+            )}
           </p>
           <p>
             <strong>Status:</strong> <Badge status={detalhe.status} />

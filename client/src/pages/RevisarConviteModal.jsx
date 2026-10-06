@@ -110,6 +110,23 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
           convite && (
             <>
               <p>
+                <strong>Projeto:</strong> {convite.projeto_titulo}
+              </p>
+              <p>
+                <strong>Edital:</strong>{' '}
+                {convite.edital_link_documento_oficial ? (
+                  <a
+                    href={convite.edital_link_documento_oficial}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {convite.edital_nome}
+                  </a>
+                ) : (
+                  convite.edital_nome
+                )}
+              </p>
+              <p>
                 <strong>Aluno:</strong> {convite.aluno_nome}
               </p>
               <p>
@@ -163,7 +180,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
       </div>
       <FormActions>
         {!rejeitando && (
-          <Button onClick={fechar} disabled={salvando}>
+          <Button variant="danger" onClick={fechar} disabled={salvando}>
             Fechar
           </Button>
         )}

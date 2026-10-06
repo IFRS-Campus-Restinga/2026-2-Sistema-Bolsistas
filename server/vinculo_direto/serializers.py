@@ -33,6 +33,9 @@ class ConviteSerializer(serializers.ModelSerializer):
     bolsa_tipo_display = serializers.CharField(source="bolsa.get_tipo_display", read_only=True)
     projeto_titulo = serializers.CharField(source="bolsa.projeto.titulo", read_only=True)
     edital_nome = serializers.CharField(source="bolsa.edital.nome", read_only=True)
+    edital_link_documento_oficial = serializers.URLField(
+        source="bolsa.edital.link_documento_oficial", read_only=True
+    )
     aluno_nome = serializers.SerializerMethodField()
     aluno_email = serializers.EmailField(source="aluno.email", read_only=True)
     documentos = DocumentoConviteSerializer(many=True, read_only=True)
@@ -44,6 +47,7 @@ class ConviteSerializer(serializers.ModelSerializer):
             "bolsa",
             "projeto_titulo",
             "edital_nome",
+            "edital_link_documento_oficial",
             "bolsa_tipo_display",
             "aluno",
             "aluno_nome",

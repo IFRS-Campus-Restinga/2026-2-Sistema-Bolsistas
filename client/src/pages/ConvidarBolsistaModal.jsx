@@ -65,7 +65,14 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
 
       <p style={{ marginBottom: 16 }}>
         Convite de vínculo direto para a bolsa do projeto <strong>{bolsa.projeto_titulo}</strong> (
-        {bolsa.edital_nome}).
+        {bolsa.edital_link_documento_oficial ? (
+          <a href={bolsa.edital_link_documento_oficial} target="_blank" rel="noopener noreferrer">
+            {bolsa.edital_nome}
+          </a>
+        ) : (
+          bolsa.edital_nome
+        )}
+        ).
       </p>
 
       {alunoSelecionado ? (
@@ -130,7 +137,7 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
       )}
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar} disabled={enviando}>
+        <Button variant="danger" onClick={onFechar} disabled={enviando}>
           Cancelar
         </Button>
         <Button variant="accent" onClick={enviarConvite} disabled={enviando || !alunoSelecionado}>

@@ -281,6 +281,18 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
         </Button>
       </FormField>
 
+      <p style={{ fontSize: 14, marginTop: 8 }}>
+        Antes de enviar, leia com atenção o edital{' '}
+        {convite.edital_link_documento_oficial ? (
+          <a href={convite.edital_link_documento_oficial} target="_blank" rel="noopener noreferrer">
+            <strong>{convite.edital_nome}</strong>
+          </a>
+        ) : (
+          <strong>{convite.edital_nome}</strong>
+        )}
+        , que define prazos, critérios de avaliação e regras do processo.
+      </p>
+
       <label
         style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, marginTop: 8 }}
       >
@@ -293,7 +305,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
       </label>
 
       <FormActions>
-        <Button variant="outline" onClick={fechar} disabled={processando}>
+        <Button variant="danger" onClick={fechar} disabled={processando}>
           Fechar
         </Button>
         <Button variant="outline" onClick={salvarEFechar} disabled={processando}>

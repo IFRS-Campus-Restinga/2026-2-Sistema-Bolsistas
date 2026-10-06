@@ -9,6 +9,8 @@ import {
   IconBriefcase,
   IconHome,
   IconClipboardList,
+  IconMessageCircle,
+  IconMail,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
@@ -19,9 +21,9 @@ import ConvitesPage from './ConvitesPage'
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
-  { id: 'recursos', label: 'Meus Recursos', icon: <IconClipboardList /> },
+  { id: 'recursos', label: 'Meus Recursos', icon: <IconMessageCircle /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
-  { id: 'convites', label: 'Convites', icon: <IconClipboardList /> },
+  { id: 'convites', label: 'Convites', icon: <IconMail /> },
 ]
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
