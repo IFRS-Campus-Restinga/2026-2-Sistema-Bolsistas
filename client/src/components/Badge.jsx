@@ -32,6 +32,11 @@ const STATUS_STYLE = {
   EXPIRADO: 'badge--gray',
   EM_VIGOR: 'badge--green',
   ARQUIVADO: 'badge--gray',
+  EM_PREENCHIMENTO: 'badge--blue',
+  ENVIADO: 'badge--yellow',
+  APROVADO: 'badge--green',
+  REJEITADO: 'badge--red',
+  RECUSADO: 'badge--red',
 }
 
 const STATUS_LABEL = {
@@ -60,6 +65,11 @@ const STATUS_LABEL = {
   EXPIRADO: 'Expirado',
   EM_VIGOR: 'Em vigor',
   ARQUIVADO: 'Arquivado',
+  EM_PREENCHIMENTO: 'Em Preenchimento',
+  ENVIADO: 'Documentos Enviados',
+  APROVADO: 'Aprovado',
+  REJEITADO: 'Rejeitado',
+  RECUSADO: 'Recusado',
 }
 
 export function Badge({ status }) {

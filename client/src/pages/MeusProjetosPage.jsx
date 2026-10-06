@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { editaisFetch, projetosFetch, bolsasFetch } from '../api'
+import { editaisFetch, projetosFetch, bolsasFetch, vinculoDiretoFetch } from '../api'
 import {
   AcoesCell,
   Alert,
@@ -22,6 +22,7 @@ import {
 import { enviarEmentaProjeto, validarArquivoEmenta } from '../utils/ementaProjeto'
 import EmentaProjetoCard from './EmentaProjetoCard'
 import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
+import ConvidarBolsistaModal from './ConvidarBolsistaModal'
 
 const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
 
@@ -317,6 +318,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [modalAberto, setModalAberto] = useState(false)
   const [bolsaEditando, setBolsaEditando] = useState(null) // null = nova solicitação
   const [bolsaEtapas, setBolsaEtapas] = useState(null) // bolsa com o modal de etapas aberto
+  const [bolsaConvidar, setBolsaConvidar] = useState(null) // bolsa com o modal de convite aberto
+  const [bolsasElegiveisIds, setBolsasElegiveisIds] = useState(new Set())
   const [form, setForm] = useState(BOLSA_INICIAL)
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
@@ -327,10 +330,11 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
     async function carregarTudo() {
       try {
-        const [resProjeto, resBolsas, resEditais] = await Promise.all([
+        const [resProjeto, resBolsas, resEditais, resElegiveis] = await Promise.all([
           projetosFetch(`/${projetoId}/`),
           bolsasFetch('/'),
           editaisFetch('/'),
+          vinculoDiretoFetch('/bolsas-elegiveis/'),
         ])
 
         if (!resProjeto.ok) throw new Error('Não foi possível carregar o projeto.')
@@ -338,11 +342,13 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         const dadosProjeto = await resProjeto.json()
         const todasBolsas = resBolsas.ok ? await resBolsas.json() : []
         const todosEditais = resEditais.ok ? await resEditais.json() : []
+        const elegiveis = resElegiveis.ok ? await resElegiveis.json() : []
 
         if (!ativo) return
         setProjeto(dadosProjeto)
         setBolsas(todasBolsas.filter((bolsa) => bolsa.projeto === projetoId))
         setEditais(todosEditais.filter((edital) => edital.status === 'EM_VIGOR'))
+        setBolsasElegiveisIds(new Set(elegiveis.map((bolsa) => bolsa.id)))
       } catch (e) {
         if (ativo) setErro(e.message)
       } finally {
@@ -516,6 +522,15 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         ...(bolsa.pode_editar
           ? [{ label: 'Editar', variant: 'outline', onClick: () => abrirModalEditarBolsa(bolsa) }]
           : []),
+        ...(bolsasElegiveisIds.has(bolsa.id)
+          ? [
+              {
+                label: 'Convidar Bolsista',
+                variant: 'accent',
+                onClick: () => setBolsaConvidar(bolsa),
+              },
+            ]
+          : []),
         ...(podeCancelar(bolsa)
           ? [
               {
@@ -561,7 +576,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
       {avisoSemEditais && (
         <Alert tone="warning">
-          Não há editais em vigor no momento — não é possível solicitar uma nova bolsa até que um
+          Não há editais em vigor no momento, não é possível solicitar uma nova bolsa até que um
           edital seja publicado.
         </Alert>
       )}
@@ -581,6 +596,22 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
               atuais.map((item) => (item.id === atualizada.id ? atualizada : item))
             )
           }
+        />
+      )}
+
+      {bolsaConvidar && (
+        <ConvidarBolsistaModal
+          bolsa={bolsaConvidar}
+          onFechar={() => setBolsaConvidar(null)}
+          onCriado={() => {
+            setBolsasElegiveisIds((atuais) => {
+              const copia = new Set(atuais)
+              copia.delete(bolsaConvidar.id)
+              return copia
+            })
+            setBolsaConvidar(null)
+            toast({ message: 'Convite enviado ao aluno.', tone: 'success' })
+          }}
         />
       )}
 
