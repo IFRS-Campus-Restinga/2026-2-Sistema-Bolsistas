@@ -62,18 +62,40 @@ EXTENSOES_DOCUMENTO = ["pdf", "jpg", "jpeg", "png"]
 
 
 def caminho_documento(instance, filename):
-    return f"inscricoes/{instance.inscricao_id}/{instance.tipo}/{filename}"
+    if instance.inscricao_id:
+        return f"inscricoes/{instance.inscricao_id}/{instance.tipo}/{filename}"
+    return f"convites/{instance.convite_id}/{instance.tipo}/{filename}"
 
 
 class Documento(models.Model):
-    inscricao = models.ForeignKey(Inscricao, on_delete=models.CASCADE, related_name="documentos")
+    inscricao = models.ForeignKey(
+        Inscricao, on_delete=models.CASCADE, related_name="documentos", null=True, blank=True
+    )
+    convite = models.ForeignKey(
+        "vinculo_direto.ConviteVinculoDireto",
+        on_delete=models.CASCADE,
+        related_name="documentos",
+        null=True,
+        blank=True,
+    )
     tipo = models.CharField(max_length=25, choices=TipoDocumento.choices)
     nome_original = models.CharField(max_length=255, blank=True, default="")
     arquivo = models.FileField(upload_to=caminho_documento)
     enviado_em = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(inscricao__isnull=False, convite__isnull=True)
+                    | Q(inscricao__isnull=True, convite__isnull=False)
+                ),
+                name="documento_pertence_a_inscricao_xor_convite",
+            )
+        ]
+
     def __str__(self):
-        return f"{self.get_tipo_display()} - {self.inscricao_id}"
+        return f"{self.get_tipo_display()} - {self.inscricao_id or self.convite_id}"
 
 
 @receiver(pre_delete, sender=Documento)
