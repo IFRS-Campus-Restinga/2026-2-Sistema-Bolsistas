@@ -275,7 +275,7 @@ function EtapaFormModal({ bolsaId, etapaInicial, onFechar, onSalva }) {
       </FormField>
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar} disabled={salvando}>
+        <Button variant="danger" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
         <Button

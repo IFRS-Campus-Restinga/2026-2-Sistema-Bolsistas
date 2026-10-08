@@ -180,7 +180,11 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
       </div>
       <FormActions>
         {!rejeitando && (
-          <Button variant="danger" onClick={fechar} disabled={salvando}>
+          <Button
+            variant={convite?.status === 'ENVIADO' ? 'outline' : 'danger'}
+            onClick={fechar}
+            disabled={salvando}
+          >
             Fechar
           </Button>
         )}

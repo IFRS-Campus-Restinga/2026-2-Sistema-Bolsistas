@@ -252,7 +252,7 @@ function ListaProjetos({ onGerenciar }) {
             />
           </FormField>
           <FormActions>
-            <Button variant="outline" onClick={() => setModalAberto(false)} disabled={salvando}>
+            <Button variant="danger" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
             </Button>
             <Button variant="accent" onClick={criarProjeto} disabled={salvando || !titulo}>
@@ -751,7 +751,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
           </FormField>
 
           <FormActions>
-            <Button variant="outline" onClick={() => setModalAberto(false)} disabled={salvando}>
+            <Button variant="danger" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
             </Button>
             <Button

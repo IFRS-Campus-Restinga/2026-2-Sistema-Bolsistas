@@ -26,7 +26,10 @@ export function ConfirmProvider({ children }) {
         <Modal title={opts.title} onClose={() => setOpts(null)} width={400}>
           <p className="confirm__message">{opts.message}</p>
           <FormActions>
-            <Button variant="outline" onClick={() => setOpts(null)}>
+            <Button
+              variant={opts.tone === 'danger' ? 'outline' : 'danger'}
+              onClick={() => setOpts(null)}
+            >
               Cancelar
             </Button>
             <Button

@@ -300,7 +300,7 @@ function ComprovanteModal({ inscricao, onFechar }) {
       )}
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar}>
+        <Button variant="danger" onClick={onFechar}>
           Fechar
         </Button>
       </FormActions>

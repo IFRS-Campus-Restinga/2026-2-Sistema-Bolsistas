@@ -175,7 +175,7 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
                     >
                       {salvando ? 'Salvando...' : 'Confirmar indeferimento'}
                     </Button>
-                    <Button onClick={fechar} disabled={salvando}>
+                    <Button variant="outline" onClick={fechar} disabled={salvando}>
                       Fechar
                     </Button>
                   </FormActions>
@@ -187,7 +187,11 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
       </div>
       <FormActions>
         {!indeferindo && (
-          <Button onClick={fechar} disabled={salvando}>
+          <Button
+            variant={candidato?.status === 'PENDENTE' ? 'outline' : 'danger'}
+            onClick={fechar}
+            disabled={salvando}
+          >
             Fechar
           </Button>
         )}

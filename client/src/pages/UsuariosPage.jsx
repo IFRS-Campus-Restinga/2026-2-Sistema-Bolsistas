@@ -359,7 +359,7 @@ export default function UsuariosPage() {
           )}
           {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
           <FormActions>
-            <Button variant="outline" onClick={fecharModalUsuario}>
+            <Button variant="danger" onClick={fecharModalUsuario}>
               Cancelar
             </Button>
             {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
@@ -405,7 +405,7 @@ export default function UsuariosPage() {
           </FormField>
           {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>
-            <Button variant="outline" onClick={fecharModalEmail}>
+            <Button variant="danger" onClick={fecharModalEmail}>
               Cancelar
             </Button>
             <Button
