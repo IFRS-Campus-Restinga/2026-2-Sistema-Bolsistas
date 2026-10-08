@@ -29,7 +29,7 @@ def _convites_do_coordenador(usuario):
 
 
 def _garantir_editavel(convite):
-    if convite.status != StatusConvite.EM_PREENCHIMENTO:
+    if convite.status not in (StatusConvite.EM_PREENCHIMENTO, StatusConvite.ENVIADO):
         raise ValidationError(
             {"detail": "Este convite não está disponível para edição de documentos."}
         )

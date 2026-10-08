@@ -4,7 +4,9 @@ import {
   AcoesCell,
   Alert,
   Badge,
+  Button,
   DataTable,
+  FormActions,
   Modal,
   PageHeader,
   useConfirm,
@@ -22,7 +24,7 @@ export default function ConvitesPage() {
   const [tentativa, setTentativa] = useState(0)
 
   const [edicaoAberta, setEdicaoAberta] = useState(null)
-  const [detalhe, setDetalhe] = useState(null)
+  const [comprovante, setComprovante] = useState(null)
 
   useEffect(() => {
     let ativo = true
@@ -106,7 +108,13 @@ export default function ConvitesPage() {
         },
       ]
     }
-    return [{ label: 'Ver Detalhes', onClick: () => setDetalhe(convite) }]
+    if (convite.status === 'ENVIADO') {
+      return [
+        { label: 'Ver Comprovante', onClick: () => setComprovante(convite) },
+        { label: 'Editar Documentação', onClick: () => setEdicaoAberta(convite) },
+      ]
+    }
+    return [{ label: 'Ver Comprovante', onClick: () => setComprovante(convite) }]
   }
 
   const linhas = convites.map((convite) => [
@@ -165,36 +173,75 @@ export default function ConvitesPage() {
         />
       )}
 
-      {detalhe && (
-        <Modal title="Detalhes do convite" onClose={() => setDetalhe(null)} width={520}>
-          <p>
-            <strong>Projeto:</strong> {detalhe.projeto_titulo}
-          </p>
-          <p>
-            <strong>Edital:</strong>{' '}
-            {detalhe.edital_link_documento_oficial ? (
-              <a
-                href={detalhe.edital_link_documento_oficial}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {detalhe.edital_nome}
-              </a>
-            ) : (
-              detalhe.edital_nome
-            )}
-          </p>
-          <p>
-            <strong>Status:</strong> <Badge status={detalhe.status} />
-          </p>
-          {detalhe.status === 'REJEITADO' && detalhe.justificativa_rejeicao && (
-            <Alert tone="error">Motivo: {detalhe.justificativa_rejeicao}</Alert>
-          )}
-          {detalhe.status === 'APROVADO' && (
-            <Alert tone="success">Vínculo direto aprovado — bolsa efetivada.</Alert>
-          )}
-        </Modal>
+      {comprovante && (
+        <ComprovanteConviteModal convite={comprovante} onFechar={() => setComprovante(null)} />
       )}
     </>
+  )
+}
+
+function ComprovanteConviteModal({ convite, onFechar }) {
+  return (
+    <Modal title={`Comprovante — ${convite.projeto_titulo}`} onClose={onFechar} width={500}>
+      <p>
+        <strong>Edital:</strong>{' '}
+        {convite.edital_link_documento_oficial ? (
+          <a href={convite.edital_link_documento_oficial} target="_blank" rel="noopener noreferrer">
+            {convite.edital_nome}
+          </a>
+        ) : (
+          convite.edital_nome
+        )}
+      </p>
+      <p>
+        <strong>Status:</strong> <Badge status={convite.status} />
+      </p>
+      <p>
+        <strong>Enviada em:</strong>{' '}
+        {convite.data_envio_documentos
+          ? new Date(convite.data_envio_documentos).toLocaleString('pt-BR')
+          : '—'}
+      </p>
+
+      {convite.status === 'REJEITADO' && convite.justificativa_rejeicao && (
+        <Alert tone="error">Motivo da rejeição: {convite.justificativa_rejeicao}</Alert>
+      )}
+      {convite.status === 'APROVADO' && (
+        <Alert tone="success">Vínculo direto aprovado — bolsa efetivada.</Alert>
+      )}
+      {convite.data_decisao && (
+        <p>Decisão registrada em {new Date(convite.data_decisao).toLocaleString('pt-BR')}.</p>
+      )}
+
+      <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
+      {convite.documentos.length ? (
+        <ul style={{ paddingLeft: 20 }}>
+          {convite.documentos.map((doc) => (
+            <li key={doc.id}>
+              <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
+                {doc.tipo_display}: {doc.nome_original}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Nenhum documento enviado.</p>
+      )}
+
+      {convite.link_lattes && (
+        <p>
+          <strong>Lattes:</strong>{' '}
+          <a href={convite.link_lattes} target="_blank" rel="noopener noreferrer">
+            {convite.link_lattes}
+          </a>
+        </p>
+      )}
+
+      <FormActions>
+        <Button variant="danger" onClick={onFechar}>
+          Fechar
+        </Button>
+      </FormActions>
+    </Modal>
   )
 }

@@ -240,6 +240,45 @@ class FluxoAlunoTests(VinculoDiretoTestBase):
         self.client.force_authenticate(outro)
         self.assertEqual(self.client.get(self.url("convite-detalhe")).status_code, 404)
 
+    def test_edita_documentos_apos_envio_e_antes_da_aprovacao(self):
+        self.client.post(self.url("convite-aceitar"))
+        self.client.patch(self.url("convite-detalhe"), {"termos_aceitos": True}, format="json")
+        for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
+            self.convite.documentos.create(tipo=tipo, arquivo="teste.pdf")
+        self.client.post(self.url("convite-enviar"))
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
+
+        response = self.client.patch(
+            self.url("convite-detalhe"), {"link_lattes": "http://lattes.cnpq.br/999"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.link_lattes, "http://lattes.cnpq.br/999")
+
+        historico = self.convite.documentos.get(tipo=TipoDocumento.HISTORICO_ESCOLAR)
+        response = self.client.delete(
+            reverse("vinculo_direto:documento-detalhe", kwargs={"pk": historico.pk})
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(
+            self.convite.documentos.filter(tipo=TipoDocumento.HISTORICO_ESCOLAR).count(), 0
+        )
+
+    def test_nao_edita_documentos_apos_aprovacao(self):
+        self.client.post(self.url("convite-aceitar"))
+        self.client.patch(self.url("convite-detalhe"), {"termos_aceitos": True}, format="json")
+        for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
+            self.convite.documentos.create(tipo=tipo, arquivo="teste.pdf")
+        self.client.post(self.url("convite-enviar"))
+        self.convite.status = StatusConvite.APROVADO
+        self.convite.save()
+
+        response = self.client.patch(
+            self.url("convite-detalhe"), {"link_lattes": "http://lattes.cnpq.br/999"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
 
 class DecisaoCoordenadorTests(VinculoDiretoTestBase):
     def setUp(self):

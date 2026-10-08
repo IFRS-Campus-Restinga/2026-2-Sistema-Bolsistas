@@ -29,6 +29,7 @@ function extrairErro(corpo, mensagemPadrao) {
 export default function PreencherConviteModal({ convite, onFechar, onAtualizado, onEnviado }) {
   const confirmar = useConfirm()
   const toast = useToast()
+  const jaEnviado = convite.status === 'ENVIADO'
 
   const [termosAceitos, setTermosAceitos] = useState(convite.termos_aceitos)
   const [linkLattes, setLinkLattes] = useState(convite.link_lattes || '')
@@ -163,7 +164,10 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
   }
 
   async function salvarEFechar() {
-    if (await salvar('Alterações salvas. Continue depois em Convites.')) onFechar()
+    const mensagem = jaEnviado
+      ? 'Alterações salvas. O coordenador verá a versão mais recente.'
+      : 'Alterações salvas. Continue depois em Convites.'
+    if (await salvar(mensagem)) onFechar()
   }
 
   async function enviar() {
@@ -215,8 +219,22 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
   const podeAdicionarExtra = adicionais.length < MAX_DOCUMENTOS_ADICIONAIS
 
   return (
-    <Modal title={`Convite: ${convite.projeto_titulo}`} onClose={fechar} width={600}>
+    <Modal
+      title={
+        jaEnviado
+          ? `Editar documentação: ${convite.projeto_titulo}`
+          : `Convite: ${convite.projeto_titulo}`
+      }
+      onClose={fechar}
+      width={600}
+    >
       {erro && <Alert tone="error">{erro}</Alert>}
+      {jaEnviado && (
+        <Alert tone="success">
+          Documentação já enviada ao coordenador. Você ainda pode editar enquanto ela não for
+          aprovada.
+        </Alert>
+      )}
       {convite.justificativa_rejeicao && (
         <Alert tone="warning">
           O coordenador solicitou reenvio: {convite.justificativa_rejeicao}
@@ -308,16 +326,24 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
         <Button variant="danger" onClick={fechar} disabled={processando}>
           Fechar
         </Button>
-        <Button variant="outline" onClick={salvarEFechar} disabled={processando}>
-          Salvar
-        </Button>
-        <Button
-          variant="accent"
-          onClick={pedirConfirmacaoEnvio}
-          disabled={processando || !termosAceitos}
-        >
-          {processando ? 'Enviando...' : 'Enviar Documentação'}
-        </Button>
+        {jaEnviado ? (
+          <Button variant="accent" onClick={salvarEFechar} disabled={processando}>
+            {processando ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" onClick={salvarEFechar} disabled={processando}>
+              Salvar
+            </Button>
+            <Button
+              variant="accent"
+              onClick={pedirConfirmacaoEnvio}
+              disabled={processando || !termosAceitos}
+            >
+              {processando ? 'Enviando...' : 'Enviar Documentação'}
+            </Button>
+          </>
+        )}
       </FormActions>
     </Modal>
   )
