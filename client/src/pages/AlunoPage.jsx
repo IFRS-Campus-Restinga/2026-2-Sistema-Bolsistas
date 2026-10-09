@@ -9,17 +9,20 @@ import {
   IconBriefcase,
   IconHome,
   IconClipboardList,
+  IconBank,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
 import MinhasInscricoesPage from './MinhasInscricoesPage'
 import MeusRecursosPage from './MeusRecursosPage'
+import DadosBancariosPage from './DadosBancariosPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
   { id: 'recursos', label: 'Meus Recursos', icon: <IconClipboardList /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
+  { id: 'dados-bancarios', label: 'Dados Bancários', icon: <IconBank /> },
 ]
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
@@ -109,6 +112,8 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
         <MinhasInscricoesPage onHistorico={() => setActive('recursos')} />
       )}
       {active === 'recursos' && <MeusRecursosPage />}
+
+      {active === 'dados-bancarios' && <DadosBancariosPage />}
     </Layout>
   )
 }

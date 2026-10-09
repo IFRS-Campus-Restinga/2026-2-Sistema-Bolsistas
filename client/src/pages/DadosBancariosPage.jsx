@@ -1,0 +1,210 @@
+import { useEffect, useState } from 'react'
+import { dadosBancariosFetch } from '../api'
+import {
+  Alert,
+  Button,
+  FileField,
+  FormActions,
+  FormField,
+  PageHeader,
+  TextInput,
+} from '../components'
+
+function mensagemErro(dados, mensagemPadrao) {
+  if (dados?.detail) return dados.detail
+
+  const mensagens = Object.values(dados || {})
+    .flat()
+    .filter((item) => typeof item === 'string')
+
+  return mensagens.join(' ') || mensagemPadrao
+}
+
+export default function DadosBancariosPage() {
+  const [form, setForm] = useState({
+    banco: '',
+    agencia: '',
+    conta: '',
+  })
+  const [comprovante, setComprovante] = useState(null)
+  const [comprovanteUrl, setComprovanteUrl] = useState(null)
+  const [cadastroCompleto, setCadastroCompleto] = useState(false)
+  const [carregando, setCarregando] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [sucesso, setSucesso] = useState('')
+
+  useEffect(() => {
+    let ativo = true
+
+    async function carregar() {
+      try {
+        const response = await dadosBancariosFetch('/meus/')
+        const dados = await response.json().catch(() => ({}))
+
+        if (!response.ok) {
+          throw new Error(mensagemErro(dados, 'Não foi possível carregar os dados bancários.'))
+        }
+
+        if (!ativo) return
+
+        setForm({
+          banco: dados.banco || '',
+          agencia: dados.agencia || '',
+          conta: dados.conta || '',
+        })
+        setComprovanteUrl(dados.comprovante_url)
+        setCadastroCompleto(dados.cadastro_completo)
+      } catch (error) {
+        if (ativo) setErro(error.message)
+      } finally {
+        if (ativo) setCarregando(false)
+      }
+    }
+
+    carregar()
+
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  function atualizarCampo(event) {
+    const { name, value } = event.target
+
+    setForm((atual) => ({
+      ...atual,
+      [name]: value,
+    }))
+    setErro('')
+    setSucesso('')
+  }
+
+  async function salvar(event) {
+    event.preventDefault()
+    setSalvando(true)
+    setErro('')
+    setSucesso('')
+
+    try {
+      const body = new FormData()
+      body.append('banco', form.banco)
+      body.append('agencia', form.agencia)
+      body.append('conta', form.conta)
+
+      if (comprovante) {
+        body.append('comprovante', comprovante)
+      }
+
+      const response = await dadosBancariosFetch('/meus/', {
+        method: 'PUT',
+        body,
+      })
+      const dados = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(mensagemErro(dados, 'Não foi possível salvar os dados bancários.'))
+      }
+
+      setForm({
+        banco: dados.banco,
+        agencia: dados.agencia,
+        conta: dados.conta,
+      })
+      setComprovante(null)
+      setComprovanteUrl(dados.comprovante_url)
+      setCadastroCompleto(dados.cadastro_completo)
+      setSucesso('Dados bancários salvos com sucesso.')
+    } catch (error) {
+      setErro(error.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <>
+      <PageHeader title="Dados Bancários" />
+
+      <p style={{ maxWidth: 760 }}>
+        Estes dados são obrigatórios antes que o Coordenador de Projeto possa indicá-lo como titular
+        de uma bolsa. A conta cadastrada precisa ser de sua própria titularidade.
+      </p>
+
+      {!cadastroCompleto && !carregando && (
+        <Alert tone="error">
+          Banco, agência e conta ainda não foram totalmente preenchidos. Complete os três campos
+          para poder ser indicado como titular de uma bolsa.
+        </Alert>
+      )}
+
+      {erro && <Alert tone="error">{erro}</Alert>}
+      {sucesso && <Alert tone="success">{sucesso}</Alert>}
+
+      {carregando ? (
+        <p role="status">Carregando dados bancários...</p>
+      ) : (
+        <form
+          onSubmit={salvar}
+          style={{
+            maxWidth: 420,
+            marginTop: 16,
+            padding: 22,
+            background: '#fff',
+            borderRadius: 12,
+          }}
+        >
+          <FormField label="Banco">
+            <TextInput
+              name="banco"
+              value={form.banco}
+              placeholder="Ex.: Banco do Brasil"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              required
+            />
+          </FormField>
+
+          <FormField label="Agência">
+            <TextInput
+              name="agencia"
+              value={form.agencia}
+              placeholder="Ex.: 1234-5"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              required
+            />
+          </FormField>
+
+          <FormField label="Conta">
+            <TextInput
+              name="conta"
+              value={form.conta}
+              placeholder="Ex.: 67890-1"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              required
+            />
+          </FormField>
+
+          <FormField label="Comprovante bancário (opcional: cartão, extrato etc.)">
+            <FileField
+              value={comprovante?.name || ''}
+              onChange={setComprovante}
+              accept=".pdf,.jpg,.jpeg,.png"
+              disabled={salvando}
+            />
+
+            {comprovanteUrl && !comprovante && <a href={comprovanteUrl}>Ver comprovante enviado</a>}
+          </FormField>
+
+          <FormActions>
+            <Button type="submit" variant="accent" disabled={salvando}>
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </FormActions>
+        </form>
+      )}
+    </>
+  )
+}

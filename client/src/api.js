@@ -66,6 +66,10 @@ export function inscricoesFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
 }
 
+export function dadosBancariosFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/dados-bancarios`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "projetos",
     "bolsas",
     "inscricoes",
+    "dados_bancarios",
 ]
 
 MIDDLEWARE = [

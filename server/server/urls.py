@@ -30,6 +30,7 @@ urlpatterns = [
     path("api/projetos/", include("projetos.urls")),
     path("api/bolsas/", include("bolsas.urls")),
     path("api/inscricoes/", include("inscricoes.urls")),
+    path("api/dados-bancarios/", include("dados_bancarios.urls")),
 ]
 
 # Em dev o Django serve os uploads; precisa vir ANTES do catch-all do React,
