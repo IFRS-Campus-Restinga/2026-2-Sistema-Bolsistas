@@ -22,6 +22,9 @@ function mensagemErro(dados, mensagemPadrao) {
 
 export default function DadosBancariosPage() {
   const [form, setForm] = useState({
+    matricula: '',
+    curso: '',
+    cpf: '',
     banco: '',
     agencia: '',
     conta: '',
@@ -49,6 +52,9 @@ export default function DadosBancariosPage() {
         if (!ativo) return
 
         setForm({
+          matricula: dados.matricula || '',
+          curso: dados.curso || '',
+          cpf: dados.cpf || '',
           banco: dados.banco || '',
           agencia: dados.agencia || '',
           conta: dados.conta || '',
@@ -88,6 +94,9 @@ export default function DadosBancariosPage() {
 
     try {
       const body = new FormData()
+      body.append('matricula', form.matricula)
+      body.append('curso', form.curso)
+      body.append('cpf', form.cpf)
       body.append('banco', form.banco)
       body.append('agencia', form.agencia)
       body.append('conta', form.conta)
@@ -107,6 +116,9 @@ export default function DadosBancariosPage() {
       }
 
       setForm({
+        matricula: dados.matricula,
+        curso: dados.curso,
+        cpf: dados.cpf,
         banco: dados.banco,
         agencia: dados.agencia,
         conta: dados.conta,
@@ -133,8 +145,8 @@ export default function DadosBancariosPage() {
 
       {!cadastroCompleto && !carregando && (
         <Alert tone="error">
-          Banco, agência e conta ainda não foram totalmente preenchidos. Complete os três campos
-          para poder ser indicado como titular de uma bolsa.
+          Matrícula, curso, CPF, banco, agência e conta devem ser preenchidos para concluir o
+          cadastro.
         </Alert>
       )}
 
@@ -154,6 +166,42 @@ export default function DadosBancariosPage() {
             borderRadius: 12,
           }}
         >
+          <FormField label="Matrícula">
+            <TextInput
+              name="matricula"
+              value={form.matricula}
+              placeholder="Ex.: 2026000001"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              maxLength={11}
+              required
+            />
+          </FormField>
+
+          <FormField label="Curso">
+            <TextInput
+              name="curso"
+              value={form.curso}
+              placeholder="Ex.: Engenharia de Software"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              maxLength={150}
+              required
+            />
+          </FormField>
+
+          <FormField label="CPF">
+            <TextInput
+              name="cpf"
+              value={form.cpf}
+              placeholder="Ex.: 000.000.000-00"
+              onChange={atualizarCampo}
+              disabled={salvando}
+              maxLength={14}
+              required
+            />
+          </FormField>
+
           <FormField label="Banco">
             <TextInput
               name="banco"

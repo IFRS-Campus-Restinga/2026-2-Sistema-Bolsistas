@@ -43,11 +43,16 @@ class MeusDadosBancariosView(APIView):
         ).first()
 
         if dados is None:
+            aluno = request.user.perfil_aluno
+
             return Response(
                 {
                     "id": None,
                     "aluno_id": request.user.id,
                     "aluno_nome": request.user.nome,
+                    "matricula": aluno.matricula or "",
+                    "curso": aluno.curso,
+                    "cpf": aluno.cpf or "",
                     "banco": "",
                     "agencia": "",
                     "conta": "",

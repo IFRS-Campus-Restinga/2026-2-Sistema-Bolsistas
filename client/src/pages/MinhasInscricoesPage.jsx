@@ -156,6 +156,12 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     return []
   }
 
+  function recursoHomologacaoDeferido(mensagem = '') {
+    const texto = mensagem.toLocaleLowerCase('pt-BR')
+
+    return texto.includes('recurso de homologação') && texto.includes('foi deferido')
+  }
+
   const [lendoNotificacao, setLendoNotificacao] = useState(null)
 
   async function marcarLida(id) {
@@ -201,22 +207,31 @@ export default function MinhasInscricoesPage({ onHistorico }) {
       {notificacoes.length > 0 && (
         <section aria-label="Notificações das inscrições">
           <h3>Novas notificações</h3>
-          {notificacoes.map((item) => (
-            <Alert key={item.id} tone="warning">
-              <p>{item.mensagem}</p>
-              <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
-              <Button
-                size="sm"
-                disabled={lendoNotificacao !== null}
-                onClick={() => marcarLida(item.id)}
-              >
-                Marcar como lida
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setBolsaInscricao(item.inscricao)}>
-                Ir para a bolsa
-              </Button>
-            </Alert>
-          ))}
+          {notificacoes.map((item) => {
+            const recursoDeferido = recursoHomologacaoDeferido(item.mensagem)
+
+            return (
+              <Alert key={item.id} tone={recursoDeferido ? 'success' : 'warning'}>
+                {recursoDeferido && <Badge status="DEFERIDO" />}
+                <p>{item.mensagem}</p>
+                <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
+                <Button
+                  size="sm"
+                  disabled={lendoNotificacao !== null}
+                  onClick={() => marcarLida(item.id)}
+                >
+                  Marcar como lida
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBolsaInscricao(item.inscricao)}
+                >
+                  Ir para a bolsa
+                </Button>
+              </Alert>
+            )
+          })}
         </section>
       )}
 

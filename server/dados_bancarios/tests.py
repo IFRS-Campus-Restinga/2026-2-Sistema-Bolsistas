@@ -37,6 +37,9 @@ class MeusDadosBancariosTests(APITestCase):
 
     def dados_validos(self, **alteracoes):
         dados = {
+            "matricula": "2026000001",
+            "curso": "Engenharia de Software",
+            "cpf": "52998224725",
             "banco": "Banco do Brasil",
             "agencia": "1234-5",
             "conta": "67890-1",
@@ -51,6 +54,9 @@ class MeusDadosBancariosTests(APITestCase):
         self.assertIsNone(response.data["id"])
         self.assertEqual(response.data["banco"], "")
         self.assertFalse(response.data["cadastro_completo"])
+        self.assertEqual(response.data["matricula"], "")
+        self.assertEqual(response.data["curso"], "")
+        self.assertEqual(response.data["cpf"], "")
 
     def test_aluno_cadastra_dados_bancarios(self):
         response = self.client.put(
@@ -66,6 +72,15 @@ class MeusDadosBancariosTests(APITestCase):
         self.assertEqual(dados.aluno, self.aluno)
         self.assertEqual(dados.banco, "Banco do Brasil")
         self.assertTrue(response.data["cadastro_completo"])
+
+        self.aluno.refresh_from_db()
+        self.assertEqual(self.aluno.matricula, "2026000001")
+        self.assertEqual(self.aluno.curso, "Engenharia de Software")
+        self.assertEqual(self.aluno.cpf, "52998224725")
+
+        self.assertEqual(response.data["matricula"], "2026000001")
+        self.assertEqual(response.data["curso"], "Engenharia de Software")
+        self.assertEqual(response.data["cpf"], "52998224725")
 
     def test_edicao_atualiza_o_mesmo_cadastro(self):
         self.client.put(
@@ -87,8 +102,15 @@ class MeusDadosBancariosTests(APITestCase):
             "Caixa Econômica",
         )
 
-    def test_campos_bancarios_sao_obrigatorios(self):
-        for campo in ["banco", "agencia", "conta"]:
+    def test_campos_do_cadastro_sao_obrigatorios(self):
+        for campo in [
+            "matricula",
+            "curso",
+            "cpf",
+            "banco",
+            "agencia",
+            "conta",
+        ]:
             with self.subTest(campo=campo):
                 dados = self.dados_validos()
                 dados[campo] = ""
