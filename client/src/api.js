@@ -74,6 +74,10 @@ export function monitoramentoFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/monitoramento`, path, options)
 }
 
+export function auditoriaFetch(path = '/logs/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/auditoria`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

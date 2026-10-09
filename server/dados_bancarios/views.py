@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAdministrador, IsAluno, IsCoordenadorProjeto
+from auditoria.services import registrar_log
 
 from .models import DadosBancarios
 from .serializers import DadosBancariosSerializer
@@ -67,6 +69,7 @@ class MeusDadosBancariosView(APIView):
         )
         return Response(serializer.data)
 
+    @transaction.atomic
     def put(self, request):
         dados = DadosBancarios.objects.filter(
             aluno__usuario=request.user,
@@ -80,6 +83,20 @@ class MeusDadosBancariosView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save(aluno=request.user.perfil_aluno)
+
+        acao = "DADOS_BANCARIOS_CADASTRADOS" if criado else "DADOS_BANCARIOS_ATUALIZADOS"
+
+        registrar_log(
+            usuario=request.user,
+            acao=acao,
+            entidade="DadosBancarios",
+            entidade_id=serializer.instance.pk,
+            descricao=(
+                "Dados bancários cadastrados pelo aluno."
+                if criado
+                else "Dados bancários atualizados pelo aluno."
+            ),
+        )
 
         return Response(
             serializer.data,

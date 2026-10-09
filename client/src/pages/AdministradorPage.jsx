@@ -7,15 +7,18 @@ import {
   IconCalendar,
   IconBriefcase,
   IconUsers,
+  IconClipboardList,
 } from '../components'
 import UsuariosPage from './admin/UsuariosPage'
 import MonitoramentoPage from './admin/MonitoramentoPage'
+import AuditoriaPage from './admin/AuditoriaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
   { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
+  { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
 ]
 
 export default function AdministradorPage({ me, initials, onVoltarHub }) {
@@ -51,6 +54,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
         </>
       )}
       {active === 'usuarios' && <UsuariosPage />}
+      {active === 'auditoria' && <AuditoriaPage />}
     </Layout>
   )
 }
