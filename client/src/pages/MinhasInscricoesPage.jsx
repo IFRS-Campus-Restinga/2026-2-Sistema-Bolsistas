@@ -261,7 +261,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 
 function ComprovanteModal({ inscricao, onFechar }) {
   return (
-    <Modal title={`Comprovante — ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
+    <Modal title={`Comprovante: ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
       <p>
         <strong>Edital:</strong> {inscricao.edital_nome}
       </p>

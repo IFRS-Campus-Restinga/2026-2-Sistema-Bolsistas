@@ -35,7 +35,7 @@ function ShowcaseContent() {
 
   return (
     <div className="showcase">
-      <h1 className="showcase__title">Componentes — Sistema de Bolsistas</h1>
+      <h1 className="showcase__title">Componentes Sistema de Bolsistas</h1>
       <p className="showcase__subtitle">
         Biblioteca de componentes React reutilizáveis com CSS puro
       </p>

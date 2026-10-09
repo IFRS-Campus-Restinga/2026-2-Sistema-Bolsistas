@@ -89,7 +89,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <StatCard
               label="Bolsas Abertas"
-              value={totalBolsas ?? '—'}
+              value={totalBolsas ?? '0'}
               icon={<IconBriefcase />}
               color="green"
               clickable
@@ -97,7 +97,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
             />
             <StatCard
               label="Minhas Inscrições"
-              value={totalInscricoes ?? '—'}
+              value={totalInscricoes ?? '0'}
               icon={<IconClipboardList />}
               color="blue"
               clickable

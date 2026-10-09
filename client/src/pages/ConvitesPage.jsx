@@ -182,7 +182,7 @@ export default function ConvitesPage() {
 
 function ComprovanteConviteModal({ convite, onFechar }) {
   return (
-    <Modal title={`Comprovante — ${convite.projeto_titulo}`} onClose={onFechar} width={500}>
+    <Modal title={`Comprovante ${convite.projeto_titulo}`} onClose={onFechar} width={500}>
       <p>
         <strong>Edital:</strong>{' '}
         {convite.edital_link_documento_oficial ? (
@@ -207,7 +207,7 @@ function ComprovanteConviteModal({ convite, onFechar }) {
         <Alert tone="error">Motivo da rejeição: {convite.justificativa_rejeicao}</Alert>
       )}
       {convite.status === 'APROVADO' && (
-        <Alert tone="success">Vínculo direto aprovado — bolsa efetivada.</Alert>
+        <Alert tone="success">Vínculo direto aprovado, bolsa efetivada.</Alert>
       )}
       {convite.data_decisao && (
         <p>Decisão registrada em {new Date(convite.data_decisao).toLocaleString('pt-BR')}.</p>

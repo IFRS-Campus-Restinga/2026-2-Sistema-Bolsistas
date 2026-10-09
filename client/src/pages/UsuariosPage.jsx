@@ -334,7 +334,7 @@ export default function UsuariosPage() {
       {modalUsuarioAberto && usuarioSelecionado && (
         <Modal
           onClose={fecharModalUsuario}
-          title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
+          title={`Editar Usuário: ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
         >
           <FormField label="Nome">
             <TextInput readOnly disabled value={usuarioSelecionado.nome || ''} />
