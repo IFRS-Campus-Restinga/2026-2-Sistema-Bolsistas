@@ -70,6 +70,10 @@ export function dadosBancariosFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/dados-bancarios`, path, options)
 }
 
+export function monitoramentoFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/monitoramento`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

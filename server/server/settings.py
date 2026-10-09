@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "bolsas",
     "inscricoes",
     "dados_bancarios",
+    "monitoramento",
 ]
 
 MIDDLEWARE = [

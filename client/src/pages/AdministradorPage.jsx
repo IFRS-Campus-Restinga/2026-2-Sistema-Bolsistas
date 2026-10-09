@@ -3,13 +3,13 @@ import {
   Layout,
   Button,
   PageHeader,
-  StatCard,
   IconHome,
   IconCalendar,
   IconBriefcase,
   IconUsers,
 } from '../components'
 import UsuariosPage from './admin/UsuariosPage'
+import MonitoramentoPage from './admin/MonitoramentoPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -46,17 +46,8 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
               </Button>
             }
           />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
-            <StatCard
-              label="Projetos Cadastrados"
-              value={0}
-              icon={<IconBriefcase />}
-              color="blue"
-            />
-            <StatCard label="Usuários Ativos" value={0} icon={<IconUsers />} color="green" />
-            <StatCard label="Usuários Inativos" value={0} icon={<IconUsers />} color="red" />
-          </div>
+
+          <MonitoramentoPage />
         </>
       )}
       {active === 'usuarios' && <UsuariosPage />}
