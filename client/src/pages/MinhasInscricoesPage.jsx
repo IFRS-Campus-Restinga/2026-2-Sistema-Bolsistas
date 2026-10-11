@@ -207,7 +207,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
         }
       />
     ) : (
-      'Aguardando'
+      ''
     ),
     <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])

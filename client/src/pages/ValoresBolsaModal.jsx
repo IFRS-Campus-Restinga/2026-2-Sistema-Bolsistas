@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Button, FormActions, Modal, useToast } from '../components'
+import { Alert, Button, FormActions, Modal } from '../components'
 import { formatarMoeda } from '../utils/formatarMoeda'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import './ValoresBolsaModal.css'
@@ -41,11 +41,11 @@ function agruparPorModalidade(itens) {
 }
 
 /**
- * Coordenador de Área escolhe, do catálogo institucional fixo (modalidade + CH),
- * o que estará disponível no edital e o valor mensal de cada combinação.
+ * Passo 2 do cadastro/edição do edital: o Coordenador de Área escolhe, do catálogo
+ * institucional fixo (modalidade + CH), o que estará disponível no edital e o valor
+ * mensal de cada combinação.
  */
-export default function ValoresBolsaModal({ edital, onFechar }) {
-  const toast = useToast()
+export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
   const [itens, setItens] = useState([])
   const [inicial, setInicial] = useState('')
   const [carregando, setCarregando] = useState(true)
@@ -99,6 +99,10 @@ export default function ValoresBolsaModal({ edital, onFechar }) {
   const alterado = !carregando && assinatura(itens) !== inicial
 
   async function salvar() {
+    if (!alterado) {
+      onSalvo()
+      return
+    }
     setSalvando(true)
     setErro('')
     try {
@@ -114,8 +118,7 @@ export default function ValoresBolsaModal({ edital, onFechar }) {
       })
       const dados = await res.json().catch(() => null)
       if (!res.ok) throw new Error(mensagemDeErro(dados, 'Não foi possível salvar os valores.'))
-      toast({ message: 'Modalidades e valores do edital salvos.', tone: 'success' })
-      onFechar()
+      onSalvo()
     } catch (e) {
       setErro(e.message)
     } finally {
@@ -124,9 +127,11 @@ export default function ValoresBolsaModal({ edital, onFechar }) {
   }
 
   const bloqueado = somenteLeitura || salvando
+  // Fechar sem concluir: avisa a página se o edital ficou sem nenhuma modalidade salva.
+  const fechar = () => onFechar(inicial === '')
 
   return (
-    <Modal title="Modalidades e valores de bolsa" onClose={onFechar} width={640}>
+    <Modal title="Modalidades e valores de bolsa (2 de 2)" onClose={fechar} width={640}>
       <p className="valores-bolsa__intro">
         {edital.nome} ({edital.ano_codigo}). Ative as combinações do catálogo institucional que este
         edital oferece e defina o valor mensal de cada uma, respeitando o valor máximo.
@@ -244,16 +249,12 @@ export default function ValoresBolsaModal({ edital, onFechar }) {
       )}
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar} disabled={salvando}>
-          {somenteLeitura ? 'Fechar' : 'Cancelar'}
+        <Button variant="outline" onClick={fechar} disabled={salvando}>
+          {somenteLeitura ? 'Fechar' : 'Definir depois'}
         </Button>
         {!somenteLeitura && (
-          <Button
-            variant="accent"
-            onClick={salvar}
-            disabled={carregando || salvando || temErro || !alterado}
-          >
-            {salvando ? 'Salvando...' : 'Salvar valores'}
+          <Button variant="accent" onClick={salvar} disabled={carregando || salvando || temErro}>
+            {salvando ? 'Salvando...' : 'Concluir'}
           </Button>
         )}
       </FormActions>

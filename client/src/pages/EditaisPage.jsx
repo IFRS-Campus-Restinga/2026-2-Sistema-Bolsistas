@@ -65,11 +65,12 @@ export default function EditaisPage() {
     })
   }
 
+  // Passo 1 salvo: segue para o passo 2 (modalidades e valores de bolsa).
   function concluirCadastro(edital) {
     atualizarLista(edital)
     setMostrarFormulario(false)
     setEditalEdicao(null)
-    toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
+    setEditalValores(edital)
   }
 
   async function abrirEdicao(edital) {
@@ -171,11 +172,6 @@ export default function EditaisPage() {
           onClick: () => abrirEdicao(edital),
         },
         {
-          label: 'Modalidades e valores',
-          disabled: processando || mostrarFormulario,
-          onClick: () => setEditalValores(edital),
-        },
-        {
           label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
           variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
           disabled: processando || mostrarFormulario,
@@ -222,7 +218,22 @@ export default function EditaisPage() {
         <ValoresBolsaModal
           key={editalValores.id}
           edital={editalValores}
-          onFechar={() => setEditalValores(null)}
+          onSalvo={() => {
+            setEditalValores(null)
+            toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
+          }}
+          onFechar={(semModalidades) => {
+            setEditalValores(null)
+            toast(
+              semModalidades
+                ? {
+                    message:
+                      'Edital salvo. Defina as modalidades e valores (em Editar) antes de publicar.',
+                    tone: 'info',
+                  }
+                : { message: 'Edital salvo com sucesso.', tone: 'success' }
+            )
+          }}
         />
       )}
 

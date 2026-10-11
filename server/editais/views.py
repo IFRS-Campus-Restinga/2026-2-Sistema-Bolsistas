@@ -68,7 +68,7 @@ class PublicarEditalView(APIView):
             raise ValidationError(
                 {
                     "detail": "Defina as modalidades de bolsa e seus valores antes de "
-                    "publicar o edital."
+                    "publicar o edital (em Editar, passo 2)."
                 }
             )
 
