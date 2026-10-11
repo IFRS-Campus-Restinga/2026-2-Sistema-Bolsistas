@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "bolsas",
     "inscricoes",
     "vinculo_direto",
+    "selecao",
 ]
 
 MIDDLEWARE = [

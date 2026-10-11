@@ -14,6 +14,7 @@ import {
 } from '../components'
 import InscricaoWizard from './InscricaoWizard'
 import RecursosModal from './RecursosModal'
+import ResultadoSelecaoModal from './ResultadoSelecaoModal'
 import { BolsaDetalhe } from './BolsasDisponiveisPage'
 
 export default function MinhasInscricoesPage({ onHistorico }) {
@@ -28,6 +29,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
   const [bolsaInscricao, setBolsaInscricao] = useState(null)
   const [consultandoRecurso, setConsultandoRecurso] = useState(false)
+  const [resultadoBolsaId, setResultadoBolsaId] = useState(null)
 
   useEffect(() => {
     let ativo = true
@@ -118,6 +120,19 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   }
 
   function acoesPorInscricao(inscricao) {
+    const resultado = inscricao.resultado_selecao
+      ? [
+          {
+            label: 'Resultado da seleção',
+            variant: 'accent',
+            onClick: () => setResultadoBolsaId(inscricao.bolsa),
+          },
+        ]
+      : []
+    return [...resultado, ...acoesDaInscricao(inscricao)]
+  }
+
+  function acoesDaInscricao(inscricao) {
     const prazoEncerrado = inscricao.prazo_inscricao_encerrado
 
     if (inscricao.status === 'RASCUNHO') {
@@ -180,6 +195,20 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     inscricao.bolsa_tipo_display,
     inscricao.edital_nome,
     <Badge key="status" status={inscricao.status} />,
+    inscricao.resultado_selecao ? (
+      <Badge
+        key="selecao"
+        status={
+          inscricao.resultado_selecao.indicado
+            ? 'INDICADO'
+            : inscricao.resultado_selecao.nao_assumiu
+              ? 'NAO_ASSUMIU'
+              : inscricao.resultado_selecao.situacao || 'RESULTADO_PUBLICADO'
+        }
+      />
+    ) : (
+      ''
+    ),
     <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])
 
@@ -224,7 +253,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
         <p role="status">Carregando inscrições...</p>
       ) : (
         <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Ações']}
+          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
           rows={linhas}
           emptyMessage="Você ainda não tem nenhuma inscrição."
         />
@@ -250,6 +279,13 @@ export default function MinhasInscricoesPage({ onHistorico }) {
           inscricaoId={recursoInscricaoId}
           onFechar={() => setRecursoInscricaoId(null)}
           onAtualizar={forcarRecarga}
+        />
+      )}
+      {resultadoBolsaId && (
+        <ResultadoSelecaoModal
+          key={resultadoBolsaId}
+          bolsaId={resultadoBolsaId}
+          onFechar={() => setResultadoBolsaId(null)}
         />
       )}
       {comprovante && (

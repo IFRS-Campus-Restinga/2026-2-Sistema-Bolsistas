@@ -70,6 +70,10 @@ export function vinculoDiretoFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/vinculo-direto`, path, options)
 }
 
+export function selecaoFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/selecao`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

@@ -37,6 +37,10 @@ const STATUS_STYLE = {
   APROVADO: 'badge--green',
   REJEITADO: 'badge--red',
   RECUSADO: 'badge--red',
+  NOTAS_PENDENTES: 'badge--gray',
+  INDICADO: 'badge--green',
+  NAO_ASSUMIU: 'badge--gray',
+  RESULTADO_PUBLICADO: 'badge--green',
 }
 
 const STATUS_LABEL = {
@@ -70,6 +74,10 @@ const STATUS_LABEL = {
   APROVADO: 'Aprovado',
   REJEITADO: 'Rejeitado',
   RECUSADO: 'Recusado',
+  NOTAS_PENDENTES: 'Notas pendentes',
+  INDICADO: 'Indicado(a)',
+  NAO_ASSUMIU: 'Não assumiu',
+  RESULTADO_PUBLICADO: 'Resultado publicado',
 }
 
 export function Badge({ status }) {

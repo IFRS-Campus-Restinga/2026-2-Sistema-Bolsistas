@@ -22,6 +22,7 @@ import {
 import { enviarEmentaProjeto, validarArquivoEmenta } from '../utils/ementaProjeto'
 import EmentaProjetoCard from './EmentaProjetoCard'
 import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
+import { formatarMoeda } from '../utils/formatarMoeda'
 import ConvidarBolsistaModal from './ConvidarBolsistaModal'
 
 const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
@@ -37,12 +38,6 @@ const MODALIDADE_OPTIONS = [
   { value: 'BICT', label: 'Bolsa de Iniciação Científica (BICT)' },
   { value: 'BIDTI', label: 'Bolsa de Iniciação ao Desenv. Tecnológico e Inovação (BIDTI)' },
   { value: 'BAT', label: 'Bolsa de Apoio Técnico (BAT)' },
-]
-
-const CARGA_HORARIA_OPTIONS = [
-  { value: '8', label: '8h semanais' },
-  { value: '12', label: '12h semanais' },
-  { value: '16', label: '16h semanais' },
 ]
 
 function opcaoLabel(opcoes, valor) {
@@ -272,7 +267,6 @@ const BOLSA_INICIAL = {
   tipo: '',
   modalidade: '',
   cargaHorariaSemanal: '',
-  valorMensal: '',
   quantidadeVagas: '1',
   prerequisitos: '',
   metodologiaAvaliacao: '',
@@ -285,7 +279,6 @@ function formDaBolsa(bolsa) {
     tipo: bolsa.tipo,
     modalidade: bolsa.modalidade,
     cargaHorariaSemanal: String(bolsa.carga_horaria_semanal),
-    valorMensal: bolsa.valor_mensal,
     quantidadeVagas: String(bolsa.quantidade_vagas),
     prerequisitos: bolsa.prerequisitos || '',
     metodologiaAvaliacao: bolsa.metodologia_avaliacao || '',
@@ -324,6 +317,37 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
   const [avisoSemEditais, setAvisoSemEditais] = useState(false)
+  // combinações modalidade + CH (e valores) disponíveis no edital escolhido no formulário
+  const [valoresEdital, setValoresEdital] = useState({ editalId: '', itens: [], erro: '' })
+
+  useEffect(() => {
+    if (!modalAberto || !form.editalId) return undefined
+    let ativo = true
+
+    async function carregarValores() {
+      try {
+        const res = await editaisFetch(`/${form.editalId}/valores-bolsa/`)
+        const dados = await res.json().catch(() => null)
+        if (!res.ok || !Array.isArray(dados)) {
+          throw new Error(dados?.detail || 'Não foi possível carregar os valores do edital.')
+        }
+        if (ativo) {
+          setValoresEdital({
+            editalId: form.editalId,
+            itens: dados.filter((item) => item.disponivel),
+            erro: '',
+          })
+        }
+      } catch (e) {
+        if (ativo) setValoresEdital({ editalId: form.editalId, itens: [], erro: e.message })
+      }
+    }
+
+    carregarValores()
+    return () => {
+      ativo = false
+    }
+  }, [modalAberto, form.editalId])
 
   useEffect(() => {
     let ativo = true
@@ -383,7 +407,50 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   }
 
   function atualizarCampo(campo, valor) {
-    setForm((atual) => ({ ...atual, [campo]: valor }))
+    setForm((atual) => {
+      const novo = { ...atual, [campo]: valor }
+      // a CH depende da modalidade, e ambas dependem do que o edital oferece
+      if (campo === 'editalId') {
+        novo.modalidade = ''
+        novo.cargaHorariaSemanal = ''
+      }
+      if (campo === 'modalidade') novo.cargaHorariaSemanal = ''
+      return novo
+    })
+  }
+
+  const valoresCarregados = valoresEdital.editalId === form.editalId
+  const combinacoes = valoresCarregados ? valoresEdital.itens : []
+  const combinacaoSelecionada = combinacoes.find(
+    (item) =>
+      item.modalidade === form.modalidade &&
+      String(item.carga_horaria_semanal) === form.cargaHorariaSemanal
+  )
+  // bolsa criada antes da tabela de valores do edital: mantém modalidade, CH e valor gravados
+  const combinacaoLegada =
+    !combinacaoSelecionada &&
+    bolsaEditando &&
+    form.modalidade === bolsaEditando.modalidade &&
+    form.cargaHorariaSemanal === String(bolsaEditando.carga_horaria_semanal)
+  const valorDaBolsa = combinacaoSelecionada
+    ? combinacaoSelecionada.valor_mensal
+    : combinacaoLegada
+      ? bolsaEditando.valor_mensal
+      : ''
+
+  const modalidadesDisponiveis = [...new Set(combinacoes.map((item) => item.modalidade))]
+  if (bolsaEditando && !modalidadesDisponiveis.includes(bolsaEditando.modalidade)) {
+    modalidadesDisponiveis.push(bolsaEditando.modalidade)
+  }
+  const cargasDisponiveis = combinacoes
+    .filter((item) => item.modalidade === form.modalidade)
+    .map((item) => String(item.carga_horaria_semanal))
+  if (
+    bolsaEditando &&
+    form.modalidade === bolsaEditando.modalidade &&
+    !cargasDisponiveis.includes(String(bolsaEditando.carga_horaria_semanal))
+  ) {
+    cargasDisponiveis.push(String(bolsaEditando.carga_horaria_semanal))
   }
 
   const editalSelecionado = editais.find((edital) => String(edital.id) === String(form.editalId))
@@ -393,7 +460,6 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       tipo: form.tipo,
       modalidade: form.modalidade,
       carga_horaria_semanal: Number(form.cargaHorariaSemanal),
-      valor_mensal: form.valorMensal,
       quantidade_vagas: Number(form.quantidadeVagas),
       prerequisitos: form.prerequisitos,
       metodologia_avaliacao: form.metodologiaAvaliacao,
@@ -671,16 +737,35 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             </Select>
           </FormField>
 
-          <FormField label="Modalidade">
+          {valoresEdital.erro && valoresCarregados && (
+            <Alert tone="error">{valoresEdital.erro}</Alert>
+          )}
+          {form.editalId &&
+            valoresCarregados &&
+            !valoresEdital.erro &&
+            combinacoes.length === 0 &&
+            !bolsaEditando && (
+              <Alert tone="warning">
+                Este edital ainda não tem modalidades e valores de bolsa definidos pelo Coordenador
+                de Área. Não é possível solicitar bolsa nele por enquanto.
+              </Alert>
+            )}
+
+          <FormField label="Modalidade (conforme o edital)">
             <Select
               value={form.modalidade}
               onChange={(e) => atualizarCampo('modalidade', e.target.value)}
+              disabled={!form.editalId || !valoresCarregados}
               required
             >
-              <option value="">Selecione a modalidade</option>
-              {MODALIDADE_OPTIONS.map((opcao) => (
-                <option key={opcao.value} value={opcao.value}>
-                  {opcao.label}
+              <option value="">
+                {form.editalId && !valoresCarregados
+                  ? 'Carregando modalidades do edital...'
+                  : 'Selecione a modalidade'}
+              </option>
+              {modalidadesDisponiveis.map((modalidade) => (
+                <option key={modalidade} value={modalidade}>
+                  {opcaoLabel(MODALIDADE_OPTIONS, modalidade)}
                 </option>
               ))}
             </Select>
@@ -690,26 +775,20 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             <Select
               value={form.cargaHorariaSemanal}
               onChange={(e) => atualizarCampo('cargaHorariaSemanal', e.target.value)}
+              disabled={!form.modalidade}
               required
             >
               <option value="">Selecione a CH</option>
-              {CARGA_HORARIA_OPTIONS.map((opcao) => (
-                <option key={opcao.value} value={opcao.value}>
-                  {opcao.label}
+              {cargasDisponiveis.map((carga) => (
+                <option key={carga} value={carga}>
+                  {carga}h semanais
                 </option>
               ))}
             </Select>
           </FormField>
 
-          <FormField label="Valor mensal (R$)">
-            <TextInput
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.valorMensal}
-              onChange={(e) => atualizarCampo('valorMensal', e.target.value)}
-              required
-            />
+          <FormField label="Valor mensal (definido pelo edital)">
+            <TextInput value={valorDaBolsa ? formatarMoeda(valorDaBolsa) : ''} disabled />
           </FormField>
 
           <FormField label="Quantidade de vagas">
@@ -763,7 +842,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
                 !form.tipo ||
                 !form.modalidade ||
                 !form.cargaHorariaSemanal ||
-                !form.valorMensal ||
+                !valorDaBolsa ||
                 !Number.isInteger(Number(form.quantidadeVagas)) ||
                 Number(form.quantidadeVagas) < 1
               }
