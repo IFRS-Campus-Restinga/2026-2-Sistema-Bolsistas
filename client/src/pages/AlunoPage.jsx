@@ -9,17 +9,21 @@ import {
   IconBriefcase,
   IconHome,
   IconClipboardList,
+  IconMessageCircle,
+  IconMail,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
 import MinhasInscricoesPage from './MinhasInscricoesPage'
 import MeusRecursosPage from './MeusRecursosPage'
+import ConvitesPage from './ConvitesPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
-  { id: 'recursos', label: 'Meus Recursos', icon: <IconClipboardList /> },
+  { id: 'recursos', label: 'Meus Recursos', icon: <IconMessageCircle /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
+  { id: 'convites', label: 'Convites', icon: <IconMail /> },
 ]
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
@@ -85,7 +89,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <StatCard
               label="Bolsas Abertas"
-              value={totalBolsas ?? '—'}
+              value={totalBolsas ?? '0'}
               icon={<IconBriefcase />}
               color="green"
               clickable
@@ -93,7 +97,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
             />
             <StatCard
               label="Minhas Inscrições"
-              value={totalInscricoes ?? '—'}
+              value={totalInscricoes ?? '0'}
               icon={<IconClipboardList />}
               color="blue"
               clickable
@@ -109,6 +113,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
         <MinhasInscricoesPage onHistorico={() => setActive('recursos')} />
       )}
       {active === 'recursos' && <MeusRecursosPage />}
+      {active === 'convites' && <ConvitesPage />}
     </Layout>
   )
 }

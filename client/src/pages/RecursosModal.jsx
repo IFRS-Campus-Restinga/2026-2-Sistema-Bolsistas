@@ -310,7 +310,7 @@ export default function RecursosModal({
                         >
                           Confirmar indeferimento
                         </Button>
-                        <Button disabled={salvando} onClick={fechar}>
+                        <Button variant="outline" disabled={salvando} onClick={fechar}>
                           Fechar
                         </Button>
                       </FormActions>
@@ -339,7 +339,16 @@ export default function RecursosModal({
       </div>
       {!julgamento && (
         <FormActions>
-          <Button disabled={salvando} onClick={fechar}>
+          <Button
+            variant={
+              coordenador &&
+              dados?.recursos?.some((r) => ['PENDENTE', 'EXPIRADO'].includes(r.status))
+                ? 'outline'
+                : 'danger'
+            }
+            disabled={salvando}
+            onClick={fechar}
+          >
             Fechar
           </Button>
         </FormActions>

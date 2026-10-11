@@ -111,7 +111,7 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
 
   return (
     <>
-      <Modal title={`Etapas de avaliação — ${bolsa.edital_nome}`} onClose={onFechar} width={760}>
+      <Modal title={`Etapas de avaliação: ${bolsa.edital_nome}`} onClose={onFechar} width={760}>
         <div
           style={{
             display: 'flex',
@@ -275,7 +275,7 @@ function EtapaFormModal({ bolsaId, etapaInicial, onFechar, onSalva }) {
       </FormField>
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar} disabled={salvando}>
+        <Button variant="danger" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
         <Button

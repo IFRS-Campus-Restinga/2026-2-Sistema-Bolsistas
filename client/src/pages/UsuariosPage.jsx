@@ -10,9 +10,9 @@ import {
   FormActions,
   DataTable,
   PageHeader,
-} from '../../components'
-import { useConfirm } from '../../components/useConfirm'
-import { useToast } from '../../components/useToast'
+} from '../components'
+import { useConfirm } from '../components/useConfirm'
+import { useToast } from '../components/useToast'
 import {
   deleteEmailCoordenador,
   getEmailsCoordenadores,
@@ -21,7 +21,7 @@ import {
   patchStatusUsuario,
   patchTipoArea,
   postEmailCoordenador,
-} from '../../api'
+} from '../api'
 
 const ROLE_LABEL = {
   ADMINISTRADOR: 'Administrador',
@@ -334,7 +334,7 @@ export default function UsuariosPage() {
       {modalUsuarioAberto && usuarioSelecionado && (
         <Modal
           onClose={fecharModalUsuario}
-          title={`Editar Usuário — ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
+          title={`Editar Usuário: ${ROLE_LABEL[usuarioSelecionado.role] || ''}`}
         >
           <FormField label="Nome">
             <TextInput readOnly disabled value={usuarioSelecionado.nome || ''} />
@@ -359,7 +359,7 @@ export default function UsuariosPage() {
           )}
           {erroSalvarUsuario && <Alert tone="error">{erroSalvarUsuario}</Alert>}
           <FormActions>
-            <Button variant="outline" onClick={fecharModalUsuario}>
+            <Button variant="danger" onClick={fecharModalUsuario}>
               Cancelar
             </Button>
             {usuarioSelecionado.role === 'COORDENADOR_AREA' && (
@@ -405,7 +405,7 @@ export default function UsuariosPage() {
           </FormField>
           {erroSalvarEmail && <Alert tone="error">{erroSalvarEmail}</Alert>}
           <FormActions>
-            <Button variant="outline" onClick={fecharModalEmail}>
+            <Button variant="danger" onClick={fecharModalEmail}>
               Cancelar
             </Button>
             <Button
