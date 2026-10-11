@@ -6,7 +6,16 @@ from rest_framework import serializers
 from editais.models import Edital
 from projetos.models import StatusProjeto
 
-from .models import PESO_TOTAL, Bolsa, EtapaAvaliacao, StatusBolsa
+from .models import PESO_TOTAL, Bolsa, EditalValorBolsa, EtapaAvaliacao, StatusBolsa
+
+
+def valor_da_tabela(edital, modalidade, carga_horaria):
+    valor = EditalValorBolsa.objects.filter(
+        edital=edital,
+        tipo_bolsa_modalidade__modalidade=modalidade,
+        tipo_bolsa_modalidade__carga_horaria_semanal=carga_horaria,
+    ).first()
+    return valor.valor_mensal if valor else None
 
 
 def _decimal_str(valor):
@@ -70,6 +79,7 @@ class BolsaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "valor_mensal",
             "status",
             "data_solicitacao",
             "data_decisao",
@@ -119,6 +129,42 @@ class BolsaSerializer(serializers.ModelSerializer):
                 "Não é possível solicitar bolsa para um projeto desligado."
             )
         return projeto
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        bolsa = self.instance
+        edital = attrs.get("edital", getattr(bolsa, "edital", None))
+        modalidade = attrs.get("modalidade", getattr(bolsa, "modalidade", None))
+        carga_horaria = attrs.get(
+            "carga_horaria_semanal", getattr(bolsa, "carga_horaria_semanal", None)
+        )
+
+        valor = valor_da_tabela(edital, modalidade, carga_horaria)
+        if valor is not None:
+            attrs["valor_mensal"] = valor
+            return attrs
+
+        combinacao_mudou = bolsa is None or (modalidade, carga_horaria) != (
+            bolsa.modalidade,
+            bolsa.carga_horaria_semanal,
+        )
+        if not combinacao_mudou:
+            # Bolsa anterior à tabela de valores do edital: mantém o valor gravado.
+            return attrs
+
+        if not edital.valores_bolsa.exists():
+            raise serializers.ValidationError(
+                {
+                    "modalidade": "Este edital ainda não tem modalidades e valores de bolsa "
+                    "configurados pelo Coordenador de Área."
+                }
+            )
+        raise serializers.ValidationError(
+            {
+                "carga_horaria_semanal": f"A combinação {modalidade} com {carga_horaria}h "
+                "semanais não está disponível neste edital."
+            }
+        )
 
     def validate_edital(self, edital):
         if edital.status != Edital.Status.EM_VIGOR:

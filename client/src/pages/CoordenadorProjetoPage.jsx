@@ -8,15 +8,18 @@ import {
   IconUsers,
   IconCheck,
   IconMail,
+  IconScale,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusCandidatosPage from './MeusCandidatosPage'
 import MeusConvitesPage from './MeusConvitesPage'
+import SelecaoPage from './SelecaoPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'projetos', label: 'Meus Projetos', icon: <IconBriefcase /> },
   { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
+  { id: 'selecao', label: 'Avaliação e Seleção', icon: <IconScale /> },
   { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
 ]
 
@@ -47,6 +50,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
 
       {active === 'projetos' && <MeusProjetosPage />}
       {active === 'candidatos' && <MeusCandidatosPage />}
+      {active === 'selecao' && <SelecaoPage />}
       {active === 'convites' && <MeusConvitesPage />}
     </Layout>
   )

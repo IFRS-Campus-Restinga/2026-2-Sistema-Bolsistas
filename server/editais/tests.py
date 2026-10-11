@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorProjeto, Usuario
-from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from bolsas.models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
 from projetos.models import Projeto
 
 from .models import AlteracaoCronograma, Edital
@@ -449,6 +449,11 @@ class EdicaoEditalAPITests(APITestCase):
     def test_publica_rascunho_com_cronograma_completo(self):
         self.edital.status = Edital.Status.RASCUNHO
         self.edital.save(update_fields=["status"])
+        EditalValorBolsa.objects.create(
+            edital=self.edital,
+            tipo_bolsa_modalidade=TipoBolsaModalidade.objects.first(),
+            valor_mensal="350.00",
+        )
 
         url = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
         response = self.client.post(url)
@@ -549,3 +554,119 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.edital.refresh_from_db()
         self.assertEqual(self.edital.status, Edital.Status.ENCERRADO)
+
+
+class ValoresBolsaEditalAPITests(APITestCase):
+    def setUp(self):
+        self.coordenador = Usuario.objects.create_user(
+            username="coord_area", email="ca@example.com", role=Usuario.Role.COORDENADOR_AREA
+        )
+        self.client.force_authenticate(user=self.coordenador)
+        self.edital = Edital.objects.create(
+            nome="Edital valores",
+            ano_codigo="2026-010",
+            link_documento_oficial="https://example.com/edital.pdf",
+        )
+        self.url = reverse("editais:valores-bolsa", kwargs={"pk": self.edital.pk})
+        self.bict_12 = TipoBolsaModalidade.objects.get(modalidade="BICT", carga_horaria_semanal=12)
+        self.bat_16 = TipoBolsaModalidade.objects.get(modalidade="BAT", carga_horaria_semanal=16)
+
+    def salvar(self, *valores):
+        return self.client.put(
+            self.url,
+            {
+                "valores": [
+                    {"tipo_bolsa_modalidade": tipo.id, "valor_mensal": valor}
+                    for tipo, valor in valores
+                ]
+            },
+            format="json",
+        )
+
+    def test_lista_catalogo_institucional(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 7)
+        self.assertFalse(any(item["disponivel"] for item in response.data))
+        bat = next(item for item in response.data if item["modalidade"] == "BAT")
+        self.assertEqual(bat["carga_horaria_semanal"], 16)
+        self.assertEqual(bat["valor_maximo"], "770.00")
+
+    def test_define_modalidades_e_valores(self):
+        response = self.salvar((self.bict_12, "500.00"), (self.bat_16, "770.00"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        disponiveis = {item["tipo_bolsa_modalidade"]: item for item in response.data}
+        self.assertEqual(disponiveis[self.bict_12.id]["valor_mensal"], "500.00")
+        self.assertTrue(disponiveis[self.bat_16.id]["disponivel"])
+        self.assertEqual(EditalValorBolsa.objects.filter(edital=self.edital).count(), 2)
+
+    def test_valor_acima_do_maximo_institucional(self):
+        response = self.salvar((self.bict_12, "600.00"))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(EditalValorBolsa.objects.exists())
+
+    def test_alterar_valor_atualiza_bolsas_vigentes(self):
+        self.salvar((self.bict_12, "500.00"))
+        bolsa = self.cria_bolsa()
+
+        self.salvar((self.bict_12, "450.00"))
+
+        bolsa.refresh_from_db()
+        self.assertEqual(str(bolsa.valor_mensal), "450.00")
+
+    def test_nao_remove_combinacao_em_uso(self):
+        self.salvar((self.bict_12, "500.00"))
+        self.cria_bolsa()
+
+        response = self.salvar((self.bat_16, "700.00"))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(
+            EditalValorBolsa.objects.filter(tipo_bolsa_modalidade=self.bict_12).exists()
+        )
+
+    def test_coordenador_projeto_le_mas_nao_altera(self):
+        coordenador_projeto = Usuario.objects.create_user(
+            username="coord_proj", email="cp@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        self.client.force_authenticate(user=coordenador_projeto)
+
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.salvar((self.bict_12, "500.00")).status_code, status.HTTP_403_FORBIDDEN
+        )
+
+    def test_publicar_exige_valores(self):
+        Edital.objects.filter(pk=self.edital.pk).update(
+            data_abertura_inscricoes="2026-09-01",
+            data_fechamento_inscricoes="2026-09-10",
+            data_homologacao="2026-09-15",
+            data_recurso_homologacao_inicio="2026-09-16",
+            data_recurso_homologacao_fim="2026-09-18",
+            data_resultado="2026-09-20",
+            data_entrega_relatorios="2026-12-01",
+        )
+        publicar = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
+
+        self.assertEqual(self.client.post(publicar).status_code, status.HTTP_400_BAD_REQUEST)
+        self.salvar((self.bict_12, "500.00"))
+        self.assertEqual(self.client.post(publicar).status_code, status.HTTP_200_OK)
+
+    def cria_bolsa(self):
+        coordenador = Usuario.objects.create_user(
+            username="dono", email="dono@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        perfil = CoordenadorProjeto.objects.create(usuario=coordenador)
+        projeto = Projeto.objects.create(titulo="Projeto", coordenador_projeto=perfil)
+        return Bolsa.objects.create(
+            projeto=projeto,
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.ABERTA,
+        )

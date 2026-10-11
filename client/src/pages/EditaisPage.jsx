@@ -11,6 +11,7 @@ import {
   useToast,
 } from '../components'
 import EditalForm from './EditalForm'
+import ValoresBolsaModal from './ValoresBolsaModal'
 
 export default function EditaisPage() {
   const [editais, setEditais] = useState([])
@@ -19,6 +20,7 @@ export default function EditaisPage() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [editalEdicao, setEditalEdicao] = useState(null)
   const [processando, setProcessando] = useState(false)
+  const [editalValores, setEditalValores] = useState(null)
   const confirmar = useConfirm()
   const toast = useToast()
 
@@ -169,6 +171,11 @@ export default function EditaisPage() {
           onClick: () => abrirEdicao(edital),
         },
         {
+          label: 'Modalidades e valores',
+          disabled: processando || mostrarFormulario,
+          onClick: () => setEditalValores(edital),
+        },
+        {
           label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
           variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
           disabled: processando || mostrarFormulario,
@@ -208,6 +215,14 @@ export default function EditaisPage() {
           columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
           rows={linhas}
           emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
+        />
+      )}
+
+      {editalValores && (
+        <ValoresBolsaModal
+          key={editalValores.id}
+          edital={editalValores}
+          onFechar={() => setEditalValores(null)}
         />
       )}
 

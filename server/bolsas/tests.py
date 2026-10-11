@@ -6,7 +6,7 @@ from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuar
 from editais.models import Edital
 from projetos.models import Projeto
 
-from .models import Bolsa, StatusBolsa, TipoBolsa
+from .models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
 
 
 def cria_usuario(username, email, role):
@@ -34,6 +34,15 @@ def cria_edital(ano_codigo="2026-001", status_edital=Edital.Status.EM_VIGOR):
     )
 
 
+def define_valor_no_edital(edital, modalidade="BICT", carga_horaria=12, valor="500.00"):
+    tipo = TipoBolsaModalidade.objects.get(
+        modalidade=modalidade, carga_horaria_semanal=carga_horaria
+    )
+    return EditalValorBolsa.objects.create(
+        edital=edital, tipo_bolsa_modalidade=tipo, valor_mensal=valor
+    )
+
+
 class SolicitarBolsaAPITests(APITestCase):
     def setUp(self):
         self.url = reverse("bolsas:lista-criacao")
@@ -42,6 +51,7 @@ class SolicitarBolsaAPITests(APITestCase):
             titulo="Projeto A", coordenador_projeto=self.coordenador.perfil_coordenador_projeto
         )
         self.edital = cria_edital()
+        define_valor_no_edital(self.edital)
         self.dados = {
             "projeto": self.projeto.id,
             "edital": self.edital.id,
@@ -60,6 +70,36 @@ class SolicitarBolsaAPITests(APITestCase):
         bolsa = Bolsa.objects.get()
         self.assertEqual(bolsa.status, StatusBolsa.SOLICITADA)
         self.assertEqual(bolsa.projeto_id, self.projeto.id)
+
+    def test_valor_mensal_vem_da_tabela_do_edital(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resposta.data["valor_mensal"], "500.00")
+
+    def test_combinacao_fora_do_edital_e_rejeitada(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(
+            self.url, {**self.dados, "carga_horaria_semanal": 16}, format="json"
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("carga_horaria_semanal", resposta.data)
+        self.assertFalse(Bolsa.objects.exists())
+
+    def test_edital_sem_tabela_de_valores_nao_aceita_bolsa(self):
+        outro_edital = cria_edital(ano_codigo="2026-009")
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(
+            self.url, {**self.dados, "edital": outro_edital.id}, format="json"
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("modalidade", resposta.data)
 
     def test_nao_dono_do_projeto_nao_pode_solicitar_bolsa(self):
         outro_coordenador = cria_coordenador_projeto("outro_cp", "outro@test.com")
