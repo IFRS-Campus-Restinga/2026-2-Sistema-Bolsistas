@@ -323,7 +323,7 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
           </label>
 
           <FormActions>
-            <Button variant="outline" onClick={pedirCancelamento} disabled={processando}>
+            <Button variant="danger" onClick={pedirCancelamento} disabled={processando}>
               Cancelar
             </Button>
             <Button
@@ -403,7 +403,7 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
                 Voltar
               </Button>
             )}
-            <Button variant="outline" onClick={pedirCancelamento} disabled={processando}>
+            <Button variant="danger" onClick={pedirCancelamento} disabled={processando}>
               {jaEnviada ? 'Fechar' : 'Cancelar'}
             </Button>
             <Button variant="outline" onClick={salvarRascunho} disabled={processando}>
@@ -437,7 +437,7 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
             <Button variant="outline" onClick={() => setEtapa(2)} disabled={processando}>
               Voltar
             </Button>
-            <Button variant="outline" onClick={pedirCancelamento} disabled={processando}>
+            <Button variant="danger" onClick={pedirCancelamento} disabled={processando}>
               {jaEnviada ? 'Fechar' : 'Cancelar'}
             </Button>
             {jaEnviada ? (

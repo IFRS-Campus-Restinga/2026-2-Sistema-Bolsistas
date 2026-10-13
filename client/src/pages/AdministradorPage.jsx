@@ -9,9 +9,9 @@ import {
   IconUsers,
   IconClipboardList,
 } from '../components'
-import UsuariosPage from './admin/UsuariosPage'
-import MonitoramentoPage from './admin/MonitoramentoPage'
-import AuditoriaPage from './admin/AuditoriaPage'
+import UsuariosPage from './UsuariosPage'
+import MonitoramentoPage from './MonitoramentoPage'
+import AuditoriaPage from './AuditoriaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },

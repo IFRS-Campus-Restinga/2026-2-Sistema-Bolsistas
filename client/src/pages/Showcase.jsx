@@ -35,7 +35,7 @@ function ShowcaseContent() {
 
   return (
     <div className="showcase">
-      <h1 className="showcase__title">Componentes — Sistema de Bolsistas</h1>
+      <h1 className="showcase__title">Componentes Sistema de Bolsistas</h1>
       <p className="showcase__subtitle">
         Biblioteca de componentes React reutilizáveis com CSS puro
       </p>
@@ -254,7 +254,7 @@ function ShowcaseContent() {
         </div>
 
         <FormActions>
-          <Button variant="outline">Cancelar</Button>
+          <Button variant="danger">Cancelar</Button>
           <Button variant="accent">Salvar</Button>
         </FormActions>
 
@@ -293,7 +293,7 @@ function ShowcaseContent() {
               <TextInput type="email" defaultValue="admin@if.edu.br" />
             </FormField>
             <FormActions>
-              <Button variant="outline" onClick={() => setModalOpen(false)}>
+              <Button variant="danger" onClick={() => setModalOpen(false)}>
                 Cancelar
               </Button>
               <Button variant="accent" onClick={() => setModalOpen(false)}>

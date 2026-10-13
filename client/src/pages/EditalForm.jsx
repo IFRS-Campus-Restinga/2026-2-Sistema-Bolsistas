@@ -119,7 +119,7 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
 
   return (
     <Modal
-      title={edital ? 'Editar edital' : 'Novo edital'}
+      title={edital ? 'Editar edital (1 de 2)' : 'Novo edital (1 de 2)'}
       onClose={solicitarFechamento}
       width={720}
     >
@@ -176,7 +176,7 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
             Descartar
           </Button>
           <Button type="submit" variant="accent" disabled={salvando}>
-            {salvando ? 'Salvando...' : emVigor ? 'Salvar alterações' : 'Salvar Rascunho'}
+            {salvando ? 'Salvando...' : 'Salvar e continuar'}
           </Button>
         </FormActions>
       </form>

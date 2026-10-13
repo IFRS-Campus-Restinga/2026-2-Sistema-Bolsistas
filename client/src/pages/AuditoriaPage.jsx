@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { auditoriaFetch } from '../../api'
-import { Alert, Button, DataTable, FormField, PageHeader, TextInput } from '../../components'
+import { auditoriaFetch } from '../api'
+import { Alert, Button, DataTable, FormField, PageHeader, TextInput } from '../components'
 
 function formatarAcao(acao) {
   const texto = acao.toLowerCase().replaceAll('_', ' ')

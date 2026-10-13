@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from bolsas.models import StatusBolsa
+from selecao.models import DesistenciaVaga, IndicacaoBolsista, PublicacaoResultado
 from server.validators import validar_upload
 
 from .models import (
@@ -72,6 +73,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
     documentos = DocumentoSerializer(many=True, read_only=True)
     notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
+    resultado_selecao = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -93,6 +95,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "data_decisao",
             "notificacoes",
             "prazo_inscricao_encerrado",
+            "resultado_selecao",
         ]
         read_only_fields = [
             "id",
@@ -106,6 +109,19 @@ class InscricaoSerializer(serializers.ModelSerializer):
 
     def get_prazo_inscricao_encerrado(self, inscricao):
         return inscricao.bolsa.edital.inscricoes_encerradas()
+
+    def get_resultado_selecao(self, inscricao):
+        publicacao = PublicacaoResultado.objects.filter(bolsa_id=inscricao.bolsa_id).first()
+        if publicacao is None:
+            return None
+        resultado = publicacao.resultados.filter(inscricao=inscricao).first()
+        return {
+            "publicado_em": publicacao.publicado_em,
+            "situacao": resultado.situacao if resultado else None,
+            "posicao": resultado.posicao if resultado else None,
+            "indicado": IndicacaoBolsista.objects.filter(inscricao=inscricao).exists(),
+            "nao_assumiu": DesistenciaVaga.objects.filter(inscricao=inscricao).exists(),
+        }
 
     def validate_bolsa(self, bolsa):
         if self.instance and bolsa != self.instance.bolsa:

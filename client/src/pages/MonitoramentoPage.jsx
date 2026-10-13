@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { monitoramentoFetch } from '../../api'
+import { monitoramentoFetch } from '../api'
 import {
   Alert,
   Badge,
@@ -9,7 +9,7 @@ import {
   IconClipboardList,
   IconUsers,
   StatCard,
-} from '../../components'
+} from '../components'
 
 const CONFIGURACOES = {
   editais_ativos: {

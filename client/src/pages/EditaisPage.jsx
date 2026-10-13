@@ -11,6 +11,7 @@ import {
   useToast,
 } from '../components'
 import EditalForm from './EditalForm'
+import ValoresBolsaModal from './ValoresBolsaModal'
 
 export default function EditaisPage() {
   const [editais, setEditais] = useState([])
@@ -19,6 +20,7 @@ export default function EditaisPage() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [editalEdicao, setEditalEdicao] = useState(null)
   const [processando, setProcessando] = useState(false)
+  const [editalValores, setEditalValores] = useState(null)
   const confirmar = useConfirm()
   const toast = useToast()
 
@@ -63,11 +65,12 @@ export default function EditaisPage() {
     })
   }
 
+  // Passo 1 salvo: segue para o passo 2 (modalidades e valores de bolsa).
   function concluirCadastro(edital) {
     atualizarLista(edital)
     setMostrarFormulario(false)
     setEditalEdicao(null)
-    toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
+    setEditalValores(edital)
   }
 
   async function abrirEdicao(edital) {
@@ -208,6 +211,29 @@ export default function EditaisPage() {
           columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
           rows={linhas}
           emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
+        />
+      )}
+
+      {editalValores && (
+        <ValoresBolsaModal
+          key={editalValores.id}
+          edital={editalValores}
+          onSalvo={() => {
+            setEditalValores(null)
+            toast({ message: 'Edital salvo com sucesso.', tone: 'success' })
+          }}
+          onFechar={(semModalidades) => {
+            setEditalValores(null)
+            toast(
+              semModalidades
+                ? {
+                    message:
+                      'Edital salvo. Defina as modalidades e valores (em Editar) antes de publicar.',
+                    tone: 'info',
+                  }
+                : { message: 'Edital salvo com sucesso.', tone: 'success' }
+            )
+          }}
         />
       )}
 
