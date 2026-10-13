@@ -56,6 +56,9 @@ INSTALLED_APPS = [
     "projetos",
     "bolsas",
     "inscricoes",
+    "dados_bancarios",
+    "monitoramento",
+    "auditoria",
     "vinculo_direto",
     "selecao",
 ]

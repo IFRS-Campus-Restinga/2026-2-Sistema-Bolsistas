@@ -30,6 +30,9 @@ urlpatterns = [
     path("api/projetos/", include("projetos.urls")),
     path("api/bolsas/", include("bolsas.urls")),
     path("api/inscricoes/", include("inscricoes.urls")),
+    path("api/dados-bancarios/", include("dados_bancarios.urls")),
+    path("api/monitoramento/", include("monitoramento.urls")),
+    path("api/auditoria/", include("auditoria.urls")),
     path("api/vinculo-direto/", include("vinculo_direto.urls")),
     path("api/selecao/", include("selecao.urls")),
 ]

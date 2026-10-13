@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.services import registrar_log
 from bolsas.models import EditalValorBolsa, StatusBolsa
 
 from .models import Edital
@@ -34,6 +35,17 @@ class EditalListCreateView(generics.ListCreateAPIView):
             return [IsAuthenticated(), IsCoordenadorArea()]
         return [IsAuthenticated(), (IsCoordenadorProjeto | IsCoordenadorArea)()]
 
+    def perform_create(self, serializer):
+        edital = serializer.save()
+
+        registrar_log(
+            usuario=self.request.user,
+            acao="EDITAL_CRIADO",
+            entidade="Edital",
+            entidade_id=edital.pk,
+            descricao=f'Edital "{edital.nome}" criado.',
+        )
+
 
 class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Edital.objects.all()
@@ -41,12 +53,34 @@ class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     http_method_names = ["get", "patch", "options"]
 
+    def perform_update(self, serializer):
+        edital = serializer.save()
+
+        registrar_log(
+            usuario=self.request.user,
+            acao="CRONOGRAMA_EDITAL_ATUALIZADO",
+            entidade="Edital",
+            entidade_id=edital.pk,
+            descricao=f'Cronograma do edital "{edital.nome}" atualizado.',
+        )
+
 
 class EditalDetailView(generics.RetrieveUpdateAPIView):
     queryset = Edital.objects.all()
     serializer_class = EditalSerializer
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     http_method_names = ["get", "patch", "options"]
+
+    def perform_update(self, serializer):
+        edital = serializer.save()
+
+        registrar_log(
+            usuario=self.request.user,
+            acao="EDITAL_ATUALIZADO",
+            entidade="Edital",
+            entidade_id=edital.pk,
+            descricao=f'Edital "{edital.nome}" atualizado.',
+        )
 
 
 class PublicarEditalView(APIView):
@@ -75,6 +109,14 @@ class PublicarEditalView(APIView):
         edital.status = Edital.Status.EM_VIGOR
         edital.save(update_fields=["status"])
 
+        registrar_log(
+            usuario=request.user,
+            acao="EDITAL_PUBLICADO",
+            entidade="Edital",
+            entidade_id=edital.pk,
+            descricao=f'Edital "{edital.nome}" publicado.',
+        )
+
         return Response(EditalSerializer(edital).data)
 
 
@@ -101,6 +143,14 @@ class EncerrarEditalView(APIView):
 
         edital.status = Edital.Status.ENCERRADO
         edital.save(update_fields=["status"])
+
+        registrar_log(
+            usuario=request.user,
+            acao="EDITAL_ENCERRADO",
+            entidade="Edital",
+            entidade_id=edital.pk,
+            descricao=f'Edital "{edital.nome}" encerrado.',
+        )
 
         return Response(EditalSerializer(edital).data)
 

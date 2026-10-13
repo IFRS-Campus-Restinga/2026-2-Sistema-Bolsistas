@@ -50,7 +50,7 @@ function StatusBadge({ ativo }) {
 
 // ─── página principal ─────────────────────────────────────────────────────────
 
-export default function UsuariosPage() {
+export default function UsuariosPage({ filtroStatus = null }) {
   const confirm = useConfirm()
   const toast = useToast()
   // usuários
@@ -248,7 +248,12 @@ export default function UsuariosPage() {
     })
   }
 
-  const rowsUsuarios = usuarios.map((usuario) => [
+  const usuariosFiltrados = usuarios.filter((usuario) => {
+    if (filtroStatus === null) return true
+    return usuario.is_active === filtroStatus
+  })
+
+  const rowsUsuarios = usuariosFiltrados.map((usuario) => [
     usuario.nome || '—',
     usuario.email || '—',
     <span key="role">

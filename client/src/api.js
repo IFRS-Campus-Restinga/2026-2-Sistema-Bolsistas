@@ -66,6 +66,18 @@ export function inscricoesFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/inscricoes`, path, options)
 }
 
+export function dadosBancariosFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/dados-bancarios`, path, options)
+}
+
+export function monitoramentoFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/monitoramento`, path, options)
+}
+
+export function auditoriaFetch(path = '/logs/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/auditoria`, path, options)
+}
+
 export function vinculoDiretoFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/vinculo-direto`, path, options)
 }
