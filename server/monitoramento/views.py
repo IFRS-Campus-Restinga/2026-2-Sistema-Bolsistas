@@ -2,10 +2,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import Usuario
 from accounts.permissions import IsAdministrador
 from bolsas.models import Bolsa, StatusBolsa
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao
+from projetos.models import Projeto
 
 
 class MonitoramentoGlobalView(APIView):
@@ -17,6 +19,13 @@ class MonitoramentoGlobalView(APIView):
                 status=Edital.Status.EM_VIGOR,
             ).order_by("ano_codigo")
         )
+
+        projetos_cadastrados = list(
+            Projeto.objects.select_related("coordenador_projeto__usuario").order_by("titulo")
+        )
+
+        usuarios_ativos = list(Usuario.objects.filter(is_active=True).order_by("nome"))
+        usuarios_inativos = list(Usuario.objects.filter(is_active=False).order_by("nome"))
 
         bolsas_ativas = list(
             Bolsa.objects.filter(
@@ -52,6 +61,9 @@ class MonitoramentoGlobalView(APIView):
             {
                 "totais": {
                     "editais_ativos": len(editais_ativos),
+                    "projetos_cadastrados": len(projetos_cadastrados),
+                    "usuarios_ativos": len(usuarios_ativos),
+                    "usuarios_inativos": len(usuarios_inativos),
                     "bolsas_ativas": len(bolsas_ativas),
                     "inscricoes_ativas": len(inscricoes_ativas),
                     "inscricoes_encerradas": len(inscricoes_encerradas),
@@ -64,6 +76,32 @@ class MonitoramentoGlobalView(APIView):
                             "status": edital.status,
                         }
                         for edital in editais_ativos
+                    ],
+                    "projetos_cadastrados": [
+                        {
+                            "titulo": projeto.titulo,
+                            "coordenador": projeto.coordenador_projeto.usuario.nome,
+                            "status": projeto.status,
+                        }
+                        for projeto in projetos_cadastrados
+                    ],
+                    "usuarios_ativos": [
+                        {
+                            "nome": usuario.nome,
+                            "email": usuario.email,
+                            "perfil": usuario.get_role_display(),
+                            "status": "ATIVO",
+                        }
+                        for usuario in usuarios_ativos
+                    ],
+                    "usuarios_inativos": [
+                        {
+                            "nome": usuario.nome,
+                            "email": usuario.email,
+                            "perfil": usuario.get_role_display(),
+                            "status": "INATIVO",
+                        }
+                        for usuario in usuarios_inativos
                     ],
                     "bolsas_ativas": [
                         {

@@ -28,6 +28,13 @@ class MonitoramentoGlobalTests(APITestCase):
         self.coordenador = CoordenadorProjeto.objects.create(
             usuario=self.coordenador_usuario,
         )
+        Usuario.objects.create_user(
+            username="usuario_inativo",
+            email="inativo@example.com",
+            nome="Usuário Inativo",
+            role=Usuario.Role.ALUNO,
+            is_active=False,
+        )
 
         self.projeto = Projeto.objects.create(
             titulo="Projeto monitorado",
@@ -110,6 +117,9 @@ class MonitoramentoGlobalTests(APITestCase):
             response.data["totais"],
             {
                 "editais_ativos": 1,
+                "projetos_cadastrados": 1,
+                "usuarios_ativos": 6,
+                "usuarios_inativos": 1,
                 "bolsas_ativas": 2,
                 "inscricoes_ativas": 1,
                 "inscricoes_encerradas": 2,
@@ -122,9 +132,13 @@ class MonitoramentoGlobalTests(APITestCase):
         response = self.client.get(self.url)
 
         edital = response.data["detalhes"]["editais_ativos"][0]
+        projeto = response.data["detalhes"]["projetos_cadastrados"][0]
+        usuario_inativo = response.data["detalhes"]["usuarios_inativos"][0]
         inscricao = response.data["detalhes"]["inscricoes_ativas"][0]
 
         self.assertEqual(edital["nome"], "Edital ativo")
+        self.assertEqual(projeto["titulo"], "Projeto monitorado")
+        self.assertEqual(usuario_inativo["nome"], "Usuário Inativo")
         self.assertEqual(edital["ano_codigo"], "2026-076")
         self.assertEqual(inscricao["aluno"], "Aluno homologado")
         self.assertEqual(inscricao["projeto"], "Projeto monitorado")

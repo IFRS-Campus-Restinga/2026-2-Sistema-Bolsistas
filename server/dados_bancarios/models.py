@@ -16,10 +16,7 @@ class DadosBancarios(models.Model):
     banco = models.CharField(max_length=100)
     agencia = models.CharField(max_length=30)
     conta = models.CharField(max_length=30)
-    comprovante = models.FileField(
-        upload_to=caminho_comprovante,
-        blank=True,
-    )
+    comprovante = models.FileField(upload_to=caminho_comprovante)
 
     class Meta:
         verbose_name = "Dados bancários"

@@ -35,7 +35,7 @@ class MeusDadosBancariosTests(APITestCase):
         self.url = reverse("dados_bancarios:meus")
         self.client.force_authenticate(self.usuario)
 
-    def dados_validos(self, **alteracoes):
+    def dados_validos(self, incluir_comprovante=True, **alteracoes):
         dados = {
             "matricula": "2026000001",
             "curso": "Engenharia de Software",
@@ -44,6 +44,12 @@ class MeusDadosBancariosTests(APITestCase):
             "agencia": "1234-5",
             "conta": "67890-1",
         }
+        if incluir_comprovante:
+            dados["comprovante"] = SimpleUploadedFile(
+                "comprovante.pdf",
+                b"conteudo do comprovante",
+                content_type="application/pdf",
+            )
         dados.update(alteracoes)
         return dados
 
@@ -62,7 +68,7 @@ class MeusDadosBancariosTests(APITestCase):
         response = self.client.put(
             self.url,
             self.dados_validos(),
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, 201)
@@ -86,13 +92,13 @@ class MeusDadosBancariosTests(APITestCase):
         self.client.put(
             self.url,
             self.dados_validos(),
-            format="json",
+            format="multipart",
         )
 
         response = self.client.put(
             self.url,
-            self.dados_validos(banco="Caixa Econômica"),
-            format="json",
+            self.dados_validos(incluir_comprovante=False, banco="Caixa Econômica"),
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, 200)
@@ -125,6 +131,80 @@ class MeusDadosBancariosTests(APITestCase):
                 self.assertIn(campo, response.data)
 
         self.assertFalse(DadosBancarios.objects.exists())
+
+    def test_comprovante_e_obrigatorio_no_primeiro_cadastro(self):
+        response = self.client.put(
+            self.url,
+            self.dados_validos(incluir_comprovante=False),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("comprovante", response.data)
+
+    def test_cpf_com_pontuacao_e_salvo_apenas_com_numeros(self):
+        response = self.client.put(
+            self.url,
+            self.dados_validos(cpf="529.982.247-25"),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.aluno.refresh_from_db()
+        self.assertEqual(self.aluno.cpf, "52998224725")
+
+    def test_rejeita_cpf_com_quantidade_incorreta(self):
+        response = self.client.put(
+            self.url,
+            self.dados_validos(cpf="123.456.789-0"),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["cpf"][0], "O CPF deve conter 11 números.")
+
+    def test_rejeita_cpf_com_caracteres_invalidos(self):
+        response = self.client.put(
+            self.url,
+            self.dados_validos(cpf="529.982.247-A5"),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["cpf"][0],
+            "O CPF deve conter apenas números, pontos e hífen.",
+        )
+
+    def test_rejeita_cpf_ja_cadastrado(self):
+        outro_usuario = Usuario.objects.create_user(
+            username="outro_aluno",
+            email="outro_aluno@example.com",
+            nome="Outro Aluno",
+            role=Usuario.Role.ALUNO,
+        )
+        Aluno.objects.create(usuario=outro_usuario, cpf="52998224725")
+
+        response = self.client.put(
+            self.url,
+            self.dados_validos(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["cpf"][0], "Este CPF já está cadastrado.")
+
+    def test_rejeita_agencia_e_conta_com_texto(self):
+        for campo in ["agencia", "conta"]:
+            with self.subTest(campo=campo):
+                response = self.client.put(
+                    self.url,
+                    self.dados_validos(**{campo: "batata"}),
+                    format="multipart",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(campo, response.data)
 
     def test_comprovante_valido_pode_ser_baixado(self):
         comprovante = SimpleUploadedFile(

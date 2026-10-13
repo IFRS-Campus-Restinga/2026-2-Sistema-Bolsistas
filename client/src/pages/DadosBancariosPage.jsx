@@ -32,6 +32,7 @@ export default function DadosBancariosPage() {
   const [comprovante, setComprovante] = useState(null)
   const [comprovanteUrl, setComprovanteUrl] = useState(null)
   const [cadastroCompleto, setCadastroCompleto] = useState(false)
+  const [cadastroExistente, setCadastroExistente] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -42,7 +43,7 @@ export default function DadosBancariosPage() {
 
     async function carregar() {
       try {
-        const response = await dadosBancariosFetch('/meus/')
+        const response = await dadosBancariosFetch('/')
         const dados = await response.json().catch(() => ({}))
 
         if (!response.ok) {
@@ -61,6 +62,7 @@ export default function DadosBancariosPage() {
         })
         setComprovanteUrl(dados.comprovante_url)
         setCadastroCompleto(dados.cadastro_completo)
+        setCadastroExistente(Boolean(dados.id))
       } catch (error) {
         if (ativo) setErro(error.message)
       } finally {
@@ -92,6 +94,12 @@ export default function DadosBancariosPage() {
     setErro('')
     setSucesso('')
 
+    if (!comprovante && !comprovanteUrl) {
+      setErro('Envie um comprovante bancário.')
+      setSalvando(false)
+      return
+    }
+
     try {
       const body = new FormData()
       body.append('matricula', form.matricula)
@@ -105,7 +113,7 @@ export default function DadosBancariosPage() {
         body.append('comprovante', comprovante)
       }
 
-      const response = await dadosBancariosFetch('/meus/', {
+      const response = await dadosBancariosFetch('/', {
         method: 'PUT',
         body,
       })
@@ -126,7 +134,8 @@ export default function DadosBancariosPage() {
       setComprovante(null)
       setComprovanteUrl(dados.comprovante_url)
       setCadastroCompleto(dados.cadastro_completo)
-      setSucesso('Dados bancários salvos com sucesso.')
+      setCadastroExistente(true)
+      setSucesso(`Dados bancários ${cadastroExistente ? 'atualizados' : 'salvos'} com sucesso.`)
     } catch (error) {
       setErro(error.message)
     } finally {
@@ -145,8 +154,8 @@ export default function DadosBancariosPage() {
 
       {!cadastroCompleto && !carregando && (
         <Alert tone="error">
-          Matrícula, curso, CPF, banco, agência e conta devem ser preenchidos para concluir o
-          cadastro.
+          Matrícula, curso, CPF, banco, agência, conta e comprovante devem ser informados para
+          concluir o cadastro.
         </Alert>
       )}
 
@@ -221,6 +230,8 @@ export default function DadosBancariosPage() {
               onChange={atualizarCampo}
               disabled={salvando}
               required
+              pattern="[0-9]+(-[0-9Xx])?"
+              title="Use somente números e, se necessário, hífen antes do dígito."
             />
           </FormField>
 
@@ -232,10 +243,12 @@ export default function DadosBancariosPage() {
               onChange={atualizarCampo}
               disabled={salvando}
               required
+              pattern="[0-9]+(-[0-9Xx])?"
+              title="Use somente números e, se necessário, hífen antes do dígito."
             />
           </FormField>
 
-          <FormField label="Comprovante bancário (opcional: cartão, extrato etc.)">
+          <FormField label="Comprovante bancário (cartão, extrato etc.)">
             <FileField
               value={comprovante?.name || ''}
               onChange={setComprovante}
@@ -248,7 +261,13 @@ export default function DadosBancariosPage() {
 
           <FormActions>
             <Button type="submit" variant="accent" disabled={salvando}>
-              {salvando ? 'Salvando...' : 'Salvar'}
+              {salvando
+                ? cadastroExistente
+                  ? 'Atualizando...'
+                  : 'Salvando...'
+                : cadastroExistente
+                  ? 'Atualizar'
+                  : 'Salvar'}
             </Button>
           </FormActions>
         </form>

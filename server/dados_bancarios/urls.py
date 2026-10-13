@@ -9,7 +9,7 @@ from .views import (
 app_name = "dados_bancarios"
 
 urlpatterns = [
-    path("meus/", MeusDadosBancariosView.as_view(), name="meus"),
+    path("", MeusDadosBancariosView.as_view(), name="meus"),
     path(
         "alunos/<uuid:aluno_id>/",
         DadosBancariosAlunoView.as_view(),

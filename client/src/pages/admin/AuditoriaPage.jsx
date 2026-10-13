@@ -88,7 +88,7 @@ export default function AuditoriaPage() {
 
   return (
     <>
-      <PageHeader title="Log de Auditoria" />
+      <PageHeader title="Auditoria" />
 
       <form
         onSubmit={filtrar}

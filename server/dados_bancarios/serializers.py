@@ -1,3 +1,5 @@
+import re
+
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -7,6 +9,7 @@ from server.validators import validar_upload
 from .models import DadosBancarios
 
 EXTENSOES_COMPROVANTE = ["pdf", "jpg", "jpeg", "png"]
+FORMATO_CONTA = r"^\d+(?:-[0-9Xx])?$"
 
 
 class DadosBancariosSerializer(serializers.ModelSerializer):
@@ -74,8 +77,23 @@ class DadosBancariosSerializer(serializers.ModelSerializer):
 
         return curso
 
+    def _validar_numero_bancario(self, valor, campo):
+        valor = valor.strip()
+        if not valor:
+            raise serializers.ValidationError(f"Informe a {campo}.")
+
+        if not re.fullmatch(FORMATO_CONTA, valor):
+            raise serializers.ValidationError(
+                "Use somente números e, se necessário, hífen antes do dígito."
+            )
+
+        return valor.upper()
+
     def validate_cpf(self, valor):
-        cpf = "".join(caractere for caractere in valor if caractere.isdigit())
+        cpf = valor.strip().replace(".", "").replace("-", "")
+
+        if not cpf.isdigit():
+            raise serializers.ValidationError("O CPF deve conter apenas números, pontos e hífen.")
 
         if len(cpf) != 11:
             raise serializers.ValidationError("O CPF deve conter 11 números.")
@@ -87,8 +105,21 @@ class DadosBancariosSerializer(serializers.ModelSerializer):
 
         return cpf
 
+    def validate_agencia(self, valor):
+        return self._validar_numero_bancario(valor, "agência")
+
+    def validate_conta(self, valor):
+        return self._validar_numero_bancario(valor, "conta")
+
     def validate_comprovante(self, arquivo):
         return validar_upload(arquivo, EXTENSOES_COMPROVANTE)
+
+    def validate(self, attrs):
+        comprovante_atual = self.instance.comprovante if self.instance else None
+        if not attrs.get("comprovante") and not comprovante_atual:
+            raise serializers.ValidationError({"comprovante": "Envie um comprovante bancário."})
+
+        return attrs
 
     def get_comprovante_url(self, dados):
         if not dados.comprovante:
@@ -111,6 +142,7 @@ class DadosBancariosSerializer(serializers.ModelSerializer):
                 dados.banco,
                 dados.agencia,
                 dados.conta,
+                dados.comprovante.name if dados.comprovante else "",
             ]
         )
 
