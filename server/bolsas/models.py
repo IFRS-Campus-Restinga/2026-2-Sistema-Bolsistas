@@ -2,7 +2,6 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.utils import timezone
 
 from editais.models import Edital
 from projetos.models import Projeto
@@ -33,6 +32,55 @@ class StatusBolsa(models.TextChoices):
 
 
 STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.APROVADA, StatusBolsa.ABERTA]
+STATUS_BOLSA_FINALIZADOS = [StatusBolsa.REJEITADA, StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA]
+
+
+class TipoBolsaModalidade(models.Model):
+    """Catálogo institucional fixo: cada modalidade + carga horária e seu valor máximo."""
+
+    modalidade = models.CharField(max_length=10, choices=Modalidade.choices)
+    carga_horaria_semanal = models.PositiveIntegerField()
+    valor_maximo = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "tipo de bolsa (modalidade + CH)"
+        verbose_name_plural = "tipos de bolsa (modalidade + CH)"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["modalidade", "carga_horaria_semanal"],
+                name="uniq_tipo_bolsa_modalidade_ch",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.modalidade} - {self.carga_horaria_semanal}h"
+
+
+class EditalValorBolsa(models.Model):
+    """Combinação do catálogo disponível em um edital, com o valor mensal daquele edital."""
+
+    edital = models.ForeignKey(Edital, on_delete=models.CASCADE, related_name="valores_bolsa")
+    tipo_bolsa_modalidade = models.ForeignKey(
+        TipoBolsaModalidade, on_delete=models.PROTECT, related_name="valores_edital"
+    )
+    valor_mensal = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))]
+    )
+
+    class Meta:
+        ordering = ["tipo_bolsa_modalidade_id"]
+        verbose_name = "valor de bolsa do edital"
+        verbose_name_plural = "valores de bolsa do edital"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["edital", "tipo_bolsa_modalidade"],
+                name="uniq_valor_bolsa_por_edital",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.edital} - {self.tipo_bolsa_modalidade}: R$ {self.valor_mensal}"
 
 
 PESO_TOTAL = Decimal("100")
@@ -55,7 +103,7 @@ class Bolsa(models.Model):
     valor_mensal = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text="Placeholder — no futuro será calculado a partir de modalidade + carga horária.",
+        help_text="Copiado da tabela de valores do edital (modalidade + carga horária).",
     )
     quantidade_vagas = models.PositiveIntegerField(
         default=1,
@@ -99,11 +147,11 @@ class Bolsa(models.Model):
         if self.status not in STATUS_EDITAVEIS:
             return f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada.'
 
-        fechamento = self.edital.data_fechamento_inscricoes
-        if fechamento and timezone.localdate() > fechamento:
+        if self.edital.inscricoes_encerradas():
             return (
                 "O prazo de inscrições do edital terminou em "
-                f"{fechamento:%d/%m/%Y}; a bolsa não pode mais ser editada."
+                f"{self.edital.data_fechamento_inscricoes:%d/%m/%Y}; "
+                "a bolsa não pode mais ser editada."
             )
         return ""
 

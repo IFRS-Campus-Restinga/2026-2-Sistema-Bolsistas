@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorProjeto
+from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
@@ -48,8 +49,7 @@ def _garantir_editavel(inscricao):
     if inscricao.status not in (StatusInscricao.RASCUNHO, StatusInscricao.PENDENTE):
         raise ValidationError({"detail": "Uma inscrição já analisada não pode ser alterada."})
 
-    hoje = timezone.localdate()
-    if hoje > inscricao.bolsa.edital.data_fechamento_inscricoes:
+    if inscricao.bolsa.edital.inscricoes_encerradas():
         raise ValidationError({"detail": "O prazo de inscrição deste edital já foi encerrado."})
 
 
@@ -129,6 +129,14 @@ class EnviarInscricaoView(APIView):
         inscricao.data_envio = timezone.now()
         inscricao.save(update_fields=["status", "data_envio"])
 
+        registrar_log(
+            usuario=request.user,
+            acao="INSCRICAO_ENVIADA",
+            entidade="Inscricao",
+            entidade_id=inscricao.pk,
+            descricao=(f'Inscrição enviada para o projeto "{inscricao.bolsa.projeto.titulo}".'),
+        )
+
         return Response(InscricaoSerializer(inscricao, context={"request": request}).data)
 
 
@@ -144,7 +152,7 @@ class CancelarInscricaoView(APIView):
         if inscricao.status != StatusInscricao.PENDENTE:
             raise ValidationError({"detail": 'Só é possível cancelar uma inscrição "Pendente".'})
 
-        if timezone.localdate() > inscricao.bolsa.edital.data_fechamento_inscricoes:
+        if inscricao.bolsa.edital.inscricoes_encerradas():
             raise ValidationError({"detail": "O prazo de inscrição deste edital já foi encerrado."})
 
         inscricao.status = StatusInscricao.CANCELADA
@@ -277,8 +285,7 @@ class DecisaoInscricaoView(APIView):
                 {"detail": "O edital precisa estar em vigor para analisar inscrições."}
             )
 
-        fechamento = inscricao.bolsa.edital.data_fechamento_inscricoes
-        if fechamento is None or timezone.localdate() <= fechamento:
+        if not inscricao.bolsa.edital.inscricoes_encerradas():
             raise ValidationError(
                 {
                     "detail": "A homologação e o indeferimento só são permitidos após o encerramento das inscrições."
@@ -313,6 +320,25 @@ class DecisaoInscricaoView(APIView):
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
         NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+
+        acao = (
+            "INSCRICAO_HOMOLOGADA"
+            if inscricao.status == StatusInscricao.HOMOLOGADA
+            else "INSCRICAO_INDEFERIDA"
+        )
+
+        registrar_log(
+            usuario=request.user,
+            acao=acao,
+            entidade="Inscricao",
+            entidade_id=inscricao.pk,
+            descricao=(
+                f'Inscrição de "{inscricao.aluno.nome}" no projeto '
+                f'"{inscricao.bolsa.projeto.titulo}" foi '
+                f"{inscricao.get_status_display().lower()}."
+            ),
+        )
+
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
 
 
@@ -371,11 +397,9 @@ def motivo_bloqueio_recurso(inscricao):
         StatusBolsa.EM_SELECAO,
     ]:
         return "O edital ou a bolsa não está disponível para receber recursos."
-    inicio = edital.data_recurso_homologacao_inicio
-    fim = edital.data_recurso_homologacao_fim
-    if fim and timezone.localdate() > fim:
+    if edital.recursos_homologacao_encerrados():
         return "O período de interpor recursos encerrou."
-    if not inicio or not fim or not inicio <= timezone.localdate() <= fim:
+    if not edital.janela_recurso_homologacao_aberta():
         return "O período de recursos da homologação não está aberto."
     if inscricao.recursos.filter(
         etapa=EtapaRecurso.HOMOLOGACAO, status=StatusRecurso.PENDENTE
@@ -447,6 +471,16 @@ class RecursosInscricaoView(APIView):
                     anexo.arquivo.save(arquivo.name, arquivo, save=False)
                     arquivos_salvos.append((anexo.arquivo.storage, anexo.arquivo.name))
                     anexo.save()
+
+                    registrar_log(
+                        usuario=request.user,
+                        acao="RECURSO_INTERPOSTO",
+                        entidade="Recurso",
+                        entidade_id=recurso.pk,
+                        descricao=(
+                            f'Recurso interposto no projeto "{inscricao.bolsa.projeto.titulo}".'
+                        ),
+                    )
                 resultado = resposta_recursos(inscricao, request)
             return Response(resultado, status=201)
         except Exception as exc:
@@ -530,6 +564,22 @@ class JulgarRecursoView(APIView):
         if recurso.justificativa_julgamento:
             mensagem += f" Justificativa: {recurso.justificativa_julgamento}"
         NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+
+        acao = (
+            "RECURSO_DEFERIDO" if recurso.status == StatusRecurso.DEFERIDO else "RECURSO_INDEFERIDO"
+        )
+
+        registrar_log(
+            usuario=request.user,
+            acao=acao,
+            entidade="Recurso",
+            entidade_id=recurso.pk,
+            descricao=(
+                f'Recurso do projeto "{inscricao.bolsa.projeto.titulo}" foi '
+                f"{recurso.get_status_display().lower()}."
+            ),
+        )
+
         return Response(resposta_recursos(inscricao, request))
 
 

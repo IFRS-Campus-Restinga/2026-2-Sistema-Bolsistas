@@ -14,6 +14,7 @@ import {
 } from '../components'
 import InscricaoWizard from './InscricaoWizard'
 import RecursosModal from './RecursosModal'
+import ResultadoSelecaoModal from './ResultadoSelecaoModal'
 import { BolsaDetalhe } from './BolsasDisponiveisPage'
 
 export default function MinhasInscricoesPage({ onHistorico }) {
@@ -28,6 +29,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
   const [bolsaInscricao, setBolsaInscricao] = useState(null)
   const [consultandoRecurso, setConsultandoRecurso] = useState(false)
+  const [resultadoBolsaId, setResultadoBolsaId] = useState(null)
 
   useEffect(() => {
     let ativo = true
@@ -118,6 +120,19 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   }
 
   function acoesPorInscricao(inscricao) {
+    const resultado = inscricao.resultado_selecao
+      ? [
+          {
+            label: 'Resultado da seleção',
+            variant: 'accent',
+            onClick: () => setResultadoBolsaId(inscricao.bolsa),
+          },
+        ]
+      : []
+    return [...resultado, ...acoesDaInscricao(inscricao)]
+  }
+
+  function acoesDaInscricao(inscricao) {
     const prazoEncerrado = inscricao.prazo_inscricao_encerrado
 
     if (inscricao.status === 'RASCUNHO') {
@@ -156,6 +171,12 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     return []
   }
 
+  function recursoHomologacaoDeferido(mensagem = '') {
+    const texto = mensagem.toLocaleLowerCase('pt-BR')
+
+    return texto.includes('recurso de homologação') && texto.includes('foi deferido')
+  }
+
   const [lendoNotificacao, setLendoNotificacao] = useState(null)
 
   async function marcarLida(id) {
@@ -180,6 +201,20 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     inscricao.bolsa_tipo_display,
     inscricao.edital_nome,
     <Badge key="status" status={inscricao.status} />,
+    inscricao.resultado_selecao ? (
+      <Badge
+        key="selecao"
+        status={
+          inscricao.resultado_selecao.indicado
+            ? 'INDICADO'
+            : inscricao.resultado_selecao.nao_assumiu
+              ? 'NAO_ASSUMIU'
+              : inscricao.resultado_selecao.situacao || 'RESULTADO_PUBLICADO'
+        }
+      />
+    ) : (
+      ''
+    ),
     <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
   ])
 
@@ -201,22 +236,31 @@ export default function MinhasInscricoesPage({ onHistorico }) {
       {notificacoes.length > 0 && (
         <section aria-label="Notificações das inscrições">
           <h3>Novas notificações</h3>
-          {notificacoes.map((item) => (
-            <Alert key={item.id} tone="warning">
-              <p>{item.mensagem}</p>
-              <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
-              <Button
-                size="sm"
-                disabled={lendoNotificacao !== null}
-                onClick={() => marcarLida(item.id)}
-              >
-                Marcar como lida
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setBolsaInscricao(item.inscricao)}>
-                Ir para a bolsa
-              </Button>
-            </Alert>
-          ))}
+          {notificacoes.map((item) => {
+            const recursoDeferido = recursoHomologacaoDeferido(item.mensagem)
+
+            return (
+              <Alert key={item.id} tone={recursoDeferido ? 'success' : 'warning'}>
+                {recursoDeferido && <Badge status="DEFERIDO" />}
+                <p>{item.mensagem}</p>
+                <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
+                <Button
+                  size="sm"
+                  disabled={lendoNotificacao !== null}
+                  onClick={() => marcarLida(item.id)}
+                >
+                  Marcar como lida
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBolsaInscricao(item.inscricao)}
+                >
+                  Ir para a bolsa
+                </Button>
+              </Alert>
+            )
+          })}
         </section>
       )}
 
@@ -224,7 +268,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
         <p role="status">Carregando inscrições...</p>
       ) : (
         <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Ações']}
+          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
           rows={linhas}
           emptyMessage="Você ainda não tem nenhuma inscrição."
         />
@@ -252,6 +296,13 @@ export default function MinhasInscricoesPage({ onHistorico }) {
           onAtualizar={forcarRecarga}
         />
       )}
+      {resultadoBolsaId && (
+        <ResultadoSelecaoModal
+          key={resultadoBolsaId}
+          bolsaId={resultadoBolsaId}
+          onFechar={() => setResultadoBolsaId(null)}
+        />
+      )}
       {comprovante && (
         <ComprovanteModal inscricao={comprovante} onFechar={() => setComprovante(null)} />
       )}
@@ -261,7 +312,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 
 function ComprovanteModal({ inscricao, onFechar }) {
   return (
-    <Modal title={`Comprovante — ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
+    <Modal title={`Comprovante: ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
       <p>
         <strong>Edital:</strong> {inscricao.edital_nome}
       </p>
@@ -300,7 +351,7 @@ function ComprovanteModal({ inscricao, onFechar }) {
       )}
 
       <FormActions>
-        <Button variant="outline" onClick={onFechar}>
+        <Button variant="danger" onClick={onFechar}>
           Fechar
         </Button>
       </FormActions>

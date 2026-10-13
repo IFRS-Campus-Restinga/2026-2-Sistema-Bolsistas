@@ -6,7 +6,7 @@ from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuar
 from editais.models import Edital
 from projetos.models import Projeto
 
-from .models import Bolsa, StatusBolsa, TipoBolsa
+from .models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
 
 
 def cria_usuario(username, email, role):
@@ -34,6 +34,15 @@ def cria_edital(ano_codigo="2026-001", status_edital=Edital.Status.EM_VIGOR):
     )
 
 
+def define_valor_no_edital(edital, modalidade="BICT", carga_horaria=12, valor="500.00"):
+    tipo = TipoBolsaModalidade.objects.get(
+        modalidade=modalidade, carga_horaria_semanal=carga_horaria
+    )
+    return EditalValorBolsa.objects.create(
+        edital=edital, tipo_bolsa_modalidade=tipo, valor_mensal=valor
+    )
+
+
 class SolicitarBolsaAPITests(APITestCase):
     def setUp(self):
         self.url = reverse("bolsas:lista-criacao")
@@ -42,6 +51,7 @@ class SolicitarBolsaAPITests(APITestCase):
             titulo="Projeto A", coordenador_projeto=self.coordenador.perfil_coordenador_projeto
         )
         self.edital = cria_edital()
+        define_valor_no_edital(self.edital)
         self.dados = {
             "projeto": self.projeto.id,
             "edital": self.edital.id,
@@ -60,6 +70,36 @@ class SolicitarBolsaAPITests(APITestCase):
         bolsa = Bolsa.objects.get()
         self.assertEqual(bolsa.status, StatusBolsa.SOLICITADA)
         self.assertEqual(bolsa.projeto_id, self.projeto.id)
+
+    def test_valor_mensal_vem_da_tabela_do_edital(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resposta.data["valor_mensal"], "500.00")
+
+    def test_combinacao_fora_do_edital_e_rejeitada(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(
+            self.url, {**self.dados, "carga_horaria_semanal": 16}, format="json"
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("carga_horaria_semanal", resposta.data)
+        self.assertFalse(Bolsa.objects.exists())
+
+    def test_edital_sem_tabela_de_valores_nao_aceita_bolsa(self):
+        outro_edital = cria_edital(ano_codigo="2026-009")
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(
+            self.url, {**self.dados, "edital": outro_edital.id}, format="json"
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("modalidade", resposta.data)
 
     def test_nao_dono_do_projeto_nao_pode_solicitar_bolsa(self):
         outro_coordenador = cria_coordenador_projeto("outro_cp", "outro@test.com")
@@ -261,3 +301,48 @@ class CancelarBolsaAPITests(APITestCase):
         resposta = self.client.post(reverse("bolsas:cancelar", args=[self.bolsa.id]))
 
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class BolsasDisponiveisPermissaoTests(APITestCase):
+    """As telas de bolsas disponíveis são do Aluno; os demais papéis não devem listar."""
+
+    def setUp(self):
+        self.coordenador_projeto = cria_coordenador_projeto("coord_projeto", "cp@test.com")
+        self.coordenador_area = cria_coordenador_area(
+            "coord_area", "ca@test.com", TipoArea.PESQUISA
+        )
+        self.aluno = cria_usuario("aluno", "aluno@test.com", Usuario.Role.ALUNO)
+        projeto = Projeto.objects.create(
+            titulo="Projeto A",
+            coordenador_projeto=self.coordenador_projeto.perfil_coordenador_projeto,
+        )
+        self.bolsa = Bolsa.objects.create(
+            projeto=projeto,
+            edital=cria_edital(),
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="700.00",
+            status=StatusBolsa.ABERTA,
+        )
+
+    def test_aluno_lista(self):
+        self.client.force_authenticate(user=self.aluno)
+        self.assertEqual(
+            self.client.get(reverse("bolsas:disponiveis")).status_code, status.HTTP_200_OK
+        )
+
+    def test_outros_papeis_nao_listam(self):
+        for usuario in [self.coordenador_projeto, self.coordenador_area]:
+            with self.subTest(role=usuario.role):
+                self.client.force_authenticate(user=usuario)
+                self.assertEqual(
+                    self.client.get(reverse("bolsas:disponiveis")).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+                self.assertEqual(
+                    self.client.get(
+                        reverse("bolsas:disponivel-detalhe", args=[self.bolsa.id])
+                    ).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )

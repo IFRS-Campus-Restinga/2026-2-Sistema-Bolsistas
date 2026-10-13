@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from auditoria.services import registrar_log
 from projetos.models import Projeto
 
 from .models import CoordenadorArea, CoordenadorProjeto, EmailCoordenadorArea, Usuario
@@ -26,6 +27,7 @@ def listar_usuarios(request):
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated, IsAdministrador])
+@transaction.atomic
 def atualizar_tipo_area(request, usuario_id):
     usuario = get_object_or_404(Usuario, id=usuario_id, role=Usuario.Role.COORDENADOR_AREA)
     perfil = get_object_or_404(CoordenadorArea, usuario=usuario)
@@ -39,12 +41,21 @@ def atualizar_tipo_area(request, usuario_id):
             tipo_area=serializer.validated_data["tipo_area"]
         )
 
+    registrar_log(
+        usuario=request.user,
+        acao="AREA_COORDENADOR_ATUALIZADA",
+        entidade="CoordenadorArea",
+        entidade_id=perfil.pk,
+        descricao=f"Área do coordenador {usuario.nome} atualizada.",
+    )
+
     usuario.refresh_from_db()
     return Response(UsuarioListSerializer(usuario).data)
 
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated, IsAdministrador])
+@transaction.atomic
 def atualizar_status(request, usuario_id):
     usuario = get_object_or_404(Usuario, id=usuario_id)
     is_active = request.data.get("is_active")
@@ -55,6 +66,15 @@ def atualizar_status(request, usuario_id):
         )
     usuario.is_active = is_active
     usuario.save(update_fields=["is_active"])
+
+    registrar_log(
+        usuario=request.user,
+        acao="USUARIO_ATIVADO" if is_active else "USUARIO_DESATIVADO",
+        entidade="Usuario",
+        entidade_id=usuario.pk,
+        descricao=f"Usuário {usuario.nome} {'ativado' if is_active else 'desativado'}.",
+    )
+
     return Response(UsuarioListSerializer(usuario).data)
 
 
@@ -72,6 +92,13 @@ def emails_coordenadores(request):
         promover_coordenador_por_email(
             serializer.validated_data["email"], serializer.validated_data["tipo_area"]
         )
+        registrar_log(
+            usuario=request.user,
+            acao="EMAIL_COORDENADOR_CADASTRADO",
+            entidade="EmailCoordenadorArea",
+            entidade_id=serializer.instance.pk,
+            descricao="E-mail de coordenador de área cadastrado.",
+        )
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -82,8 +109,16 @@ def email_coordenador_detalhe(request, entrada_id):
 
     if request.method == "DELETE":
         with transaction.atomic():
+            entrada_id_log = entrada.pk
             remover_coordenador_por_email(entrada.email)
             entrada.delete()
+            registrar_log(
+                usuario=request.user,
+                acao="EMAIL_COORDENADOR_REMOVIDO",
+                entidade="EmailCoordenadorArea",
+                entidade_id=entrada_id_log,
+                descricao="E-mail de coordenador de área removido.",
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     email_antigo = entrada.email
@@ -106,6 +141,14 @@ def email_coordenador_detalhe(request, entrada_id):
                     tipo_area=novo_tipo_area
                 )
             promover_coordenador_por_email(email_vigente, entrada.tipo_area)
+
+        registrar_log(
+            usuario=request.user,
+            acao="EMAIL_COORDENADOR_ATUALIZADO",
+            entidade="EmailCoordenadorArea",
+            entidade_id=entrada.pk,
+            descricao="E-mail de coordenador de área atualizado.",
+        )
 
     return Response(serializer.data)
 

@@ -1,8 +1,11 @@
 import re
+from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+
+from bolsas.models import TipoBolsaModalidade
 
 from .models import AlteracaoCronograma, Edital
 
@@ -121,3 +124,57 @@ class CronogramaEditalSerializer(EditalSerializer):
     class Meta:
         model = Edital
         fields = CAMPOS_CRONOGRAMA
+
+
+class ValorBolsaItemSerializer(serializers.Serializer):
+    tipo_bolsa_modalidade = serializers.IntegerField()
+    valor_mensal = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0.01")
+    )
+
+
+class ValoresBolsaEditalSerializer(serializers.Serializer):
+    """Substitui o conjunto de modalidades + CH disponíveis no edital e seus valores."""
+
+    valores = ValorBolsaItemSerializer(many=True)
+
+    def validate_valores(self, valores):
+        catalogo = {item.id: item for item in TipoBolsaModalidade.objects.all()}
+        vistos = set()
+        erros = []
+        for item in valores:
+            tipo = catalogo.get(item["tipo_bolsa_modalidade"])
+            if tipo is None:
+                erros.append("Combinação de modalidade e carga horária inexistente no catálogo.")
+                continue
+            if tipo.id in vistos:
+                erros.append(f"A combinação {tipo} foi informada mais de uma vez.")
+                continue
+            vistos.add(tipo.id)
+            if item["valor_mensal"] > tipo.valor_maximo:
+                erros.append(
+                    f"O valor de {tipo} não pode passar do máximo institucional "
+                    f"(R$ {tipo.valor_maximo})."
+                )
+            item["tipo"] = tipo
+        if erros:
+            raise serializers.ValidationError(erros)
+        return valores
+
+
+def representar_valores_bolsa(edital):
+    configurados = {
+        valor.tipo_bolsa_modalidade_id: valor.valor_mensal for valor in edital.valores_bolsa.all()
+    }
+    return [
+        {
+            "tipo_bolsa_modalidade": tipo.id,
+            "modalidade": tipo.modalidade,
+            "modalidade_display": tipo.get_modalidade_display(),
+            "carga_horaria_semanal": tipo.carga_horaria_semanal,
+            "valor_maximo": f"{tipo.valor_maximo:.2f}",
+            "disponivel": tipo.id in configurados,
+            "valor_mensal": (f"{configurados[tipo.id]:.2f}" if tipo.id in configurados else None),
+        }
+        for tipo in TipoBolsaModalidade.objects.all()
+    ]

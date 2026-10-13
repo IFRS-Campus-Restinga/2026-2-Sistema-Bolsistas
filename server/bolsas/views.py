@@ -8,7 +8,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Usuario
-from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.services import registrar_log
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
@@ -50,6 +51,17 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
         return queryset.none()
 
+    def perform_create(self, serializer):
+        bolsa = serializer.save()
+
+        registrar_log(
+            usuario=self.request.user,
+            acao="BOLSA_CRIADA",
+            entidade="Bolsa",
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" criada.',
+        )
+
 
 def _bolsas_disponiveis_qs():
     hoje = timezone.localdate()
@@ -66,6 +78,7 @@ def _bolsas_disponiveis_qs():
 
 class BolsasDisponiveisView(generics.ListAPIView):
     serializer_class = BolsaSerializer
+    permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
         return _bolsas_disponiveis_qs()
@@ -73,6 +86,7 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
     serializer_class = BolsaSerializer
+    permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
         return _bolsas_disponiveis_qs()
@@ -95,7 +109,15 @@ class BolsaDetailView(generics.RetrieveUpdateAPIView):
         motivo = serializer.instance.motivo_bloqueio_edicao()
         if motivo:
             raise ValidationError({"detail": motivo})
-        serializer.save()
+        bolsa = serializer.save()
+
+        registrar_log(
+            usuario=self.request.user,
+            acao="BOLSA_ATUALIZADA",
+            entidade="Bolsa",
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" atualizada.',
+        )
 
     def get_queryset(self):
         user = self.request.user
@@ -137,6 +159,14 @@ class AprovarBolsaView(APIView):
         bolsa.data_decisao = timezone.now()
         bolsa.save(update_fields=["status", "coordenador_area", "data_decisao"])
 
+        registrar_log(
+            usuario=request.user,
+            acao="BOLSA_APROVADA",
+            entidade="Bolsa",
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" aprovada.',
+        )
+
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
@@ -173,6 +203,14 @@ class RejeitarBolsaView(APIView):
             update_fields=["status", "coordenador_area", "data_decisao", "justificativa_decisao"]
         )
 
+        registrar_log(
+            usuario=request.user,
+            acao="BOLSA_REJEITADA",
+            entidade="Bolsa",
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" rejeitada.',
+        )
+
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 
 
@@ -194,6 +232,14 @@ class CancelarBolsaView(APIView):
         bolsa.status = StatusBolsa.CANCELADA
         bolsa.justificativa_decisao = (request.data.get("motivo") or "").strip()
         bolsa.save(update_fields=["status", "justificativa_decisao"])
+
+        registrar_log(
+            usuario=request.user,
+            acao="BOLSA_CANCELADA",
+            entidade="Bolsa",
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" cancelada.',
+        )
 
         return Response(
             BolsaSerializer(bolsa, context={"request": request}).data, status=status.HTTP_200_OK

@@ -1,12 +1,14 @@
 import re
 
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework import serializers
 
 from bolsas.models import StatusBolsa
+from selecao.models import DesistenciaVaga, IndicacaoBolsista, PublicacaoResultado
+from server.validators import validar_upload
 
 from .models import (
+    EXTENSOES_DOCUMENTO,
     AnexoRecurso,
     Documento,
     Inscricao,
@@ -27,6 +29,9 @@ class DocumentoSerializer(serializers.ModelSerializer):
         model = Documento
         fields = ["id", "tipo", "tipo_display", "nome_original", "arquivo", "enviado_em"]
         read_only_fields = ["id", "nome_original", "enviado_em"]
+
+    def validate_arquivo(self, arquivo):
+        return validar_upload(arquivo, EXTENSOES_DOCUMENTO)
 
     def to_representation(self, instance):
         dados = super().to_representation(instance)
@@ -68,6 +73,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
     documentos = DocumentoSerializer(many=True, read_only=True)
     notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
+    resultado_selecao = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -89,6 +95,7 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "data_decisao",
             "notificacoes",
             "prazo_inscricao_encerrado",
+            "resultado_selecao",
         ]
         read_only_fields = [
             "id",
@@ -101,7 +108,20 @@ class InscricaoSerializer(serializers.ModelSerializer):
         ]
 
     def get_prazo_inscricao_encerrado(self, inscricao):
-        return timezone.localdate() > inscricao.bolsa.edital.data_fechamento_inscricoes
+        return inscricao.bolsa.edital.inscricoes_encerradas()
+
+    def get_resultado_selecao(self, inscricao):
+        publicacao = PublicacaoResultado.objects.filter(bolsa_id=inscricao.bolsa_id).first()
+        if publicacao is None:
+            return None
+        resultado = publicacao.resultados.filter(inscricao=inscricao).first()
+        return {
+            "publicado_em": publicacao.publicado_em,
+            "situacao": resultado.situacao if resultado else None,
+            "posicao": resultado.posicao if resultado else None,
+            "indicado": IndicacaoBolsista.objects.filter(inscricao=inscricao).exists(),
+            "nao_assumiu": DesistenciaVaga.objects.filter(inscricao=inscricao).exists(),
+        }
 
     def validate_bolsa(self, bolsa):
         if self.instance and bolsa != self.instance.bolsa:
@@ -110,14 +130,9 @@ class InscricaoSerializer(serializers.ModelSerializer):
             )
 
         if self.instance is None:
-            hoje = timezone.localdate()
             if bolsa.status != StatusBolsa.ABERTA:
                 raise serializers.ValidationError("Esta bolsa não está com inscrições abertas.")
-            if not (
-                bolsa.edital.data_abertura_inscricoes
-                <= hoje
-                <= bolsa.edital.data_fechamento_inscricoes
-            ):
+            if not bolsa.edital.janela_inscricao_aberta():
                 raise serializers.ValidationError(
                     "O prazo de inscrição deste edital não está aberto."
                 )
@@ -207,6 +222,9 @@ class EnvioRecursoSerializer(serializers.Serializer):
         default=list,
     )
 
+    def validate_anexos(self, anexos):
+        return [validar_upload(anexo, EXTENSOES_DOCUMENTO) for anexo in anexos]
+
 
 class JulgamentoRecursoSerializer(serializers.Serializer):
     decisao = serializers.ChoiceField(choices=[StatusRecurso.DEFERIDO, StatusRecurso.INDEFERIDO])
@@ -245,8 +263,9 @@ class RecursoSerializer(serializers.ModelSerializer):
 
     def get_status(self, recurso):
         # Expiração é derivada do prazo; o recurso continua aguardando julgamento.
-        fim = recurso.inscricao.bolsa.edital.data_recurso_homologacao_fim
-        if recurso.status == StatusRecurso.PENDENTE and fim and timezone.localdate() > fim:
+        if recurso.status == StatusRecurso.PENDENTE and (
+            recurso.inscricao.bolsa.edital.recursos_homologacao_encerrados()
+        ):
             return "EXPIRADO"
         return recurso.status
 

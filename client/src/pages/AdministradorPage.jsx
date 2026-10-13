@@ -3,30 +3,41 @@ import {
   Layout,
   Button,
   PageHeader,
-  StatCard,
   IconHome,
   IconCalendar,
   IconBriefcase,
   IconUsers,
+  IconClipboardList,
 } from '../components'
-import UsuariosPage from './admin/UsuariosPage'
+import UsuariosPage from './UsuariosPage'
+import MonitoramentoPage from './MonitoramentoPage'
+import AuditoriaPage from './AuditoriaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
+  { id: 'bolsas', label: 'Bolsas', icon: <IconBriefcase /> },
+  { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardList /> },
   { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
+  { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
 ]
 
 export default function AdministradorPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
+  const [secaoMonitoramento, setSecaoMonitoramento] = useState(null)
+
+  function navegar(destino, secao = null) {
+    setSecaoMonitoramento(secao)
+    setActive(destino)
+  }
 
   return (
     <Layout
       role="Administrador"
       menuItems={menuItems}
       active={active}
-      onNav={setActive}
+      onNav={(destino) => navegar(destino)}
       onLogout={onVoltarHub}
       campus="Campus Restinga"
       userName={me.nome || '(sem nome)'}
@@ -46,20 +57,28 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
               </Button>
             }
           />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
-            <StatCard
-              label="Projetos Cadastrados"
-              value={0}
-              icon={<IconBriefcase />}
-              color="blue"
-            />
-            <StatCard label="Usuários Ativos" value={0} icon={<IconUsers />} color="green" />
-            <StatCard label="Usuários Inativos" value={0} icon={<IconUsers />} color="red" />
-          </div>
+
+          <MonitoramentoPage onNavigate={navegar} />
         </>
       )}
-      {active === 'usuarios' && <UsuariosPage />}
+      {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
+      {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
+      {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
+      {active === 'inscricoes' && (
+        <MonitoramentoPage secao={secaoMonitoramento || 'inscricoes_ativas'} />
+      )}
+      {active === 'usuarios' && (
+        <UsuariosPage
+          filtroStatus={
+            secaoMonitoramento === 'usuarios_ativos'
+              ? true
+              : secaoMonitoramento === 'usuarios_inativos'
+                ? false
+                : null
+          }
+        />
+      )}
+      {active === 'auditoria' && <AuditoriaPage />}
     </Layout>
   )
 }
