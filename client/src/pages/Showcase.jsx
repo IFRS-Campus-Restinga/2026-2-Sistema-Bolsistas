@@ -32,6 +32,12 @@ import './Showcase.css'
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const LINHAS_PAGINADAS = Array.from({ length: 47 }, (_, i) => [
+  `Edital ${String(i + 1).padStart(2, '0')}/2026`,
+  `2026-${String(i + 1).padStart(3, '0')}`,
+  <Badge key="status" status={i % 3 === 0 ? 'RASCUNHO' : 'EM_VIGOR'} />,
+])
+
 /* ── Conteúdo interno do showcase ──────────────────────────── */
 function ShowcaseContent() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -238,6 +244,9 @@ function ShowcaseContent() {
             ],
           ]}
         />
+
+        <p className="showcase__label">Data Table com paginação (10 por página)</p>
+        <DataTable columns={['Edital', 'Ano-Código', 'Status']} rows={LINHAS_PAGINADAS} />
       </section>
 
       {/* ── FORMULÁRIOS (#179) ─────────────────────────────── */}

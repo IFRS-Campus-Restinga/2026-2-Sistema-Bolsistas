@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import { auditoriaFetch } from '../api'
-import { Alert, Button, DataTable, FormField, PageHeader, TextInput } from '../components'
+import {
+  Alert,
+  Button,
+  DataTable,
+  FormField,
+  PageHeader,
+  Paginacao,
+  TextInput,
+} from '../components'
+
+const POR_PAGINA = 10
 
 function formatarAcao(acao) {
   const texto = acao.toLowerCase().replaceAll('_', ' ')
@@ -25,8 +35,10 @@ export default function AuditoriaPage() {
   const [filtros, setFiltros] = useState({
     inicio: '',
     fim: '',
+    pagina: 1,
   })
   const [logs, setLogs] = useState([])
+  const [total, setTotal] = useState(0)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
@@ -38,21 +50,25 @@ export default function AuditoriaPage() {
       setErro('')
 
       try {
-        const parametros = new URLSearchParams()
+        const parametros = new URLSearchParams({
+          pagina: String(filtros.pagina),
+          por_pagina: String(POR_PAGINA),
+        })
 
         if (filtros.inicio) parametros.set('inicio', filtros.inicio)
         if (filtros.fim) parametros.set('fim', filtros.fim)
 
-        const consulta = parametros.toString()
-        const caminho = consulta ? `/logs/?${consulta}` : '/logs/'
-        const response = await auditoriaFetch(caminho)
+        const response = await auditoriaFetch(`/logs/?${parametros}`)
         const resultado = await response.json().catch(() => ({}))
 
         if (!response.ok) {
           throw new Error(mensagemErro(resultado))
         }
 
-        if (ativo) setLogs(Array.isArray(resultado) ? resultado : [])
+        if (ativo) {
+          setLogs(Array.isArray(resultado.results) ? resultado.results : [])
+          setTotal(resultado.count ?? 0)
+        }
       } catch (error) {
         if (ativo) setErro(error.message)
       } finally {
@@ -69,13 +85,16 @@ export default function AuditoriaPage() {
 
   function filtrar(event) {
     event.preventDefault()
-    setFiltros({ ...campos })
+    setFiltros({ ...campos, pagina: 1 })
   }
 
   function limpar() {
-    const vazios = { inicio: '', fim: '' }
-    setCampos(vazios)
-    setFiltros(vazios)
+    setCampos({ inicio: '', fim: '' })
+    setFiltros({ inicio: '', fim: '', pagina: 1 })
+  }
+
+  function mudarPagina(pagina) {
+    setFiltros((atuais) => ({ ...atuais, pagina }))
   }
 
   const linhas = logs.map((log) => [
@@ -141,8 +160,18 @@ export default function AuditoriaPage() {
         columns={['Data e hora', 'Ação', 'Usuário', 'Entidade', 'Descrição']}
         rows={linhas}
         loading={carregando}
+        porPagina={null}
         emptyMessage="Nenhum registro de auditoria encontrado."
       />
+
+      {total > POR_PAGINA && (
+        <Paginacao
+          pagina={filtros.pagina}
+          porPagina={POR_PAGINA}
+          totalItens={total}
+          onMudar={mudarPagina}
+        />
+      )}
     </>
   )
 }

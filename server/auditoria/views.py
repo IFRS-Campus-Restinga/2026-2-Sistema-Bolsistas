@@ -1,14 +1,20 @@
-# Create your views here.
 from django.utils.dateparse import parse_date
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdministrador
 
 from .models import LogAuditoria
 from .serializers import LogAuditoriaSerializer
+
+
+class PaginacaoAuditoria(PageNumberPagination):
+    page_size = 20
+    page_query_param = "pagina"
+    page_size_query_param = "por_pagina"
+    max_page_size = 100
 
 
 class LogAuditoriaListView(APIView):
@@ -38,5 +44,7 @@ class LogAuditoriaListView(APIView):
         if fim:
             logs = logs.filter(data_hora__date__lte=fim)
 
-        serializer = LogAuditoriaSerializer(logs, many=True)
-        return Response(serializer.data)
+        paginador = PaginacaoAuditoria()
+        pagina = paginador.paginate_queryset(logs, request, view=self)
+        serializer = LogAuditoriaSerializer(pagina, many=True)
+        return paginador.get_paginated_response(serializer.data)

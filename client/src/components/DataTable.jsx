@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Paginacao } from './Paginacao'
 import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 import './DataTable.css'
 
@@ -12,14 +14,25 @@ const LARGURAS_ESQUELETO = ['70%', '55%', '80%', '60%']
  *   rows         — [[cell, cell, ...], ...]  (cada cell pode ser string ou ReactNode)
  *   emptyMessage — texto quando não há registros
  *   loading      — mostra linhas-esqueleto enquanto os dados carregam
+ *   porPagina    — linhas por página (padrão 10); null desliga a paginação
  */
 export function DataTable({
   columns,
   rows,
   emptyMessage = 'Nenhum registro encontrado.',
   loading = false,
+  porPagina = 10,
 }) {
   const mostrarEsqueleto = useCarregamentoVisivel(loading)
+
+  // A página só volta para 1 quando a tabela passa a mostrar outro tipo de dado
+  const assinatura = columns.join('|')
+  const [paginacao, setPaginacao] = useState({ pagina: 1, assinatura })
+  const paginar = Boolean(porPagina) && rows.length > porPagina
+  const totalPaginas = paginar ? Math.ceil(rows.length / porPagina) : 1
+  const paginaSalva = paginacao.assinatura === assinatura ? paginacao.pagina : 1
+  const pagina = Math.min(paginaSalva, totalPaginas)
+  const linhasVisiveis = paginar ? rows.slice((pagina - 1) * porPagina, pagina * porPagina) : rows
 
   if (loading && !mostrarEsqueleto) {
     return <div className="data-table__aguardando" role="status" aria-busy="true" />
@@ -81,29 +94,40 @@ export function DataTable({
   }
 
   return (
-    <div className="data-table__wrapper">
-      <table className="data-table">
-        <thead>
-          <tr className="data-table__header-row">
-            {columns.map((col, i) => (
-              <th key={i} className="data-table__th">
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="data-table__row">
-              {row.map((cell, j) => (
-                <td key={j} className="data-table__td">
-                  {cell}
-                </td>
+    <>
+      <div className="data-table__wrapper">
+        <table className="data-table">
+          <thead>
+            <tr className="data-table__header-row">
+              {columns.map((col, i) => (
+                <th key={i} className="data-table__th">
+                  {col}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {linhasVisiveis.map((row, i) => (
+              <tr key={i} className="data-table__row">
+                {row.map((cell, j) => (
+                  <td key={j} className="data-table__td">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {paginar && (
+        <Paginacao
+          pagina={pagina}
+          porPagina={porPagina}
+          totalItens={rows.length}
+          onMudar={(nova) => setPaginacao({ pagina: nova, assinatura })}
+        />
+      )}
+    </>
   )
 }

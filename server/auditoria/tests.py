@@ -87,9 +87,9 @@ class LogAuditoriaTests(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 3)
-        self.assertEqual(response.data[0]["acao"], "HOMOLOGACAO")
-        self.assertEqual(response.data[0]["usuario_nome"], "Administrador")
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(response.data["results"][0]["acao"], "HOMOLOGACAO")
+        self.assertEqual(response.data["results"][0]["usuario_nome"], "Administrador")
 
     def test_filtra_logs_por_periodo(self):
         self.client.force_authenticate(self.administrador)
@@ -103,8 +103,8 @@ class LogAuditoriaTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["acao"], "EDICAO")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["acao"], "EDICAO")
 
     def test_rejeita_periodo_invertido(self):
         self.client.force_authenticate(self.administrador)
@@ -144,3 +144,54 @@ class LogAuditoriaTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 405)
+
+
+class PaginacaoLogAuditoriaTests(APITestCase):
+    def setUp(self):
+        self.url = reverse("auditoria:logs")
+        self.administrador = Usuario.objects.create_user(
+            username="administrador",
+            email="administrador@example.com",
+            nome="Administrador",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        for i in range(25):
+            registrar_log(
+                usuario=self.administrador,
+                acao=f"ACAO_{i:02d}",
+                entidade="Edital",
+                entidade_id=i,
+            )
+        self.client.force_authenticate(self.administrador)
+
+    def test_primeira_pagina_traz_20_registros_e_total(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 25)
+        self.assertEqual(len(response.data["results"]), 20)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
+
+    def test_segunda_pagina_traz_o_restante(self):
+        response = self.client.get(self.url, {"pagina": 2})
+
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertIsNone(response.data["next"])
+
+    def test_paginas_nao_repetem_registros(self):
+        pagina_1 = self.client.get(self.url, {"pagina": 1}).data["results"]
+        pagina_2 = self.client.get(self.url, {"pagina": 2}).data["results"]
+
+        ids = [log["id"] for log in pagina_1 + pagina_2]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 25)
+
+    def test_tamanho_de_pagina_e_limitado(self):
+        self.assertEqual(len(self.client.get(self.url, {"por_pagina": 10}).data["results"]), 10)
+        for _ in range(80):
+            registrar_log(usuario=self.administrador, acao="EXTRA", entidade="Edital")
+        self.assertEqual(len(self.client.get(self.url, {"por_pagina": 500}).data["results"]), 100)
+
+    def test_pagina_inexistente_responde_404(self):
+        self.assertEqual(self.client.get(self.url, {"pagina": 99}).status_code, 404)
