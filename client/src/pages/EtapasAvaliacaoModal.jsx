@@ -281,9 +281,10 @@ function EtapaFormModal({ bolsaId, etapaInicial, onFechar, onSalva }) {
         <Button
           variant="accent"
           onClick={salvar}
-          disabled={salvando || !form.nome.trim() || pesoInvalido || dataNoPassado}
+          disabled={!form.nome.trim() || pesoInvalido || dataNoPassado}
+          loading={salvando}
         >
-          {salvando ? 'Salvando...' : editando ? 'Salvar Etapa' : 'Adicionar Etapa'}
+          {editando ? 'Salvar Etapa' : 'Adicionar Etapa'}
         </Button>
       </FormActions>
     </Modal>

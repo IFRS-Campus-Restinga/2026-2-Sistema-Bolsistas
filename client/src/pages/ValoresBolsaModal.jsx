@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Button, FormActions, Modal } from '../components'
+import { Alert, Button, Carregando, FormActions, Modal } from '../components'
 import { formatarMoeda } from '../utils/formatarMoeda'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import './ValoresBolsaModal.css'
@@ -143,7 +143,7 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
       )}
 
       {carregando ? (
-        <p role="status">Carregando catálogo...</p>
+        <Carregando texto="Carregando catálogo..." />
       ) : (
         <>
           <div className="valores-bolsa__resumo">
@@ -253,8 +253,13 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
           {somenteLeitura ? 'Fechar' : 'Definir depois'}
         </Button>
         {!somenteLeitura && (
-          <Button variant="accent" onClick={salvar} disabled={carregando || salvando || temErro}>
-            {salvando ? 'Salvando...' : 'Concluir'}
+          <Button
+            variant="accent"
+            onClick={salvar}
+            disabled={carregando || temErro}
+            loading={salvando}
+          >
+            Concluir
           </Button>
         )}
       </FormActions>

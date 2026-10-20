@@ -28,7 +28,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   const [comprovante, setComprovante] = useState(null)
   const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
   const [bolsaInscricao, setBolsaInscricao] = useState(null)
-  const [consultandoRecurso, setConsultandoRecurso] = useState(false)
+  const [consultandoRecurso, setConsultandoRecurso] = useState(null)
   const [resultadoBolsaId, setResultadoBolsaId] = useState(null)
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 
   async function interporRecurso(inscricao) {
     if (consultandoRecurso) return
-    setConsultandoRecurso(true)
+    setConsultandoRecurso(inscricao.id)
     setErro('')
     try {
       const res = await inscricoesFetch(`/${inscricao.id}/recursos/`)
@@ -115,7 +115,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     } catch (e) {
       setErro(e.message)
     } finally {
-      setConsultandoRecurso(false)
+      setConsultandoRecurso(null)
     }
   }
 
@@ -215,7 +215,11 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     ) : (
       ''
     ),
-    <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
+    <AcoesCell
+      key="acoes"
+      acoes={acoesPorInscricao(inscricao)}
+      ocupado={consultandoRecurso === inscricao.id}
+    />,
   ])
 
   if (bolsaInscricao)
@@ -247,6 +251,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
                 <Button
                   size="sm"
                   disabled={lendoNotificacao !== null}
+                  loading={lendoNotificacao === item.id}
                   onClick={() => marcarLida(item.id)}
                 >
                   Marcar como lida
@@ -264,15 +269,12 @@ export default function MinhasInscricoesPage({ onHistorico }) {
         </section>
       )}
 
-      {carregando ? (
-        <p role="status">Carregando inscrições...</p>
-      ) : (
-        <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
-          rows={linhas}
-          emptyMessage="Você ainda não tem nenhuma inscrição."
-        />
-      )}
+      <DataTable
+        columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Você ainda não tem nenhuma inscrição."
+      />
 
       {edicaoAberta && (
         <InscricaoWizard

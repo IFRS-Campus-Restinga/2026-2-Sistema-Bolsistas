@@ -26,8 +26,12 @@
   transition: background 0.15s ease;
 }
 
-.acoes-cell__gatilho:hover {
+.acoes-cell__gatilho:hover:not(:disabled) {
   background: #f9fafb;
+}
+
+.acoes-cell__gatilho:disabled {
+  cursor: progress;
 }
 
 .acoes-cell__painel {

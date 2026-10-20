@@ -86,8 +86,8 @@ export default function DesempateModal({ bolsaId, empatados, onSalvo, onFechar }
         <Button variant="outline" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
-        <Button variant="accent" onClick={salvar} disabled={salvando}>
-          {salvando ? 'Salvando...' : 'Salvar ordem'}
+        <Button variant="accent" onClick={salvar} loading={salvando}>
+          Salvar ordem
         </Button>
       </FormActions>
     </Modal>

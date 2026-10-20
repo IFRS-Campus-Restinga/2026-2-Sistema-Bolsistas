@@ -55,8 +55,8 @@ export default function NaoAssumiuModal({ bolsaId, candidato, onSalvo, onFechar 
         <Button variant="outline" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
-        <Button variant="danger" onClick={salvar} disabled={salvando || !motivo.trim()}>
-          {salvando ? 'Registrando...' : 'Confirmar'}
+        <Button variant="danger" onClick={salvar} disabled={!motivo.trim()} loading={salvando}>
+          Confirmar
         </Button>
       </FormActions>
     </Modal>

@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { selecaoFetch } from '../api'
-import { AcoesCell, Alert, Badge, Button, DataTable, useConfirm, useToast } from '../components'
+import {
+  AcoesCell,
+  Alert,
+  Badge,
+  Button,
+  Carregando,
+  DataTable,
+  useConfirm,
+  useToast,
+} from '../components'
 import { formatarPeso } from '../utils/formatarPeso'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import DesempateModal from './DesempateModal'
@@ -83,7 +92,7 @@ export default function ClassificacaoBolsa({ bolsaId, onAtualizada }) {
     })
   }
 
-  if (consulta.carregando) return <p role="status">Carregando classificação...</p>
+  if (consulta.carregando) return <Carregando texto="Carregando classificação..." />
   if (consulta.erro) {
     return (
       <>

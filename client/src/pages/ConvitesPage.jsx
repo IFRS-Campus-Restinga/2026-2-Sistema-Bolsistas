@@ -148,15 +148,12 @@ export default function ConvitesPage() {
         </Alert>
       )}
 
-      {carregando ? (
-        <p role="status">Carregando convites...</p>
-      ) : (
-        <DataTable
-          columns={['Projeto', 'Edital', 'Tipo', 'Status', 'Ações']}
-          rows={linhas}
-          emptyMessage="Você não recebeu nenhum convite de vínculo direto."
-        />
-      )}
+      <DataTable
+        columns={['Projeto', 'Edital', 'Tipo', 'Status', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Você não recebeu nenhum convite de vínculo direto."
+      />
 
       {edicaoAberta && (
         <PreencherConviteModal

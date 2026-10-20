@@ -54,6 +54,16 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
       .map((d) => ({ key: crypto.randomUUID(), documento: d }))
   )
   const [processando, setProcessando] = useState(false)
+  const [botaoCarregando, setBotaoCarregando] = useState(null)
+
+  async function comBotao(nome, acao) {
+    setBotaoCarregando(nome)
+    try {
+      await acao()
+    } finally {
+      setBotaoCarregando(null)
+    }
+  }
   const [erro, setErro] = useState('')
 
   async function enviarDocumento(inscricao, tipo, arquivo) {
@@ -328,10 +338,11 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
             </Button>
             <Button
               variant="accent"
-              onClick={avancarEtapa1}
+              onClick={() => comBotao('avancar', avancarEtapa1)}
               disabled={!termosAceitos || processando}
+              loading={botaoCarregando === 'avancar'}
             >
-              {processando ? 'Avançando...' : 'Avançar'}
+              Avançar
             </Button>
           </FormActions>
         </>
@@ -406,11 +417,21 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
             <Button variant="danger" onClick={pedirCancelamento} disabled={processando}>
               {jaEnviada ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button variant="outline" onClick={salvarRascunho} disabled={processando}>
+            <Button
+              variant="outline"
+              onClick={() => comBotao('salvar', salvarRascunho)}
+              disabled={processando}
+              loading={botaoCarregando === 'salvar'}
+            >
               {jaEnviada ? 'Salvar' : 'Salvar Rascunho'}
             </Button>
-            <Button variant="accent" onClick={avancarEtapa2} disabled={processando}>
-              {processando ? 'Avançando...' : 'Avançar'}
+            <Button
+              variant="accent"
+              onClick={() => comBotao('avancar', avancarEtapa2)}
+              disabled={processando}
+              loading={botaoCarregando === 'avancar'}
+            >
+              Avançar
             </Button>
           </FormActions>
         </>
@@ -441,16 +462,26 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
               {jaEnviada ? 'Fechar' : 'Cancelar'}
             </Button>
             {jaEnviada ? (
-              <Button variant="accent" onClick={salvarRascunho} disabled={processando}>
-                {processando ? 'Salvando...' : 'Salvar Alterações'}
+              <Button
+                variant="accent"
+                onClick={() => comBotao('salvar', salvarRascunho)}
+                disabled={processando}
+                loading={botaoCarregando === 'salvar'}
+              >
+                Salvar Alterações
               </Button>
             ) : (
               <>
-                <Button variant="outline" onClick={salvarRascunho} disabled={processando}>
+                <Button
+                  variant="outline"
+                  onClick={() => comBotao('salvar', salvarRascunho)}
+                  disabled={processando}
+                  loading={botaoCarregando === 'salvar'}
+                >
                   Salvar Rascunho
                 </Button>
                 <Button variant="accent" onClick={pedirConfirmacaoFinal} disabled={processando}>
-                  {processando ? 'Enviando...' : 'Confirmar Inscrição'}
+                  Confirmar Inscrição
                 </Button>
               </>
             )}

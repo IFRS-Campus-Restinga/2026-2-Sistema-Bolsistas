@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from './Button'
 import { IconDotsHorizontal } from './Icons'
+import { Spinner } from './Spinner'
+import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 import './AcoesCell.css'
 
 const ALTURA_ESTIMADA_ITEM = 36
@@ -21,8 +23,11 @@ const ALTURA_ESTIMADA_ITEM = 36
  *       { label: 'Rejeitar', variant: 'danger', onClick: () => rejeitar(bolsa) },
  *     ]}
  *   />
+ *
+ * `ocupado` marca a linha como em processamento: desabilita as ações e mostra spinner.
  */
-export function AcoesCell({ mostrar = true, acoes = [] }) {
+export function AcoesCell({ mostrar = true, acoes = [], ocupado = false }) {
+  const mostrarSpinner = useCarregamentoVisivel(ocupado)
   const [aberto, setAberto] = useState(false)
   const [posicao, setPosicao] = useState(null)
   const gatilhoRef = useRef(null)
@@ -82,6 +87,7 @@ export function AcoesCell({ mostrar = true, acoes = [] }) {
           variant={acao.variant || 'outline'}
           onClick={acao.onClick}
           disabled={acao.disabled}
+          loading={ocupado}
         >
           {acao.label}
         </Button>
@@ -96,11 +102,13 @@ export function AcoesCell({ mostrar = true, acoes = [] }) {
         type="button"
         className="acoes-cell__gatilho"
         onClick={alternarMenu}
+        disabled={ocupado || mostrarSpinner}
         aria-haspopup="menu"
         aria-expanded={aberto}
+        aria-busy={ocupado || undefined}
         aria-label="Mais ações"
       >
-        <IconDotsHorizontal />
+        {mostrarSpinner ? <Spinner size={16} /> : <IconDotsHorizontal />}
       </button>
 
       {aberto &&

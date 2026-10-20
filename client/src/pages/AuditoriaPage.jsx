@@ -126,7 +126,7 @@ export default function AuditoriaPage() {
           />
         </FormField>
 
-        <Button type="submit" variant="accent">
+        <Button type="submit" variant="accent" loading={carregando}>
           Filtrar
         </Button>
 
@@ -137,15 +137,12 @@ export default function AuditoriaPage() {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando logs...</p>
-      ) : (
-        <DataTable
-          columns={['Data e hora', 'Ação', 'Usuário', 'Entidade', 'Descrição']}
-          rows={linhas}
-          emptyMessage="Nenhum registro de auditoria encontrado."
-        />
-      )}
+      <DataTable
+        columns={['Data e hora', 'Ação', 'Usuário', 'Entidade', 'Descrição']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Nenhum registro de auditoria encontrado."
+      />
     </>
   )
 }

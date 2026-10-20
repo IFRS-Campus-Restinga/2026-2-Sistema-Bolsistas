@@ -3,6 +3,7 @@ import { monitoramentoFetch } from '../api'
 import {
   Alert,
   Badge,
+  Carregando,
   DataTable,
   IconBriefcase,
   IconCalendar,
@@ -119,7 +120,7 @@ export default function MonitoramentoPage({ secao = null, onNavigate = null }) {
   }, [])
 
   if (erro) return <Alert tone="error">{erro}</Alert>
-  if (!dados) return <p role="status">Carregando monitoramento...</p>
+  if (!dados) return <Carregando texto="Carregando monitoramento..." />
 
   const cartoes = [
     {

@@ -1,0 +1,30 @@
+/* ── Spinner ────────────────────────────────────────────────── */
+
+.spinner {
+  flex-shrink: 0;
+  animation: spinner-girar 0.7s linear infinite;
+}
+
+@keyframes spinner-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/* ── Carregando (estado de seção/página) ────────────────────── */
+
+.carregando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  color: #6b7280;
+  font-size: 14px;
+}

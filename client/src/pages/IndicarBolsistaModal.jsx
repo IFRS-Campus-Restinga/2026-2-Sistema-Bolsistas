@@ -64,9 +64,10 @@ export default function IndicarBolsistaModal({ bolsaId, candidato, onSalvo, onFe
         <Button
           variant="accent"
           onClick={salvar}
-          disabled={salvando || (exigeJustificativa && !justificativa.trim())}
+          disabled={exigeJustificativa && !justificativa.trim()}
+          loading={salvando}
         >
-          {salvando ? 'Indicando...' : 'Confirmar indicação'}
+          Confirmar indicação
         </Button>
       </FormActions>
     </Modal>

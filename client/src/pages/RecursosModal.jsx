@@ -4,6 +4,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   FormActions,
   FormField,
   Modal,
@@ -152,7 +153,7 @@ export default function RecursosModal({
       <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: 4 }}>
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
-          <p role="status">Carregando recursos...</p>
+          <Carregando texto="Carregando recursos..." />
         ) : !dados ? (
           <Button
             onClick={() => {
@@ -235,9 +236,10 @@ export default function RecursosModal({
                     <Button
                       type="submit"
                       variant="accent"
-                      disabled={salvando || !justificativa.trim() || anexos.length > 5}
+                      disabled={!justificativa.trim() || anexos.length > 5}
+                      loading={salvando}
                     >
-                      {salvando ? 'Enviando...' : 'Enviar recurso'}
+                      Enviar recurso
                     </Button>
                   </FormActions>
                 </form>
@@ -306,7 +308,8 @@ export default function RecursosModal({
                         <Button
                           type="submit"
                           variant="danger"
-                          disabled={salvando || !motivo.trim()}
+                          disabled={!motivo.trim()}
+                          loading={salvando}
                         >
                           Confirmar indeferimento
                         </Button>

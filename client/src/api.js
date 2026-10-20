@@ -28,18 +28,40 @@ async function refreshHubSession() {
   return res.ok
 }
 
+let requisicoesEmAndamento = 0
+const ouvintesRequisicoes = new Set()
+
+function atualizarRequisicoes(delta) {
+  requisicoesEmAndamento += delta
+  ouvintesRequisicoes.forEach((ouvinte) => ouvinte())
+}
+
+export function observarRequisicoes(ouvinte) {
+  ouvintesRequisicoes.add(ouvinte)
+  return () => ouvintesRequisicoes.delete(ouvinte)
+}
+
+export function totalRequisicoesEmAndamento() {
+  return requisicoesEmAndamento
+}
+
 async function fetchWithRefresh(base, path, options = {}) {
   const doFetch = () => fetch(`${base}${path}`, { ...options, credentials: 'include' })
 
-  let res = await doFetch()
+  atualizarRequisicoes(1)
+  try {
+    let res = await doFetch()
 
-  if (res.status === 401) {
-    const renovou = await refreshHubSession()
-    if (!renovou) throw new SessaoExpiradaError()
-    res = await doFetch()
+    if (res.status === 401) {
+      const renovou = await refreshHubSession()
+      if (!renovou) throw new SessaoExpiradaError()
+      res = await doFetch()
+    }
+
+    return res
+  } finally {
+    atualizarRequisicoes(-1)
   }
-
-  return res
 }
 
 export async function apiFetch(path, options = {}) {

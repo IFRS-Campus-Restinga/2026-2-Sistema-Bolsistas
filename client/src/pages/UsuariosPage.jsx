@@ -298,12 +298,12 @@ export default function UsuariosPage({ filtroStatus = null }) {
         {/* ── Usuários ── */}
         <section>
           <PageHeader title="Usuários" />
-          {carregandoUsuarios && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
           {erroUsuarios && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroUsuarios}</p>}
-          {!carregandoUsuarios && !erroUsuarios && (
+          {!erroUsuarios && (
             <DataTable
               columns={['Nome', 'E-mail', 'Grupo / Perfil', 'Status', 'Ações']}
               rows={rowsUsuarios}
+              loading={carregandoUsuarios}
               emptyMessage="Nenhum usuário encontrado."
             />
           )}
@@ -323,12 +323,12 @@ export default function UsuariosPage({ filtroStatus = null }) {
             Servidores cujo e-mail estiver nesta lista serão reconhecidos como Coordenadores de Área
             ao fazer login.
           </p>
-          {carregandoEmails && <p style={{ color: '#6b7280', fontSize: 14 }}>Carregando...</p>}
           {erroEmails && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroEmails}</p>}
-          {!carregandoEmails && !erroEmails && (
+          {!erroEmails && (
             <DataTable
               columns={['E-mail', 'Tipo de Área', 'Ações']}
               rows={rowsEmails}
+              loading={carregandoEmails}
               emptyMessage="Nenhum e-mail cadastrado."
             />
           )}
@@ -371,9 +371,10 @@ export default function UsuariosPage({ filtroStatus = null }) {
               <Button
                 variant="primary"
                 onClick={salvarUsuario}
-                disabled={salvandoUsuario || !tipoAreaEditado}
+                disabled={!tipoAreaEditado}
+                loading={salvandoUsuario}
               >
-                {salvandoUsuario ? 'Salvando...' : 'Salvar'}
+                Salvar
               </Button>
             )}
           </FormActions>
@@ -416,9 +417,10 @@ export default function UsuariosPage({ filtroStatus = null }) {
             <Button
               variant="primary"
               onClick={salvarEmail}
-              disabled={salvandoEmail || !emailEditado || !tipoAreaEmailEditado}
+              disabled={!emailEditado || !tipoAreaEmailEditado}
+              loading={salvandoEmail}
             >
-              {salvandoEmail ? 'Salvando...' : 'Salvar'}
+              Salvar
             </Button>
           </FormActions>
         </Modal>

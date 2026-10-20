@@ -1,4 +1,8 @@
+import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 import './DataTable.css'
+
+const LINHAS_ESQUELETO = 4
+const LARGURAS_ESQUELETO = ['70%', '55%', '80%', '60%']
 
 /**
  * Tabela de dados genérica — suporta ReactNode nas células (badges, botões).
@@ -7,8 +11,52 @@ import './DataTable.css'
  *   columns      — ["Nome", "E-mail", "Status", ...]
  *   rows         — [[cell, cell, ...], ...]  (cada cell pode ser string ou ReactNode)
  *   emptyMessage — texto quando não há registros
+ *   loading      — mostra linhas-esqueleto enquanto os dados carregam
  */
-export function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encontrado.' }) {
+export function DataTable({
+  columns,
+  rows,
+  emptyMessage = 'Nenhum registro encontrado.',
+  loading = false,
+}) {
+  const mostrarEsqueleto = useCarregamentoVisivel(loading)
+
+  if (loading && !mostrarEsqueleto) {
+    return <div className="data-table__aguardando" role="status" aria-busy="true" />
+  }
+
+  if (mostrarEsqueleto) {
+    return (
+      <div className="data-table__wrapper" role="status" aria-busy="true" aria-label="Carregando">
+        <table className="data-table">
+          <thead>
+            <tr className="data-table__header-row">
+              {columns.map((col, i) => (
+                <th key={i} className="data-table__th">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: LINHAS_ESQUELETO }, (_, i) => (
+              <tr key={i} className="data-table__row">
+                {columns.map((_, j) => (
+                  <td key={j} className="data-table__td">
+                    <span
+                      className="data-table__esqueleto"
+                      style={{ width: LARGURAS_ESQUELETO[(i + j) % LARGURAS_ESQUELETO.length] }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   if (rows.length === 0) {
     return (
       <div className="data-table__empty">

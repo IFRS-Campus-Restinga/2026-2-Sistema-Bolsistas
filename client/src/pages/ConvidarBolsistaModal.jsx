@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { vinculoDiretoFetch } from '../api'
-import { Alert, Button, FormActions, FormField, Modal, TextInput } from '../components'
+import { Alert, Button, FormActions, FormField, Modal, Spinner, TextInput } from '../components'
 
 function extrairErro(corpo, mensagemPadrao) {
   if (!corpo) return mensagemPadrao
@@ -104,7 +104,20 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
             placeholder="Digite ao menos 3 caracteres..."
             autoFocus
           />
-          {buscando && <p style={{ fontSize: 13, color: '#6b7280' }}>Buscando...</p>}
+          {buscando && (
+            <p
+              role="status"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 13,
+                color: '#6b7280',
+              }}
+            >
+              <Spinner size={12} /> Buscando...
+            </p>
+          )}
           {!buscando && buscaValida && resultados.length === 0 && (
             <p style={{ fontSize: 13, color: '#6b7280' }}>Nenhum aluno encontrado.</p>
           )}
@@ -140,8 +153,13 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
         <Button variant="danger" onClick={onFechar} disabled={enviando}>
           Cancelar
         </Button>
-        <Button variant="accent" onClick={enviarConvite} disabled={enviando || !alunoSelecionado}>
-          {enviando ? 'Enviando...' : 'Enviar Convite'}
+        <Button
+          variant="accent"
+          onClick={enviarConvite}
+          disabled={!alunoSelecionado}
+          loading={enviando}
+        >
+          Enviar Convite
         </Button>
       </FormActions>
     </Modal>

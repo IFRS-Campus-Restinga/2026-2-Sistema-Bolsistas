@@ -4,6 +4,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   FormActions,
   FormField,
   Modal,
@@ -15,7 +16,8 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
   const [convite, setConvite] = useState(null)
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(true)
-  const [salvando, setSalvando] = useState(false)
+  const [acaoEmAndamento, setAcaoEmAndamento] = useState(null)
+  const salvando = acaoEmAndamento !== null
   const [rejeitando, setRejeitando] = useState(false)
   const [justificativa, setJustificativa] = useState('')
   const ocupado = useRef(false)
@@ -49,7 +51,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
   async function aprovar() {
     if (ocupado.current) return
     ocupado.current = true
-    setSalvando(true)
+    setAcaoEmAndamento('aprovar')
     setErro('')
     try {
       const res = await vinculoDiretoFetch(`/convites/${conviteId}/aprovar/`, { method: 'POST' })
@@ -60,14 +62,14 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
       setErro(e.message)
     } finally {
       ocupado.current = false
-      setSalvando(false)
+      setAcaoEmAndamento(null)
     }
   }
 
   async function rejeitar(definitivo) {
     if (ocupado.current) return
     ocupado.current = true
-    setSalvando(true)
+    setAcaoEmAndamento(definitivo ? 'definitivo' : 'reenvio')
     setErro('')
     try {
       const res = await vinculoDiretoFetch(`/convites/${conviteId}/rejeitar/`, {
@@ -85,7 +87,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
       setErro(e.message)
     } finally {
       ocupado.current = false
-      setSalvando(false)
+      setAcaoEmAndamento(null)
     }
   }
 
@@ -105,7 +107,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
       <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
-          <p role="status">Carregando convite...</p>
+          <Carregando texto="Carregando convite..." />
         ) : (
           convite && (
             <>
@@ -194,7 +196,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
               Rejeitar
             </Button>
             <Button variant="accent" disabled={salvando} onClick={confirmarAprovar}>
-              {salvando ? 'Salvando...' : 'Aprovar'}
+              Aprovar
             </Button>
           </>
         )}
@@ -206,6 +208,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
             <Button
               variant="outline"
               disabled={salvando || !justificativa.trim()}
+              loading={acaoEmAndamento === 'reenvio'}
               onClick={() => rejeitar(false)}
             >
               Solicitar Reenvio
@@ -213,6 +216,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
             <Button
               variant="danger"
               disabled={salvando || !justificativa.trim()}
+              loading={acaoEmAndamento === 'definitivo'}
               onClick={() => rejeitar(true)}
             >
               Rejeitar Definitivamente

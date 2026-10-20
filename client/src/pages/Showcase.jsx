@@ -17,6 +17,9 @@ import {
   Modal,
   ConfirmProvider,
   useConfirm,
+  AcoesCell,
+  Carregando,
+  Spinner,
   IconHome,
   IconCalendar,
   IconBriefcase,
@@ -27,11 +30,41 @@ import {
 } from '../components'
 import './Showcase.css'
 
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /* ── Conteúdo interno do showcase ──────────────────────────── */
 function ShowcaseContent() {
   const [modalOpen, setModalOpen] = useState(false)
   const [fileName, setFileName] = useState('')
+  const [botaoCarregando, setBotaoCarregando] = useState(null)
+  const [tabelaCarregando, setTabelaCarregando] = useState(false)
+  const [linhaOcupada, setLinhaOcupada] = useState(false)
+  const [mostrarCarregando, setMostrarCarregando] = useState(false)
   const confirm = useConfirm()
+
+  async function simularBotao(nome, ms) {
+    setBotaoCarregando(nome)
+    await esperar(ms)
+    setBotaoCarregando(null)
+  }
+
+  async function simularTabela() {
+    setTabelaCarregando(true)
+    await esperar(1500)
+    setTabelaCarregando(false)
+  }
+
+  async function simularLinha() {
+    setLinhaOcupada(true)
+    await esperar(1500)
+    setLinhaOcupada(false)
+  }
+
+  async function simularCarregando() {
+    setMostrarCarregando(true)
+    await esperar(1500)
+    setMostrarCarregando(false)
+  }
 
   return (
     <div className="showcase">
@@ -302,6 +335,134 @@ function ShowcaseContent() {
             </FormActions>
           </Modal>
         )}
+      </section>
+
+      {/* ── CARREGAMENTO ──────────────────────────────────── */}
+      <section className="showcase__section">
+        <h2 className="showcase__section-title">Carregamento</h2>
+        <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+          Indicadores só aparecem se a ação passar de 300ms e, uma vez exibidos, ficam no mínimo
+          400ms. O botão fica desabilitado na hora do clique, evitando envio duplicado.
+        </p>
+
+        <p className="showcase__label">Spinner</p>
+        <div className="showcase__row">
+          <Spinner size={12} />
+          <Spinner size={16} />
+          <Spinner size={24} />
+          <span style={{ color: 'var(--if-green)' }}>
+            <Spinner size={24} />
+          </span>
+        </div>
+
+        <p className="showcase__label">Botão com loading</p>
+        <div className="showcase__row">
+          <Button
+            variant="accent"
+            loading={botaoCarregando === 'lento'}
+            onClick={() => simularBotao('lento', 1500)}
+          >
+            Salvar (1,5s)
+          </Button>
+          <Button
+            variant="outline"
+            loading={botaoCarregando === 'rapido'}
+            onClick={() => simularBotao('rapido', 200)}
+          >
+            Ação rápida (200ms, sem spinner)
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            loading={botaoCarregando === 'pequeno'}
+            onClick={() => simularBotao('pequeno', 1500)}
+          >
+            Tamanho sm
+          </Button>
+        </div>
+
+        <p className="showcase__label">Confirmação assíncrona</p>
+        <div className="showcase__row">
+          <Button
+            variant="accent"
+            onClick={() =>
+              confirm({
+                title: 'Aprovar bolsa?',
+                message: 'O diálogo fica aberto com spinner até a ação terminar.',
+                confirmLabel: 'Aprovar',
+                tone: 'accent',
+                onConfirm: () => esperar(1500),
+              })
+            }
+          >
+            Confirmação com sucesso
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              confirm({
+                title: 'Publicar edital?',
+                message: 'Se a ação falhar, o erro aparece dentro do diálogo.',
+                confirmLabel: 'Publicar',
+                tone: 'primary',
+                onConfirm: async () => {
+                  await esperar(1000)
+                  throw new Error('Preencha o cronograma antes de publicar.')
+                },
+              })
+            }
+          >
+            Confirmação com erro
+          </Button>
+        </div>
+
+        <p className="showcase__label">Tabela carregando (linhas-esqueleto)</p>
+        <div className="showcase__row">
+          <Button variant="outline" size="sm" onClick={simularTabela} disabled={tabelaCarregando}>
+            Recarregar tabela
+          </Button>
+        </div>
+        <DataTable
+          columns={['Projeto', 'Edital', 'Status', 'Ações']}
+          loading={tabelaCarregando}
+          rows={[
+            [
+              'Projeto de Extensão',
+              'Edital 2026-1',
+              <Badge key="status" status="ABERTA" />,
+              <AcoesCell
+                key="acoes"
+                ocupado={linhaOcupada}
+                acoes={[
+                  { label: 'Editar', onClick: simularLinha },
+                  { label: 'Cancelar', variant: 'danger', onClick: () => {} },
+                ]}
+              />,
+            ],
+          ]}
+        />
+        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+          No menu "..." da linha, "Editar" simula uma ação de linha (spinner só naquela linha).
+        </p>
+
+        <p className="showcase__label">Seção / página carregando</p>
+        <div className="showcase__row">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={simularCarregando}
+            disabled={mostrarCarregando}
+          >
+            Simular carregamento
+          </Button>
+        </div>
+        {mostrarCarregando && <Carregando texto="Carregando projeto..." />}
+
+        <p className="showcase__label">Barra de progresso global</p>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>
+          Barra fina no topo da tela, ligada automaticamente a toda chamada à API que passe de
+          300ms. Não precisa de código nas páginas.
+        </p>
       </section>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { bolsasFetch } from '../api'
-import { Alert, Button, FormField, PageHeader, Select } from '../components'
+import { Alert, Button, Carregando, FormField, PageHeader, Select } from '../components'
 import CandidatosPage from './CandidatosPage'
 
 export default function MeusCandidatosPage() {
@@ -44,7 +44,7 @@ export default function MeusCandidatosPage() {
     <>
       <PageHeader title="Candidatos por Bolsa" />
       {carregando ? (
-        <p role="status">Carregando bolsas...</p>
+        <Carregando texto="Carregando bolsas..." />
       ) : erro ? (
         <>
           <Alert tone="error">{erro}</Alert>

@@ -46,6 +46,16 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
       .map((d) => ({ key: crypto.randomUUID(), documento: d }))
   )
   const [processando, setProcessando] = useState(false)
+  const [botaoCarregando, setBotaoCarregando] = useState(null)
+
+  async function comBotao(nome, acao) {
+    setBotaoCarregando(nome)
+    try {
+      await acao()
+    } finally {
+      setBotaoCarregando(null)
+    }
+  }
   const [erro, setErro] = useState('')
 
   async function enviarDocumento(tipo, arquivo) {
@@ -327,12 +337,22 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
           Fechar
         </Button>
         {jaEnviado ? (
-          <Button variant="accent" onClick={salvarEFechar} disabled={processando}>
-            {processando ? 'Salvando...' : 'Salvar Alterações'}
+          <Button
+            variant="accent"
+            onClick={() => comBotao('salvar', salvarEFechar)}
+            disabled={processando}
+            loading={botaoCarregando === 'salvar'}
+          >
+            Salvar Alterações
           </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={salvarEFechar} disabled={processando}>
+            <Button
+              variant="outline"
+              onClick={() => comBotao('salvar', salvarEFechar)}
+              disabled={processando}
+              loading={botaoCarregando === 'salvar'}
+            >
               Salvar
             </Button>
             <Button
@@ -340,7 +360,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
               onClick={pedirConfirmacaoEnvio}
               disabled={processando || !termosAceitos}
             >
-              {processando ? 'Enviando...' : 'Enviar Documentação'}
+              Enviar Documentação
             </Button>
           </>
         )}

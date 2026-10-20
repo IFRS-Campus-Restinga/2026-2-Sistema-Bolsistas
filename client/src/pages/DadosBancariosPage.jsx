@@ -3,6 +3,7 @@ import { dadosBancariosFetch } from '../api'
 import {
   Alert,
   Button,
+  Carregando,
   FileField,
   FormActions,
   FormField,
@@ -163,7 +164,7 @@ export default function DadosBancariosPage() {
       {sucesso && <Alert tone="success">{sucesso}</Alert>}
 
       {carregando ? (
-        <p role="status">Carregando dados bancários...</p>
+        <Carregando texto="Carregando dados bancários..." />
       ) : (
         <form
           onSubmit={salvar}
@@ -260,14 +261,8 @@ export default function DadosBancariosPage() {
           </FormField>
 
           <FormActions>
-            <Button type="submit" variant="accent" disabled={salvando}>
-              {salvando
-                ? cadastroExistente
-                  ? 'Atualizando...'
-                  : 'Salvando...'
-                : cadastroExistente
-                  ? 'Atualizar'
-                  : 'Salvar'}
+            <Button type="submit" variant="accent" loading={salvando}>
+              {cadastroExistente ? 'Atualizar' : 'Salvar'}
             </Button>
           </FormActions>
         </form>

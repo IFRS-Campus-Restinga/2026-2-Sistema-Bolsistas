@@ -70,9 +70,7 @@ export default function CandidatosPage({ bolsa }) {
 
   return (
     <>
-      {consulta.carregando ? (
-        <p role="status">Carregando candidatos...</p>
-      ) : consulta.erro ? (
+      {!consulta.carregando && consulta.erro ? (
         <>
           <Alert tone="error">{consulta.erro}</Alert>
           <Button variant="outline" onClick={tentarNovamente}>
@@ -81,6 +79,7 @@ export default function CandidatosPage({ bolsa }) {
         </>
       ) : (
         <DataTable
+          loading={consulta.carregando}
           columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhum candidato com inscrição enviada para esta bolsa."

@@ -100,8 +100,13 @@ export default function LancarNotasModal({ bolsaId, candidato, etapas, onSalvo, 
         <Button variant="outline" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
-        <Button variant="accent" onClick={salvar} disabled={salvando || invalidas.length > 0}>
-          {salvando ? 'Salvando...' : 'Salvar notas'}
+        <Button
+          variant="accent"
+          onClick={salvar}
+          disabled={invalidas.length > 0}
+          loading={salvando}
+        >
+          Salvar notas
         </Button>
       </FormActions>
     </Modal>

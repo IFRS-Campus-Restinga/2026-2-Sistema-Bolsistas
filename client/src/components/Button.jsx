@@ -1,3 +1,5 @@
+import { Spinner } from './Spinner'
+import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 import './Button.css'
 
 /**
@@ -6,6 +8,7 @@ import './Button.css'
  * Props:
  *   variant   — "primary" | "accent" | "outline" | "danger" | "ghost"
  *   size      — "sm" | "md"
+ *   loading   — desabilita na hora e mostra spinner se a ação passar de 300ms
  *   onClick, type, disabled, className, children
  */
 export function Button({
@@ -15,15 +18,20 @@ export function Button({
   onClick,
   type = 'button',
   disabled,
+  loading = false,
   className = '',
 }) {
+  const mostrarSpinner = useCarregamentoVisivel(loading)
+
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading || mostrarSpinner}
+      aria-busy={loading || undefined}
       className={`btn btn--${variant} btn--${size} ${className}`}
     >
+      {mostrarSpinner && <Spinner size={size === 'sm' ? 12 : 14} />}
       {children}
     </button>
   )

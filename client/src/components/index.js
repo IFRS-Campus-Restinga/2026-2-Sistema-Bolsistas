@@ -20,6 +20,11 @@ export { Layout } from './Layout'
 // Button (#178)
 export { Button } from './Button'
 
+// Carregamento
+export { Spinner } from './Spinner'
+export { Carregando } from './Carregando'
+export { BarraProgresso } from './BarraProgresso'
+
 // Card & Table (#180)
 export { StatCard } from './StatCard'
 export { DataTable } from './DataTable'

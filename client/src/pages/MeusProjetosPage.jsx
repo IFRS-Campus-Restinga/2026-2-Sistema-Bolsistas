@@ -5,6 +5,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   DataTable,
   FileField,
   FormActions,
@@ -215,15 +216,12 @@ function ListaProjetos({ onGerenciar }) {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando projetos...</p>
-      ) : (
-        <DataTable
-          columns={['Título', 'Status', 'Ações']}
-          rows={linhas}
-          emptyMessage="Nenhum projeto cadastrado."
-        />
-      )}
+      <DataTable
+        columns={['Título', 'Status', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Nenhum projeto cadastrado."
+      />
 
       {modalAberto && (
         <Modal title="Novo Projeto" onClose={() => setModalAberto(false)}>
@@ -250,8 +248,8 @@ function ListaProjetos({ onGerenciar }) {
             <Button variant="danger" onClick={() => setModalAberto(false)} disabled={salvando}>
               Cancelar
             </Button>
-            <Button variant="accent" onClick={criarProjeto} disabled={salvando || !titulo}>
-              {salvando ? 'Criando...' : 'Criar Projeto'}
+            <Button variant="accent" onClick={criarProjeto} disabled={!titulo} loading={salvando}>
+              Criar Projeto
             </Button>
           </FormActions>
         </Modal>
@@ -549,7 +547,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
     })
   }
 
-  if (carregando) return <p role="status">Carregando projeto...</p>
+  if (carregando) return <Carregando texto="Carregando projeto..." />
 
   if (erro || !projeto) {
     return (
@@ -836,8 +834,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             <Button
               variant="accent"
               onClick={salvarBolsa}
+              loading={salvando}
               disabled={
-                salvando ||
                 !form.editalId ||
                 !form.tipo ||
                 !form.modalidade ||
@@ -847,7 +845,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
                 Number(form.quantidadeVagas) < 1
               }
             >
-              {salvando ? 'Enviando...' : bolsaEditando ? 'Salvar Alterações' : 'Solicitar Bolsa'}
+              {bolsaEditando ? 'Salvar Alterações' : 'Solicitar Bolsa'}
             </Button>
           </FormActions>
         </Modal>

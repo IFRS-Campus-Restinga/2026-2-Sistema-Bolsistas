@@ -34,15 +34,14 @@ export default function MeusRecursosPage() {
   return (
     <>
       <PageHeader title="Meus Recursos" />
-      {carregando ? (
-        <p role="status">Carregando recursos...</p>
-      ) : erro ? (
+      {!carregando && erro ? (
         <>
           <Alert tone="error">{erro}</Alert>
           <Button onClick={() => setTentativa((n) => n + 1)}>Tentar novamente</Button>
         </>
       ) : (
         <DataTable
+          loading={carregando}
           columns={['Projeto', 'Edital', 'Justificativa', 'Enviado em', 'Status', 'Ações']}
           rows={recursos.map((recurso) => [
             recurso.projeto_titulo,

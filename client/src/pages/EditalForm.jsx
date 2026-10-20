@@ -175,8 +175,8 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
           <Button onClick={solicitarFechamento} disabled={salvando}>
             Descartar
           </Button>
-          <Button type="submit" variant="accent" disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Salvar e continuar'}
+          <Button type="submit" variant="accent" loading={salvando}>
+            Salvar e continuar
           </Button>
         </FormActions>
       </form>

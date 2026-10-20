@@ -4,6 +4,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   DataTable,
   IconArrowLeft,
   IconPaperclip,
@@ -85,23 +86,20 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando bolsas...</p>
-      ) : (
-        <DataTable
-          columns={[
-            'Projeto',
-            'Tipo',
-            'Edital',
-            'Carga Horária',
-            'Valor',
-            'Minha Inscrição',
-            'Ações',
-          ]}
-          rows={linhas}
-          emptyMessage="Nenhuma bolsa disponível no momento."
-        />
-      )}
+      <DataTable
+        columns={[
+          'Projeto',
+          'Tipo',
+          'Edital',
+          'Carga Horária',
+          'Valor',
+          'Minha Inscrição',
+          'Ações',
+        ]}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Nenhuma bolsa disponível no momento."
+      />
     </>
   )
 }
@@ -137,7 +135,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
     }
   }, [bolsaId, inscricaoId])
 
-  if (carregando) return <p role="status">Carregando bolsa...</p>
+  if (carregando) return <Carregando texto="Carregando bolsa..." />
 
   if (erro || !bolsa) {
     return (

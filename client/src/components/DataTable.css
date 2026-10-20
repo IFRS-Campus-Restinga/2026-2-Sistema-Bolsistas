@@ -51,6 +51,35 @@
   text-align: center;
 }
 
+/* Loading */
+.data-table__aguardando {
+  min-height: 120px;
+}
+
+.data-table__esqueleto {
+  display: inline-block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
+  background-size: 400% 100%;
+  animation: data-table-brilho 1.4s ease infinite;
+}
+
+@keyframes data-table-brilho {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-table__esqueleto {
+    animation: none;
+  }
+}
+
 /* Empty state */
 .data-table__empty {
   background: #fff;
