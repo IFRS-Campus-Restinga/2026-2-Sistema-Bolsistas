@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorProjeto, Usuario
+from auditoria.models import LogAuditoria
 from bolsas.models import Bolsa
 from editais.models import Edital
 from projetos.models import Projeto
@@ -165,6 +166,11 @@ class HomologacaoTests(APITestCase):
 
     def url(self, acao):
         return reverse(f"inscricoes:{acao}", kwargs={"pk": self.inscricao.pk})
+
+    def test_decisao_sobre_inscricao_nao_gera_log_de_auditoria(self):
+        self.client.post(self.url("homologar"))
+
+        self.assertFalse(LogAuditoria.objects.exists())
 
     def test_homologa_registra_responsavel_e_notifica(self):
         response = self.client.post(self.url("homologar"))
@@ -474,6 +480,12 @@ class RecursosTests(APITestCase):
             {"decisao": decisao, "justificativa": justificativa},
             format="json",
         )
+
+    def test_envio_e_julgamento_de_recurso_nao_geram_log_de_auditoria(self):
+        self.assertEqual(self.enviar(arquivos=2).status_code, 201)
+        self.julgar(Recurso.objects.get())
+
+        self.assertFalse(LogAuditoria.objects.exists())
 
     def test_envio_preserva_originais_e_motivo(self):
         doc = Documento.objects.create(

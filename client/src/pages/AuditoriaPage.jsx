@@ -12,11 +12,6 @@ import {
 
 const POR_PAGINA = 10
 
-function formatarAcao(acao) {
-  const texto = acao.toLowerCase().replaceAll('_', ' ')
-  return texto.charAt(0).toUpperCase() + texto.slice(1)
-}
-
 function mensagemErro(dados) {
   if (typeof dados?.detail === 'string') return dados.detail
 
@@ -99,9 +94,9 @@ export default function AuditoriaPage() {
 
   const linhas = logs.map((log) => [
     new Date(log.data_hora).toLocaleString('pt-BR'),
-    formatarAcao(log.acao),
+    log.acao_display,
     log.usuario_email ? `${log.usuario_nome} (${log.usuario_email})` : log.usuario_nome,
-    log.entidade,
+    log.entidade_display,
     log.descricao,
   ])
 

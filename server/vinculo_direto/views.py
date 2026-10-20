@@ -12,6 +12,8 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
+from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from inscricoes.models import Documento, TipoDocumento
@@ -135,6 +137,17 @@ class AprovarConviteView(APIView):
         if vagas_livres(bolsa) <= 0 and bolsa.status != StatusBolsa.PREENCHIDA:
             bolsa.status = StatusBolsa.PREENCHIDA
             bolsa.save(update_fields=["status"])
+
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.VINCULO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=bolsa.pk,
+            descricao=(
+                f"{convite.aluno.nome} vinculado(a) como bolsista da bolsa do projeto "
+                f'"{bolsa.projeto.titulo}" por vínculo direto.'
+            ),
+        )
 
         if bolsa.coordenador_area_id:
             NotificacaoConvite.objects.create(

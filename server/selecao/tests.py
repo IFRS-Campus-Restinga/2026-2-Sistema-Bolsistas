@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import Aluno, CoordenadorProjeto, Usuario
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EtapaAvaliacao, StatusBolsa
 from editais.models import Edital
 from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
@@ -323,6 +324,20 @@ class PublicacaoEIndicacaoTests(SelecaoBaseTests):
                 inscricao=self.ana, mensagem__contains="Titular"
             ).exists()
         )
+
+    def test_publicacao_indicacao_e_desistencia_geram_log(self):
+        self.publicar()
+        self.nao_assumiu(self.ana)
+        self.indicar(self.bia)
+
+        def registrado(acao, entidade):
+            return LogAuditoria.objects.filter(
+                acao=acao, entidade=entidade, entidade_id=str(self.bolsa.pk)
+            ).count()
+
+        self.assertEqual(registrado(AcaoAuditoria.PUBLICACAO, EntidadeAuditoria.SELECAO), 1)
+        self.assertEqual(registrado(AcaoAuditoria.DESISTENCIA, EntidadeAuditoria.BOLSA), 1)
+        self.assertEqual(registrado(AcaoAuditoria.VINCULO, EntidadeAuditoria.BOLSA), 1)
 
     def test_nao_publica_duas_vezes(self):
         self.publicar()

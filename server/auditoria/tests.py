@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import Usuario
 
-from .models import LogAuditoria
+from .models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from .services import registrar_log
 
 
@@ -30,24 +30,24 @@ class LogAuditoriaTests(APITestCase):
 
         self.log_antigo = registrar_log(
             usuario=self.administrador,
-            acao="CRIACAO",
-            entidade="Edital",
+            acao=AcaoAuditoria.CRIACAO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=1,
             descricao="Edital criado.",
         )
         self.log_periodo = registrar_log(
             usuario=self.administrador,
-            acao="EDICAO",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=2,
             descricao="Bolsa editada.",
         )
         self.log_novo = registrar_log(
             usuario=self.administrador,
-            acao="HOMOLOGACAO",
-            entidade="Inscricao",
+            acao=AcaoAuditoria.PUBLICACAO,
+            entidade=EntidadeAuditoria.SELECAO,
             entidade_id=3,
-            descricao="Inscrição homologada.",
+            descricao="Resultado da seleção publicado.",
         )
 
         LogAuditoria.objects.filter(pk=self.log_antigo.pk).update(
@@ -64,10 +64,16 @@ class LogAuditoriaTests(APITestCase):
         log = LogAuditoria.objects.get(pk=self.log_periodo.pk)
 
         self.assertEqual(log.usuario, self.administrador)
-        self.assertEqual(log.acao, "EDICAO")
-        self.assertEqual(log.entidade, "Bolsa")
+        self.assertEqual(log.acao, AcaoAuditoria.ATUALIZACAO)
+        self.assertEqual(log.entidade, EntidadeAuditoria.BOLSA)
         self.assertEqual(log.entidade_id, "2")
         self.assertEqual(log.descricao, "Bolsa editada.")
+
+    def test_servico_recusa_acao_ou_entidade_fora_da_lista(self):
+        with self.assertRaises(ValueError):
+            registrar_log(usuario=self.administrador, acao="EDITAL_PUBLICADO", entidade="EDITAL")
+        with self.assertRaises(ValueError):
+            registrar_log(usuario=self.administrador, acao="CRIACAO", entidade="Inscricao")
 
     def test_visitante_nao_acessa_logs(self):
         response = self.client.get(self.url)
@@ -88,7 +94,9 @@ class LogAuditoriaTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 3)
-        self.assertEqual(response.data["results"][0]["acao"], "HOMOLOGACAO")
+        self.assertEqual(response.data["results"][0]["acao"], "PUBLICACAO")
+        self.assertEqual(response.data["results"][0]["acao_display"], "Publicação")
+        self.assertEqual(response.data["results"][0]["entidade_display"], "Seleção")
         self.assertEqual(response.data["results"][0]["usuario_nome"], "Administrador")
 
     def test_filtra_logs_por_periodo(self):
@@ -104,7 +112,7 @@ class LogAuditoriaTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["results"][0]["acao"], "EDICAO")
+        self.assertEqual(response.data["results"][0]["acao"], "ATUALIZACAO")
 
     def test_rejeita_periodo_invertido(self):
         self.client.force_authenticate(self.administrador)
@@ -158,8 +166,8 @@ class PaginacaoLogAuditoriaTests(APITestCase):
         for i in range(25):
             registrar_log(
                 usuario=self.administrador,
-                acao=f"ACAO_{i:02d}",
-                entidade="Edital",
+                acao=AcaoAuditoria.CRIACAO,
+                entidade=EntidadeAuditoria.EDITAL,
                 entidade_id=i,
             )
         self.client.force_authenticate(self.administrador)
@@ -190,7 +198,11 @@ class PaginacaoLogAuditoriaTests(APITestCase):
     def test_tamanho_de_pagina_e_limitado(self):
         self.assertEqual(len(self.client.get(self.url, {"por_pagina": 10}).data["results"]), 10)
         for _ in range(80):
-            registrar_log(usuario=self.administrador, acao="EXTRA", entidade="Edital")
+            registrar_log(
+                usuario=self.administrador,
+                acao=AcaoAuditoria.CRIACAO,
+                entidade=EntidadeAuditoria.EDITAL,
+            )
         self.assertEqual(len(self.client.get(self.url, {"por_pagina": 500}).data["results"]), 100)
 
     def test_pagina_inexistente_responde_404(self):

@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAdministrador, IsAluno, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 
 from .models import DadosBancarios
@@ -84,12 +85,12 @@ class MeusDadosBancariosView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(aluno=request.user.perfil_aluno)
 
-        acao = "DADOS_BANCARIOS_CADASTRADOS" if criado else "DADOS_BANCARIOS_ATUALIZADOS"
+        acao = AcaoAuditoria.CRIACAO if criado else AcaoAuditoria.ATUALIZACAO
 
         registrar_log(
             usuario=request.user,
             acao=acao,
-            entidade="DadosBancarios",
+            entidade=EntidadeAuditoria.DADOS_BANCARIOS,
             entidade_id=serializer.instance.pk,
             descricao=(
                 "Dados bancários cadastrados pelo aluno."

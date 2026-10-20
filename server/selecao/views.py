@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
+from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
 
@@ -180,6 +182,13 @@ class PublicarResultadoView(_BolsaDoCoordenadorMixin, APIView):
             )
             for candidato in classificacao.candidatos
         )
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.PUBLICACAO,
+            entidade=EntidadeAuditoria.SELECAO,
+            entidade_id=bolsa.pk,
+            descricao=f'Resultado da seleção da bolsa do projeto "{titulo}" publicado.',
+        )
         return self.resposta()
 
 
@@ -241,6 +250,16 @@ class IndicarBolsistaView(_ResultadoPublicadoMixin, APIView):
         if bolsa.indicacoes.count() >= bolsa.quantidade_vagas:
             bolsa.status = StatusBolsa.PREENCHIDA
             bolsa.save(update_fields=["status"])
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.VINCULO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=bolsa.pk,
+            descricao=(
+                f"{inscricao.aluno.nome} vinculado(a) como bolsista da bolsa do projeto "
+                f'"{bolsa.projeto.titulo}" pela seleção.'
+            ),
+        )
         return self.resposta()
 
 
@@ -268,6 +287,16 @@ class DesistenciaVagaView(_ResultadoPublicadoMixin, APIView):
             mensagem=(
                 "Foi registrado que você não vai assumir a vaga da bolsa do projeto "
                 f'"{bolsa.projeto.titulo}". Motivo: {dados["motivo"]}'
+            ),
+        )
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.DESISTENCIA,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=bolsa.pk,
+            descricao=(
+                f"{inscricao.aluno.nome} não vai assumir a vaga da bolsa do projeto "
+                f'"{bolsa.projeto.titulo}".'
             ),
         )
         return self.resposta()

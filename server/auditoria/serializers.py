@@ -4,6 +4,8 @@ from .models import LogAuditoria
 
 
 class LogAuditoriaSerializer(serializers.ModelSerializer):
+    acao_display = serializers.CharField(source="get_acao_display", read_only=True)
+    entidade_display = serializers.CharField(source="get_entidade_display", read_only=True)
     usuario_nome = serializers.SerializerMethodField()
     usuario_email = serializers.SerializerMethodField()
 
@@ -12,10 +14,12 @@ class LogAuditoriaSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "acao",
+            "acao_display",
             "usuario_nome",
             "usuario_email",
             "data_hora",
             "entidade",
+            "entidade_display",
             "entidade_id",
             "descricao",
         ]
