@@ -1,0 +1,59 @@
+/* ── Troca de perfil (somente modo dev) ─────────────────────── */
+
+.troca-perfil-dev {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px dashed #f59e0b;
+  border-radius: var(--radius-xl);
+  background: #fffbeb;
+}
+
+.troca-perfil-dev__titulo {
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.troca-perfil-dev__opcoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.troca-perfil-dev__opcao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  background: #fff;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.troca-perfil-dev__opcao:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.troca-perfil-dev__opcao:disabled {
+  cursor: default;
+}
+
+.troca-perfil-dev__opcao--atual {
+  border-color: #f59e0b;
+  background: #f59e0b;
+  color: #fff;
+}
+
+.troca-perfil-dev__erro {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #dc2626;
+}

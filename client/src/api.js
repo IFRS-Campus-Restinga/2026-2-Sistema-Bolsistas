@@ -68,6 +68,10 @@ export async function apiFetch(path, options = {}) {
   return fetchWithRefresh(API_BASE, path, options)
 }
 
+export function entrarComoPerfilDev(papel) {
+  return apiFetch(`/dev/login/${papel}/`, { method: 'POST' })
+}
+
 async function adminFetch(path, options = {}) {
   return fetchWithRefresh(ADMIN_BASE, path, options)
 }

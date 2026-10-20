@@ -1,5 +1,6 @@
 import { IFLogo } from './IFLogo'
 import { IconLogOut } from './Icons'
+import { TrocaPerfilDev } from './TrocaPerfilDev'
 import './Sidebar.css'
 
 /**
@@ -47,6 +48,7 @@ export function Sidebar({ menuItems, active, onNav, onLogout }) {
 
       {/* Logout */}
       <div className="sidebar__footer">
+        <TrocaPerfilDev />
         <button onClick={onLogout} className="sidebar__logout">
           <IconLogOut />
           Voltar ao HUB
