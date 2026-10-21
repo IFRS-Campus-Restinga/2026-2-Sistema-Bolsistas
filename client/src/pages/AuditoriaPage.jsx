@@ -2,15 +2,27 @@ import { useEffect, useState } from 'react'
 import { auditoriaFetch } from '../api'
 import {
   Alert,
+  Badge,
   Button,
   DataTable,
   FormField,
   PageHeader,
   Paginacao,
+  Select,
   TextInput,
 } from '../components'
+import './AuditoriaPage.css'
 
 const POR_PAGINA = 10
+
+const CAMPOS_VAZIOS = {
+  inicio: '',
+  fim: '',
+  acao: '',
+  entidade: '',
+  usuario: '',
+  descricao: '',
+}
 
 function mensagemErro(dados) {
   if (typeof dados?.detail === 'string') return dados.detail
@@ -23,19 +35,28 @@ function mensagemErro(dados) {
 }
 
 export default function AuditoriaPage() {
-  const [campos, setCampos] = useState({
-    inicio: '',
-    fim: '',
-  })
-  const [filtros, setFiltros] = useState({
-    inicio: '',
-    fim: '',
-    pagina: 1,
-  })
+  const [campos, setCampos] = useState(CAMPOS_VAZIOS)
+  const [filtros, setFiltros] = useState({ ...CAMPOS_VAZIOS, pagina: 1 })
+  const [opcoes, setOpcoes] = useState({ acoes: [], entidades: [] })
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    let ativo = true
+
+    auditoriaFetch('/opcoes/')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((dados) => {
+        if (ativo && dados) setOpcoes(dados)
+      })
+      .catch(() => {})
+
+    return () => {
+      ativo = false
+    }
+  }, [])
 
   useEffect(() => {
     let ativo = true
@@ -50,8 +71,10 @@ export default function AuditoriaPage() {
           por_pagina: String(POR_PAGINA),
         })
 
-        if (filtros.inicio) parametros.set('inicio', filtros.inicio)
-        if (filtros.fim) parametros.set('fim', filtros.fim)
+        Object.keys(CAMPOS_VAZIOS).forEach((nome) => {
+          const valor = filtros[nome].trim()
+          if (valor) parametros.set(nome, valor)
+        })
 
         const response = await auditoriaFetch(`/logs/?${parametros}`)
         const resultado = await response.json().catch(() => ({}))
@@ -78,14 +101,18 @@ export default function AuditoriaPage() {
     }
   }, [filtros])
 
+  function atualizarCampo(nome) {
+    return (event) => setCampos((atuais) => ({ ...atuais, [nome]: event.target.value }))
+  }
+
   function filtrar(event) {
     event.preventDefault()
     setFiltros({ ...campos, pagina: 1 })
   }
 
   function limpar() {
-    setCampos({ inicio: '', fim: '' })
-    setFiltros({ inicio: '', fim: '', pagina: 1 })
+    setCampos(CAMPOS_VAZIOS)
+    setFiltros({ ...CAMPOS_VAZIOS, pagina: 1 })
   }
 
   function mudarPagina(pagina) {
@@ -94,7 +121,7 @@ export default function AuditoriaPage() {
 
   const linhas = logs.map((log) => [
     new Date(log.data_hora).toLocaleString('pt-BR'),
-    log.acao_display,
+    <Badge key="acao" status={log.acao} label={log.acao_display} />,
     log.usuario_email ? `${log.usuario_nome} (${log.usuario_email})` : log.usuario_nome,
     log.entidade_display,
     log.descricao,
@@ -104,49 +131,65 @@ export default function AuditoriaPage() {
     <>
       <PageHeader title="Auditoria" />
 
-      <form
-        onSubmit={filtrar}
-        style={{
-          display: 'flex',
-          alignItems: 'end',
-          flexWrap: 'wrap',
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
+      <form onSubmit={filtrar} className="auditoria-filtros">
         <FormField label="Data inicial">
-          <TextInput
-            type="date"
-            value={campos.inicio}
-            onChange={(event) =>
-              setCampos((atual) => ({
-                ...atual,
-                inicio: event.target.value,
-              }))
-            }
-          />
+          <TextInput type="date" value={campos.inicio} onChange={atualizarCampo('inicio')} />
         </FormField>
 
         <FormField label="Data final">
+          <TextInput type="date" value={campos.fim} onChange={atualizarCampo('fim')} />
+        </FormField>
+
+        <FormField label="Ação">
+          <Select value={campos.acao} onChange={atualizarCampo('acao')}>
+            <option value="">Todas</option>
+            {opcoes.acoes.map((opcao) => (
+              <option key={opcao.valor} value={opcao.valor}>
+                {opcao.rotulo}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField label="Entidade">
+          <Select value={campos.entidade} onChange={atualizarCampo('entidade')}>
+            <option value="">Todas</option>
+            {opcoes.entidades.map((opcao) => (
+              <option key={opcao.valor} value={opcao.valor}>
+                {opcao.rotulo}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField label="Usuário">
           <TextInput
-            type="date"
-            value={campos.fim}
-            onChange={(event) =>
-              setCampos((atual) => ({
-                ...atual,
-                fim: event.target.value,
-              }))
-            }
+            type="search"
+            placeholder="Nome ou e-mail"
+            value={campos.usuario}
+            onChange={atualizarCampo('usuario')}
           />
         </FormField>
 
-        <Button type="submit" variant="accent" loading={carregando}>
-          Filtrar
-        </Button>
+        <div className="auditoria-filtros__descricao">
+          <FormField label="Descrição">
+            <TextInput
+              type="search"
+              placeholder="Trecho da descrição"
+              value={campos.descricao}
+              onChange={atualizarCampo('descricao')}
+            />
+          </FormField>
+        </div>
 
-        <Button type="button" variant="outline" onClick={limpar}>
-          Limpar
-        </Button>
+        <div className="auditoria-filtros__acoes">
+          <Button type="button" variant="outline" onClick={limpar}>
+            Limpar
+          </Button>
+          <Button type="submit" variant="accent" loading={carregando}>
+            Filtrar
+          </Button>
+        </div>
       </form>
 
       {erro && <Alert tone="error">{erro}</Alert>}

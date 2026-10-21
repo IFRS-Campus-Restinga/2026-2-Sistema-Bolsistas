@@ -1,0 +1,56 @@
+/* ── Filtros da auditoria ───────────────────────────────────── */
+
+.auditoria-filtros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+/* A margem padrão do FormField empurrava os botões para baixo dos campos. */
+.auditoria-filtros .form-field {
+  margin-bottom: 0;
+}
+
+/* Campos e botões com a mesma altura, para alinharem pela base. */
+.auditoria-filtros .form-input,
+.auditoria-filtros__acoes .btn {
+  height: 40px;
+}
+
+.auditoria-filtros__descricao {
+  grid-column: span 2;
+}
+
+.auditoria-filtros__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .auditoria-filtros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auditoria-filtros__acoes {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 520px) {
+  .auditoria-filtros {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auditoria-filtros__descricao,
+  .auditoria-filtros__acoes {
+    grid-column: auto;
+  }
+}

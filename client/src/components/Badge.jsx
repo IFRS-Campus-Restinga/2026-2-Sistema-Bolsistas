@@ -41,6 +41,19 @@ const STATUS_STYLE = {
   INDICADO: 'badge--green',
   NAO_ASSUMIU: 'badge--gray',
   RESULTADO_PUBLICADO: 'badge--green',
+  // Ações da auditoria, agrupadas por significado
+  APROVACAO: 'badge--green',
+  PUBLICACAO: 'badge--green',
+  ATIVACAO: 'badge--green',
+  REJEICAO: 'badge--red',
+  CANCELAMENTO: 'badge--red',
+  EXCLUSAO: 'badge--red',
+  DESATIVACAO: 'badge--red',
+  CRIACAO: 'badge--blue',
+  ATUALIZACAO: 'badge--gray',
+  ENCERRAMENTO: 'badge--gray',
+  DESISTENCIA: 'badge--yellow',
+  VINCULO: 'badge--purple',
 }
 
 const STATUS_LABEL = {
@@ -80,11 +93,11 @@ const STATUS_LABEL = {
   RESULTADO_PUBLICADO: 'Resultado publicado',
 }
 
-export function Badge({ status }) {
+export function Badge({ status, label: labelInformado }) {
   if (!status) {
     return <span className="badge badge--gray">—</span>
   }
   const cls = STATUS_STYLE[status] ?? 'badge--gray'
-  const label = STATUS_LABEL[status] ?? status
+  const label = labelInformado ?? STATUS_LABEL[status] ?? status
   return <span className={`badge ${cls}`}>{label}</span>
 }

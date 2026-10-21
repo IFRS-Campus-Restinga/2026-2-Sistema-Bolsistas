@@ -207,3 +207,82 @@ class PaginacaoLogAuditoriaTests(APITestCase):
 
     def test_pagina_inexistente_responde_404(self):
         self.assertEqual(self.client.get(self.url, {"pagina": 99}).status_code, 404)
+
+
+class FiltrosLogAuditoriaTests(APITestCase):
+    def setUp(self):
+        self.url = reverse("auditoria:logs")
+        self.ana = Usuario.objects.create_user(
+            username="ana",
+            email="ana.admin@ifrs.edu.br",
+            nome="Ana Souza",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.bruno = Usuario.objects.create_user(
+            username="bruno",
+            email="bruno.coord@ifrs.edu.br",
+            nome="Bruno Lima",
+            role=Usuario.Role.COORDENADOR_AREA,
+        )
+        registrar_log(
+            usuario=self.ana,
+            acao=AcaoAuditoria.ATIVACAO,
+            entidade=EntidadeAuditoria.USUARIO,
+            descricao="Usuário Duda Reichert ativado.",
+        )
+        registrar_log(
+            usuario=self.bruno,
+            acao=AcaoAuditoria.PUBLICACAO,
+            entidade=EntidadeAuditoria.EDITAL,
+            descricao='Edital "2026-1" publicado.',
+        )
+        registrar_log(
+            usuario=self.ana,
+            acao=AcaoAuditoria.CANCELAMENTO,
+            entidade=EntidadeAuditoria.BOLSA,
+            descricao='Bolsa do projeto "Robótica" cancelada.',
+        )
+        self.client.force_authenticate(self.ana)
+
+    def descricoes(self, **filtros):
+        resposta = self.client.get(self.url, filtros)
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        return sorted(log["descricao"] for log in resposta.data["results"])
+
+    def test_filtra_por_acao_e_por_entidade(self):
+        self.assertEqual(self.descricoes(acao="PUBLICACAO"), ['Edital "2026-1" publicado.'])
+        self.assertEqual(
+            self.descricoes(entidade="BOLSA"), ['Bolsa do projeto "Robótica" cancelada.']
+        )
+
+    def test_filtra_usuario_por_parte_do_nome_ou_do_email(self):
+        self.assertEqual(len(self.descricoes(usuario="souza")), 2)
+        self.assertEqual(self.descricoes(usuario="BRUNO.COORD"), ['Edital "2026-1" publicado.'])
+
+    def test_filtra_descricao_por_trecho_sem_diferenciar_maiusculas(self):
+        self.assertEqual(
+            self.descricoes(descricao="duda reichert"), ["Usuário Duda Reichert ativado."]
+        )
+
+    def test_combina_filtros(self):
+        self.assertEqual(
+            self.descricoes(usuario="ana", entidade="BOLSA"),
+            ['Bolsa do projeto "Robótica" cancelada.'],
+        )
+        self.assertEqual(self.descricoes(usuario="ana", acao="PUBLICACAO"), [])
+
+    def test_recusa_acao_ou_entidade_desconhecida(self):
+        self.assertEqual(self.client.get(self.url, {"acao": "INVENTADA"}).status_code, 400)
+        self.assertEqual(self.client.get(self.url, {"entidade": "Inscricao"}).status_code, 400)
+
+    def test_opcoes_trazem_todas_as_acoes_e_entidades_com_rotulo(self):
+        resposta = self.client.get(reverse("auditoria:opcoes"))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.data["acoes"]), len(AcaoAuditoria.choices))
+        self.assertEqual(len(resposta.data["entidades"]), len(EntidadeAuditoria.choices))
+        self.assertIn({"valor": "VINCULO", "rotulo": "Vínculo"}, resposta.data["acoes"])
+
+    def test_opcoes_sao_restritas_ao_administrador(self):
+        self.client.force_authenticate(self.bruno)
+        self.assertEqual(self.client.get(reverse("auditoria:opcoes")).status_code, 403)
