@@ -1,8 +1,10 @@
 # Create your tests here.
 from datetime import datetime
+from io import BytesIO
 
 from django.urls import reverse
 from django.utils import timezone
+from openpyxl import load_workbook
 from rest_framework.test import APITestCase
 
 from accounts.models import Usuario
@@ -323,24 +325,33 @@ class ExportacaoLogsTests(CenarioComTresLogs):
     def exportar(self, **filtros):
         return self.client.get(reverse("auditoria:exportar"), filtros)
 
-    def test_exporta_csv_com_cabecalho_e_bom(self):
+    def planilha(self, **filtros):
+        resposta = self.exportar(**filtros)
+        self.assertEqual(resposta.status_code, 200)
+        return load_workbook(BytesIO(resposta.content)).active
+
+    def test_exporta_xlsx_com_cabecalho_e_todos_os_registros(self):
         resposta = self.exportar()
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertIn("text/csv", resposta["Content-Type"])
-        self.assertIn("attachment", resposta["Content-Disposition"])
-        conteudo = resposta.content.decode("utf-8")
-        self.assertTrue(conteudo.startswith("﻿"))
-        linhas = conteudo.lstrip("﻿").strip().splitlines()
-        self.assertEqual(linhas[0], "Data e hora;Ação;Usuário;E-mail;Entidade;ID;Descrição")
-        self.assertEqual(len(linhas), 4)
+        self.assertIn("spreadsheetml", resposta["Content-Type"])
+        self.assertIn(".xlsx", resposta["Content-Disposition"])
+        aba = self.planilha()
+        cabecalho = [celula.value for celula in aba[1]]
+        self.assertEqual(
+            cabecalho, ["Data e hora", "Ação", "Usuário", "E-mail", "Entidade", "ID", "Descrição"]
+        )
+        self.assertEqual(aba.max_row, 4)
+
+    def test_data_e_gravada_como_data_do_excel(self):
+        aba = self.planilha()
+
+        self.assertIsInstance(aba.cell(row=2, column=1).value, datetime)
 
     def test_exportacao_respeita_os_filtros(self):
-        conteudo = self.exportar(acao="PUBLICACAO").content.decode("utf-8")
-        linhas = conteudo.lstrip("﻿").strip().splitlines()
+        aba = self.planilha(acao="PUBLICACAO")
 
-        self.assertEqual(len(linhas), 2)
-        self.assertIn("Publicação", linhas[1])
+        self.assertEqual(aba.max_row, 2)
+        self.assertEqual(aba.cell(row=2, column=2).value, "Publicação")
 
     def test_exportacao_restrita_ao_administrador(self):
         self.client.force_authenticate(self.bruno)

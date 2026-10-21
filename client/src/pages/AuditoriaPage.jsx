@@ -198,7 +198,7 @@ export default function AuditoriaPage() {
       const url = URL.createObjectURL(await response.blob())
       const link = document.createElement('a')
       link.href = url
-      link.download = `auditoria-${opcoes.hoje || 'registros'}.csv`
+      link.download = `auditoria-${opcoes.hoje || 'registros'}.xlsx`
       link.click()
       URL.revokeObjectURL(url)
     } catch (error) {
@@ -343,7 +343,7 @@ export default function AuditoriaPage() {
           loading={exportando}
           disabled={carregando || total === 0}
         >
-          Exportar CSV
+          Exportar Excel
         </Button>
       </div>
 

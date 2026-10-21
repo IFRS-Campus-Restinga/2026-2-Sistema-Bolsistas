@@ -1,9 +1,12 @@
-import csv
+from io import BytesIO
 
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -81,34 +84,60 @@ class LogAuditoriaListView(APIView):
         return paginador.get_paginated_response(serializer.data)
 
 
-class ExportarLogsView(APIView):
-    """Mesmos filtros da listagem, sem paginação, em CSV pronto para o Excel."""
+COLUNAS_EXPORTACAO = [
+    ("Data e hora", 20),
+    ("Ação", 16),
+    ("Usuário", 28),
+    ("E-mail", 32),
+    ("Entidade", 20),
+    ("ID", 8),
+    ("Descrição", 70),
+]
 
+
+def _planilha_de_logs(logs):
+    planilha = Workbook()
+    aba = planilha.active
+    aba.title = "Auditoria"
+
+    aba.append([titulo for titulo, _ in COLUNAS_EXPORTACAO])
+    for celula in aba[1]:
+        celula.font = Font(bold=True)
+    for indice, (_, largura) in enumerate(COLUNAS_EXPORTACAO, start=1):
+        aba.column_dimensions[get_column_letter(indice)].width = largura
+
+    for log in logs:
+        aba.append(
+            [
+                timezone.localtime(log.data_hora).replace(tzinfo=None),
+                log.get_acao_display(),
+                log.usuario_nome or "Sistema",
+                log.usuario_email,
+                log.get_entidade_display(),
+                log.entidade_id,
+                log.descricao,
+            ]
+        )
+        aba.cell(row=aba.max_row, column=1).number_format = "dd/mm/yyyy hh:mm:ss"
+
+    aba.freeze_panes = "A2"
+    aba.auto_filter.ref = aba.dimensions
+    return planilha
+
+
+class ExportarLogsView(APIView):
     permission_classes = [IsAuthenticated, IsAdministrador]
 
     def get(self, request):
-        logs = _logs_filtrados(request)
-        hoje = timezone.localdate().isoformat()
+        conteudo = BytesIO()
+        _planilha_de_logs(_logs_filtrados(request)).save(conteudo)
 
-        resposta = HttpResponse(content_type="text/csv; charset=utf-8")
-        resposta["Content-Disposition"] = f'attachment; filename="auditoria-{hoje}.csv"'
-        resposta.write("﻿")
-        escritor = csv.writer(resposta, delimiter=";")
-        escritor.writerow(
-            ["Data e hora", "Ação", "Usuário", "E-mail", "Entidade", "ID", "Descrição"]
+        resposta = HttpResponse(
+            conteudo.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        for log in logs:
-            escritor.writerow(
-                [
-                    timezone.localtime(log.data_hora).strftime("%d/%m/%Y %H:%M:%S"),
-                    log.get_acao_display(),
-                    log.usuario_nome or "Sistema",
-                    log.usuario_email,
-                    log.get_entidade_display(),
-                    log.entidade_id,
-                    log.descricao,
-                ]
-            )
+        hoje = timezone.localdate().isoformat()
+        resposta["Content-Disposition"] = f'attachment; filename="auditoria-{hoje}.xlsx"'
         return resposta
 
 
