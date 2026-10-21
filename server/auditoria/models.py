@@ -35,6 +35,10 @@ class LogAuditoria(models.Model):
         blank=True,
         related_name="logs_auditoria",
     )
+    # Cópia do autor no momento da ação: o registro continua legível mesmo que o
+    # usuário seja removido depois (a FK acima vira null).
+    usuario_nome = models.CharField(max_length=150, blank=True, default="")
+    usuario_email = models.CharField(max_length=254, blank=True, default="")
     data_hora = models.DateTimeField(auto_now_add=True)
     entidade = models.CharField(max_length=20, choices=EntidadeAuditoria.choices)
     entidade_id = models.CharField(max_length=64, blank=True, default="")

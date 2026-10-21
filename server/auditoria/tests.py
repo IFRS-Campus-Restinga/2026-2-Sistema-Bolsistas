@@ -209,7 +209,7 @@ class PaginacaoLogAuditoriaTests(APITestCase):
         self.assertEqual(self.client.get(self.url, {"pagina": 99}).status_code, 404)
 
 
-class FiltrosLogAuditoriaTests(APITestCase):
+class CenarioComTresLogs(APITestCase):
     def setUp(self):
         self.url = reverse("auditoria:logs")
         self.ana = Usuario.objects.create_user(
@@ -244,6 +244,8 @@ class FiltrosLogAuditoriaTests(APITestCase):
         )
         self.client.force_authenticate(self.ana)
 
+
+class FiltrosLogAuditoriaTests(CenarioComTresLogs):
     def descricoes(self, **filtros):
         resposta = self.client.get(self.url, filtros)
         self.assertEqual(resposta.status_code, 200, resposta.data)
@@ -286,3 +288,64 @@ class FiltrosLogAuditoriaTests(APITestCase):
     def test_opcoes_sao_restritas_ao_administrador(self):
         self.client.force_authenticate(self.bruno)
         self.assertEqual(self.client.get(reverse("auditoria:opcoes")).status_code, 403)
+
+
+class AutorCopiadoNoLogTests(APITestCase):
+    def test_log_mantem_autor_mesmo_se_o_usuario_for_removido(self):
+        autor = Usuario.objects.create_user(
+            username="carla",
+            email="carla@ifrs.edu.br",
+            nome="Carla Dias",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        log = registrar_log(
+            usuario=autor, acao=AcaoAuditoria.ATIVACAO, entidade=EntidadeAuditoria.USUARIO
+        )
+        autor.delete()
+
+        log.refresh_from_db()
+        self.assertIsNone(log.usuario)
+        self.assertEqual(log.usuario_nome, "Carla Dias")
+
+        leitor = Usuario.objects.create_user(
+            username="leitor",
+            email="leitor@ifrs.edu.br",
+            nome="Leitor",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(leitor)
+        resposta = self.client.get(reverse("auditoria:logs"), {"usuario": "carla"})
+        self.assertEqual(resposta.data["count"], 1)
+        self.assertEqual(resposta.data["results"][0]["usuario_nome"], "Carla Dias")
+
+
+class ExportacaoLogsTests(CenarioComTresLogs):
+    def exportar(self, **filtros):
+        return self.client.get(reverse("auditoria:exportar"), filtros)
+
+    def test_exporta_csv_com_cabecalho_e_bom(self):
+        resposta = self.exportar()
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("text/csv", resposta["Content-Type"])
+        self.assertIn("attachment", resposta["Content-Disposition"])
+        conteudo = resposta.content.decode("utf-8")
+        self.assertTrue(conteudo.startswith("﻿"))
+        linhas = conteudo.lstrip("﻿").strip().splitlines()
+        self.assertEqual(linhas[0], "Data e hora;Ação;Usuário;E-mail;Entidade;ID;Descrição")
+        self.assertEqual(len(linhas), 4)
+
+    def test_exportacao_respeita_os_filtros(self):
+        conteudo = self.exportar(acao="PUBLICACAO").content.decode("utf-8")
+        linhas = conteudo.lstrip("﻿").strip().splitlines()
+
+        self.assertEqual(len(linhas), 2)
+        self.assertIn("Publicação", linhas[1])
+
+    def test_exportacao_restrita_ao_administrador(self):
+        self.client.force_authenticate(self.bruno)
+        self.assertEqual(self.exportar().status_code, 403)
+
+    def test_opcoes_informam_a_data_do_servidor(self):
+        resposta = self.client.get(reverse("auditoria:opcoes"))
+        self.assertEqual(resposta.data["hoje"], timezone.localdate().isoformat())

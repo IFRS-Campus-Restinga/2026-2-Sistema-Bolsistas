@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { auditoriaFetch } from '../api'
 import {
   Alert,
@@ -10,6 +11,7 @@ import {
   Paginacao,
   Select,
   TextInput,
+  useToast,
 } from '../components'
 import './AuditoriaPage.css'
 
@@ -24,6 +26,12 @@ const CAMPOS_VAZIOS = {
   descricao: '',
 }
 
+const PERIODOS = [
+  { rotulo: 'Hoje', dias: 0 },
+  { rotulo: 'Últimos 7 dias', dias: 6 },
+  { rotulo: 'Últimos 30 dias', dias: 29 },
+]
+
 function mensagemErro(dados) {
   if (typeof dados?.detail === 'string') return dados.detail
 
@@ -34,13 +42,47 @@ function mensagemErro(dados) {
   return mensagens.join(' ') || 'Não foi possível consultar os logs.'
 }
 
+// Só aritmética sobre a data que veio do servidor; não consulta o relógio do navegador.
+function deslocarData(dataIso, dias) {
+  const [ano, mes, dia] = dataIso.split('-').map(Number)
+  const data = new Date(ano, mes - 1, dia + dias)
+  const doisDigitos = (numero) => String(numero).padStart(2, '0')
+  return `${data.getFullYear()}-${doisDigitos(data.getMonth() + 1)}-${doisDigitos(data.getDate())}`
+}
+
+function somenteCampos(filtros) {
+  return Object.fromEntries(Object.keys(CAMPOS_VAZIOS).map((nome) => [nome, filtros[nome]]))
+}
+
+function filtrosDaUrl(parametros) {
+  const pagina = Number(parametros.get('pagina'))
+  return {
+    ...Object.fromEntries(
+      Object.keys(CAMPOS_VAZIOS).map((nome) => [nome, parametros.get(nome) || ''])
+    ),
+    pagina: Number.isInteger(pagina) && pagina > 1 ? pagina : 1,
+  }
+}
+
+function consultaDosFiltros(filtros) {
+  const consulta = new URLSearchParams()
+  Object.keys(CAMPOS_VAZIOS).forEach((nome) => {
+    const valor = filtros[nome].trim()
+    if (valor) consulta.set(nome, valor)
+  })
+  return consulta
+}
+
 export default function AuditoriaPage() {
-  const [campos, setCampos] = useState(CAMPOS_VAZIOS)
-  const [filtros, setFiltros] = useState({ ...CAMPOS_VAZIOS, pagina: 1 })
-  const [opcoes, setOpcoes] = useState({ acoes: [], entidades: [] })
+  const toast = useToast()
+  const [parametros, setParametros] = useSearchParams()
+  const [filtros, setFiltros] = useState(() => filtrosDaUrl(parametros))
+  const [campos, setCampos] = useState(() => somenteCampos(filtrosDaUrl(parametros)))
+  const [opcoes, setOpcoes] = useState({ acoes: [], entidades: [], hoje: '' })
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [carregando, setCarregando] = useState(true)
+  const [exportando, setExportando] = useState(false)
   const [erro, setErro] = useState('')
 
   useEffect(() => {
@@ -58,6 +100,20 @@ export default function AuditoriaPage() {
     }
   }, [])
 
+  // Mantém os filtros na URL: recarregar a página ou compartilhar o link reproduz a consulta.
+  useEffect(() => {
+    const consulta = consultaDosFiltros(filtros)
+    consulta.set('aba', 'auditoria')
+    if (filtros.pagina > 1) consulta.set('pagina', String(filtros.pagina))
+    consulta.sort()
+
+    const atual = new URLSearchParams(parametros)
+    atual.sort()
+    if (atual.toString() !== consulta.toString()) {
+      setParametros(consulta, { replace: true })
+    }
+  }, [filtros, parametros, setParametros])
+
   useEffect(() => {
     let ativo = true
 
@@ -66,17 +122,11 @@ export default function AuditoriaPage() {
       setErro('')
 
       try {
-        const parametros = new URLSearchParams({
-          pagina: String(filtros.pagina),
-          por_pagina: String(POR_PAGINA),
-        })
+        const consulta = consultaDosFiltros(filtros)
+        consulta.set('pagina', String(filtros.pagina))
+        consulta.set('por_pagina', String(POR_PAGINA))
 
-        Object.keys(CAMPOS_VAZIOS).forEach((nome) => {
-          const valor = filtros[nome].trim()
-          if (valor) parametros.set(nome, valor)
-        })
-
-        const response = await auditoriaFetch(`/logs/?${parametros}`)
+        const response = await auditoriaFetch(`/logs/?${consulta}`)
         const resultado = await response.json().catch(() => ({}))
 
         if (!response.ok) {
@@ -105,25 +155,95 @@ export default function AuditoriaPage() {
     return (event) => setCampos((atuais) => ({ ...atuais, [nome]: event.target.value }))
   }
 
+  function aplicar(novosFiltros) {
+    setFiltros({ ...novosFiltros, pagina: 1 })
+    setCampos(somenteCampos(novosFiltros))
+  }
+
   function filtrar(event) {
     event.preventDefault()
-    setFiltros({ ...campos, pagina: 1 })
+    aplicar(campos)
   }
 
   function limpar() {
-    setCampos(CAMPOS_VAZIOS)
-    setFiltros({ ...CAMPOS_VAZIOS, pagina: 1 })
+    aplicar(CAMPOS_VAZIOS)
+  }
+
+  function aplicarFiltro(parcial) {
+    aplicar({ ...filtros, ...parcial })
+  }
+
+  function aplicarPeriodo(dias) {
+    aplicarFiltro({ inicio: deslocarData(opcoes.hoje, -dias), fim: opcoes.hoje })
+  }
+
+  function periodoAtivo(dias) {
+    return (
+      Boolean(opcoes.hoje) &&
+      filtros.fim === opcoes.hoje &&
+      filtros.inicio === deslocarData(opcoes.hoje, -dias)
+    )
   }
 
   function mudarPagina(pagina) {
     setFiltros((atuais) => ({ ...atuais, pagina }))
   }
 
+  async function exportar() {
+    setExportando(true)
+    try {
+      const response = await auditoriaFetch(`/logs/exportar/?${consultaDosFiltros(filtros)}`)
+      if (!response.ok) throw new Error('Não foi possível exportar os registros.')
+
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `auditoria-${opcoes.hoje || 'registros'}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      toast({ message: error.message, tone: 'error' })
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  function celulaFiltravel(chave, conteudo, titulo, filtro) {
+    return (
+      <button
+        key={chave}
+        type="button"
+        className="auditoria-celula-filtro"
+        title={titulo}
+        onClick={() => aplicarFiltro(filtro)}
+      >
+        {conteudo}
+      </button>
+    )
+  }
+
   const linhas = logs.map((log) => [
     new Date(log.data_hora).toLocaleString('pt-BR'),
-    <Badge key="acao" status={log.acao} label={log.acao_display} />,
-    log.usuario_email ? `${log.usuario_nome} (${log.usuario_email})` : log.usuario_nome,
-    log.entidade_display,
+    celulaFiltravel(
+      'acao',
+      <Badge status={log.acao} label={log.acao_display} />,
+      `Filtrar por ação: ${log.acao_display}`,
+      { acao: log.acao }
+    ),
+    log.usuario_email
+      ? celulaFiltravel(
+          'usuario',
+          `${log.usuario_nome} (${log.usuario_email})`,
+          `Filtrar por usuário: ${log.usuario_nome}`,
+          { usuario: log.usuario_email }
+        )
+      : log.usuario_nome,
+    celulaFiltravel(
+      'entidade',
+      log.entidade_display,
+      `Filtrar por entidade: ${log.entidade_display}`,
+      { entidade: log.entidade }
+    ),
     log.descricao,
   ])
 
@@ -132,6 +252,22 @@ export default function AuditoriaPage() {
       <PageHeader title="Auditoria" />
 
       <form onSubmit={filtrar} className="auditoria-filtros">
+        <div className="auditoria-filtros__periodos">
+          <span className="auditoria-filtros__periodos-rotulo">Período:</span>
+          {PERIODOS.map((periodo) => (
+            <button
+              key={periodo.rotulo}
+              type="button"
+              className={`auditoria-periodo${periodoAtivo(periodo.dias) ? ' auditoria-periodo--ativo' : ''}`}
+              onClick={() => aplicarPeriodo(periodo.dias)}
+              disabled={!opcoes.hoje}
+              aria-pressed={periodoAtivo(periodo.dias)}
+            >
+              {periodo.rotulo}
+            </button>
+          ))}
+        </div>
+
         <FormField label="Data inicial">
           <TextInput type="date" value={campos.inicio} onChange={atualizarCampo('inicio')} />
         </FormField>
@@ -193,6 +329,23 @@ export default function AuditoriaPage() {
       </form>
 
       {erro && <Alert tone="error">{erro}</Alert>}
+
+      <div className="auditoria-resumo">
+        <span role="status">
+          {!carregando &&
+            !erro &&
+            (total === 1 ? '1 registro encontrado' : `${total} registros encontrados`)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportar}
+          loading={exportando}
+          disabled={carregando || total === 0}
+        >
+          Exportar CSV
+        </Button>
+      </div>
 
       <DataTable
         columns={['Data e hora', 'Ação', 'Usuário', 'Entidade', 'Descrição']}

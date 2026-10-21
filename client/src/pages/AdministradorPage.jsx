@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Layout,
   Button,
@@ -23,13 +24,20 @@ const menuItems = [
   { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
 ]
 
+const ABAS = new Set(menuItems.map((item) => item.id))
+
 export default function AdministradorPage({ me, initials, onVoltarHub }) {
-  const [active, setActive] = useState('dashboard')
+  const [parametros, setParametros] = useSearchParams()
+  const [active, setActive] = useState(() =>
+    ABAS.has(parametros.get('aba')) ? parametros.get('aba') : 'dashboard'
+  )
   const [secaoMonitoramento, setSecaoMonitoramento] = useState(null)
 
   function navegar(destino, secao = null) {
     setSecaoMonitoramento(secao)
     setActive(destino)
+    // A aba fica na URL (recarregar mantém a tela); os filtros da aba anterior saem.
+    setParametros(destino === 'dashboard' ? {} : { aba: destino }, { replace: true })
   }
 
   return (

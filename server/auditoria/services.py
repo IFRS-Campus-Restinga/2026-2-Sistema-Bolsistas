@@ -17,6 +17,8 @@ def registrar_log(
 
     return LogAuditoria.objects.create(
         usuario=responsavel,
+        usuario_nome=responsavel.nome if responsavel else "",
+        usuario_email=(responsavel.email or "") if responsavel else "",
         acao=acao,
         entidade=entidade,
         entidade_id=str(entidade_id) if entidade_id else "",

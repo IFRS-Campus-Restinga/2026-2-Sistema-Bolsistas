@@ -54,3 +54,77 @@
     grid-column: auto;
   }
 }
+
+/* Atalhos de período */
+.auditoria-filtros__periodos {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.auditoria-filtros__periodos-rotulo {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.auditoria-periodo {
+  padding: 4px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.auditoria-periodo:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.auditoria-periodo:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auditoria-periodo--ativo {
+  border-color: var(--if-green);
+  background: var(--if-green);
+  color: #fff;
+}
+
+.auditoria-periodo--ativo:hover:not(:disabled) {
+  background: var(--if-green-dark);
+}
+
+/* Total + exportação */
+.auditoria-resumo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  min-height: 30px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Células que filtram ao clicar */
+.auditoria-celula-filtro {
+  padding: 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.auditoria-celula-filtro:hover {
+  background: #f0fdf4;
+  text-decoration: underline;
+  text-decoration-color: #86efac;
+}

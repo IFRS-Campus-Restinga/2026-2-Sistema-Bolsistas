@@ -26,7 +26,7 @@ class LogAuditoriaSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_usuario_nome(self, log):
-        return log.usuario.nome if log.usuario else "Sistema"
+        return log.usuario_nome or "Sistema"
 
     def get_usuario_email(self, log):
-        return log.usuario.email if log.usuario else None
+        return log.usuario_email or None
