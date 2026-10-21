@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
 import { monitoramentoFetch } from '../api'
-import {
-  Alert,
-  Badge,
-  Carregando,
-  DataTable,
-  IconBriefcase,
-  IconCalendar,
-  IconClipboardList,
-  IconUsers,
-  StatCard,
-} from '../components'
+import { Alert, Badge, Carregando, DataTable } from '../components'
 
 const CONFIGURACOES = {
   editais_ativos: {
@@ -90,7 +80,7 @@ const CONFIGURACOES = {
   },
 }
 
-export default function MonitoramentoPage({ secao = null, onNavigate = null }) {
+export default function MonitoramentoPage({ secao }) {
   const [dados, setDados] = useState(null)
   const [erro, setErro] = useState('')
 
@@ -122,85 +112,11 @@ export default function MonitoramentoPage({ secao = null, onNavigate = null }) {
   if (erro) return <Alert tone="error">{erro}</Alert>
   if (!dados) return <Carregando texto="Carregando monitoramento..." />
 
-  const cartoes = [
-    {
-      chave: 'editais_ativos',
-      label: 'Editais Ativos',
-      icon: <IconCalendar />,
-      color: 'green',
-      destino: 'editais',
-    },
-    {
-      chave: 'projetos_cadastrados',
-      label: 'Projetos Cadastrados',
-      icon: <IconBriefcase />,
-      color: 'blue',
-      destino: 'projetos',
-    },
-    {
-      chave: 'usuarios_ativos',
-      label: 'Usuários Ativos',
-      icon: <IconUsers />,
-      color: 'green',
-      destino: 'usuarios',
-    },
-    {
-      chave: 'usuarios_inativos',
-      label: 'Usuários Inativos',
-      icon: <IconUsers />,
-      color: 'red',
-      destino: 'usuarios',
-    },
-    {
-      chave: 'bolsas_ativas',
-      label: 'Bolsas Ativas',
-      icon: <IconBriefcase />,
-      color: 'blue',
-      destino: 'bolsas',
-    },
-    {
-      chave: 'inscricoes_ativas',
-      label: 'Inscrições Ativas',
-      icon: <IconClipboardList />,
-      color: 'green',
-      destino: 'inscricoes',
-    },
-    {
-      chave: 'inscricoes_encerradas',
-      label: 'Inscrições Encerradas',
-      icon: <IconClipboardList />,
-      color: 'red',
-      destino: 'inscricoes',
-    },
-  ]
-
-  const configuracao = secao ? CONFIGURACOES[secao] : null
-  const itens = secao ? dados.detalhes[secao] : []
+  const configuracao = CONFIGURACOES[secao]
+  const itens = dados.detalhes[secao]
 
   return (
     <>
-      {!secao && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-            gap: 16,
-          }}
-        >
-          {cartoes.map((cartao) => (
-            <StatCard
-              key={cartao.chave}
-              label={cartao.label}
-              value={dados.totais[cartao.chave]}
-              icon={cartao.icon}
-              color={cartao.color}
-              clickable
-              onClick={() => onNavigate?.(cartao.destino, cartao.chave)}
-            />
-          ))}
-        </div>
-      )}
-
       {configuracao && (
         <section>
           <h3>{configuracao.titulo}</h3>

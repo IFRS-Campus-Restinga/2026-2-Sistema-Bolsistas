@@ -50,6 +50,12 @@
   letter-spacing: -0.025em;
 }
 
+.stat-card__detail {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .stat-card__icon {
   width: 48px;
   height: 48px;

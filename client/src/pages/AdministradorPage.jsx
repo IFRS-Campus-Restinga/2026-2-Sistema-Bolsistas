@@ -12,6 +12,7 @@ import {
 } from '../components'
 import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
+import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
 
 const menuItems = [
@@ -31,10 +32,8 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState(() =>
     ABAS.has(parametros.get('aba')) ? parametros.get('aba') : 'dashboard'
   )
-  const [secaoMonitoramento, setSecaoMonitoramento] = useState(null)
 
-  function navegar(destino, secao = null) {
-    setSecaoMonitoramento(secao)
+  function navegar(destino) {
     setActive(destino)
     // A aba fica na URL (recarregar mantém a tela); os filtros da aba anterior saem.
     setParametros(destino === 'dashboard' ? {} : { aba: destino }, { replace: true })
@@ -45,7 +44,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
       role="Administrador"
       menuItems={menuItems}
       active={active}
-      onNav={(destino) => navegar(destino)}
+      onNav={navegar}
       onLogout={onVoltarHub}
       campus="Campus Restinga"
       userName={me.nome || '(sem nome)'}
@@ -66,26 +65,14 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
             }
           />
 
-          <MonitoramentoPage onNavigate={navegar} />
+          <PainelAdministrativo onNavigate={navegar} />
         </>
       )}
       {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
-      {active === 'inscricoes' && (
-        <MonitoramentoPage secao={secaoMonitoramento || 'inscricoes_ativas'} />
-      )}
-      {active === 'usuarios' && (
-        <UsuariosPage
-          filtroStatus={
-            secaoMonitoramento === 'usuarios_ativos'
-              ? true
-              : secaoMonitoramento === 'usuarios_inativos'
-                ? false
-                : null
-          }
-        />
-      )}
+      {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}
+      {active === 'usuarios' && <UsuariosPage />}
       {active === 'auditoria' && <AuditoriaPage />}
     </Layout>
   )

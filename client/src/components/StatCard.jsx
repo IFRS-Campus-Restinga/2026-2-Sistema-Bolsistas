@@ -6,11 +6,20 @@ import './StatCard.css'
  * Props:
  *   label     — rótulo superior ("EDITAIS ATIVOS")
  *   value     — valor numérico ou texto
+ *   detail    — linha de contexto abaixo do valor ("de 10 vagas"), opcional
  *   icon      — ReactNode do ícone
  *   color     — "green" | "purple" | "blue" | "orange" | "red"
  *   clickable — se mostra indicação de clicável no hover
  */
-export function StatCard({ label, value, icon, color = 'green', clickable = false, onClick }) {
+export function StatCard({
+  label,
+  value,
+  detail,
+  icon,
+  color = 'green',
+  clickable = false,
+  onClick,
+}) {
   const clicavel = clickable || !!onClick
 
   return (
@@ -33,6 +42,7 @@ export function StatCard({ label, value, icon, color = 'green', clickable = fals
       <div className="stat-card__content">
         <p className="stat-card__label">{label}</p>
         <p className="stat-card__value">{value}</p>
+        {detail && <p className="stat-card__detail">{detail}</p>}
       </div>
       <div className={`stat-card__icon stat-card__icon--${color}`}>{icon}</div>
       {clicavel && <span className="stat-card__link">Ir para →</span>}
