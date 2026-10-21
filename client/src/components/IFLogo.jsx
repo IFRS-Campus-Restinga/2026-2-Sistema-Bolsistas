@@ -13,19 +13,19 @@ export function IFLogo({ size = 48 }) {
       width={width}
       height={height}
       viewBox="0 0 34 46"
-      style={{ flexShrink: 0 }}
+      className="shrink-0"
       aria-label="Instituto Federal"
     >
-      <circle cx="5" cy="5" r="5.5" fill="var(--if-red)" />
-      <rect x="12" y="0" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="24" y="0" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="0" y="12" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="12" y="12" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="0" y="24" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="12" y="24" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="24" y="24" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="0" y="36" width="10" height="10" rx="1" fill="var(--if-green)" />
-      <rect x="12" y="36" width="10" height="10" rx="1" fill="var(--if-green)" />
+      <circle cx="5" cy="5" r="5.5" fill="var(--color-if-red)" />
+      <rect x="12" y="0" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="24" y="0" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="0" y="12" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="12" y="12" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="0" y="24" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="12" y="24" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="24" y="24" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="0" y="36" width="10" height="10" rx="1" fill="var(--color-if-green)" />
+      <rect x="12" y="36" width="10" height="10" rx="1" fill="var(--color-if-green)" />
     </svg>
   )
 }

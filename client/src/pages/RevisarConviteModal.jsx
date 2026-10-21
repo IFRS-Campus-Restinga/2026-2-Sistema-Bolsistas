@@ -104,7 +104,7 @@ export default function RevisarConviteModal({ conviteId, onFechar, onDecisao }) 
 
   return (
     <Modal title="Revisar Documentação do Convite" onClose={fechar} width={720}>
-      <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+      <div className="max-h-[65vh] overflow-y-auto">
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
           <Carregando texto="Carregando convite..." />

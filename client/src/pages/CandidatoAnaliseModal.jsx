@@ -94,7 +94,7 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
 
   return (
     <Modal title="Análise da inscrição" onClose={fechar} width={720}>
-      <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+      <div className="max-h-[65vh] overflow-y-auto">
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
           <Carregando texto="Carregando inscrição..." />

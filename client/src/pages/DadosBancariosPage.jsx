@@ -148,7 +148,7 @@ export default function DadosBancariosPage() {
     <>
       <PageHeader title="Dados Bancários" />
 
-      <p style={{ maxWidth: 760 }}>
+      <p className="max-w-[760px]">
         Estes dados são obrigatórios antes que o Coordenador de Projeto possa indicá-lo como titular
         de uma bolsa. A conta cadastrada precisa ser de sua própria titularidade.
       </p>
@@ -166,16 +166,7 @@ export default function DadosBancariosPage() {
       {carregando ? (
         <Carregando texto="Carregando dados bancários..." />
       ) : (
-        <form
-          onSubmit={salvar}
-          style={{
-            maxWidth: 420,
-            marginTop: 16,
-            padding: 22,
-            background: '#fff',
-            borderRadius: 12,
-          }}
-        >
+        <form onSubmit={salvar} className="mt-4 max-w-[420px] rounded-xl bg-white p-5.5">
           <FormField label="Matrícula">
             <TextInput
               name="matricula"

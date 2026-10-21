@@ -150,9 +150,9 @@ export default function SolicitacoesBolsaPage() {
       {notificacoes.map((notificacao) => (
         <Alert key={notificacao.id} tone="success">
           {notificacao.mensagem}{' '}
-          <button type="button" onClick={() => marcarNotificacaoLida(notificacao)}>
+          <Button size="sm" variant="outline" onClick={() => marcarNotificacaoLida(notificacao)}>
             Marcar como lida
-          </button>
+          </Button>
         </Alert>
       ))}
 

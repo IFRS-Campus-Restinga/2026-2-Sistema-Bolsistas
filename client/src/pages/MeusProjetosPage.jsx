@@ -210,7 +210,7 @@ function ListaProjetos({ onGerenciar }) {
           </Button>
         }
       />
-      <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -8, marginBottom: 16 }}>
+      <p className="-mt-2 mb-4 text-xs text-gray-400">
         Projetos são criados livremente por você. Não é necessária autorização do Administrador.
       </p>
 
@@ -615,15 +615,7 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       </Button>
 
       <PageHeader title={projeto.titulo} badge={<Badge status={projeto.status} />} />
-      <div
-        style={{
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 8,
-          padding: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
         {projeto.descricao || 'Sem descrição.'}
       </div>
 

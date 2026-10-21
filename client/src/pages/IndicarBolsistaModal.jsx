@@ -32,11 +32,11 @@ export default function IndicarBolsistaModal({ bolsaId, candidato, onSalvo, onFe
   return (
     <Modal title="Indicar bolsista" onClose={onFechar} width={520}>
       {erro && <Alert tone="error">{erro}</Alert>}
-      <p style={{ marginBottom: 12 }}>
+      <p className="mb-3">
         <strong>{candidato.aluno_nome}</strong> ({candidato.posicao}º lugar, nota{' '}
         {candidato.nota_final}) <Badge status={candidato.situacao} />
       </p>
-      <p style={{ marginBottom: 12 }}>
+      <p className="mb-3">
         A indicação formaliza o aluno como bolsista e inicia o vínculo administrativo com a bolsa.
       </p>
 

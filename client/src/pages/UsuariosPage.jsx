@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   AcoesCell,
   Alert,
+  Badge,
   Modal,
   Button,
   FormField,
@@ -41,11 +42,7 @@ function tipoAreaLabel(value) {
 }
 
 function StatusBadge({ ativo }) {
-  return (
-    <span className={`badge ${ativo ? 'badge--green' : 'badge--red'}`}>
-      {ativo ? 'Ativo' : 'Inativo'}
-    </span>
-  )
+  return <Badge status={ativo ? 'ATIVO' : 'DESLIGADO'} label={ativo ? 'Ativo' : 'Inativo'} />
 }
 
 // ─── página principal ─────────────────────────────────────────────────────────
@@ -259,9 +256,7 @@ export default function UsuariosPage({ filtroStatus = null }) {
     <span key="role">
       {ROLE_LABEL[usuario.role] || usuario.role}
       {usuario.tipo_area && (
-        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>
-          ({tipoAreaLabel(usuario.tipo_area)})
-        </span>
+        <span className="ml-1 text-2xs text-gray-400">({tipoAreaLabel(usuario.tipo_area)})</span>
       )}
     </span>,
     <StatusBadge key="status" ativo={usuario.is_active} />,
@@ -294,11 +289,11 @@ export default function UsuariosPage({ filtroStatus = null }) {
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+      <div className="flex flex-col gap-10">
         {/* ── Usuários ── */}
         <section>
           <PageHeader title="Usuários" />
-          {erroUsuarios && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroUsuarios}</p>}
+          {erroUsuarios && <p className="text-base text-red-600">{erroUsuarios}</p>}
           {!erroUsuarios && (
             <DataTable
               columns={['Nome', 'E-mail', 'Grupo / Perfil', 'Status', 'Ações']}
@@ -319,11 +314,11 @@ export default function UsuariosPage({ filtroStatus = null }) {
               </Button>
             }
           />
-          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -16, marginBottom: 16 }}>
+          <p className="-mt-4 mb-4 text-xs text-gray-400">
             Servidores cujo e-mail estiver nesta lista serão reconhecidos como Coordenadores de Área
             ao fazer login.
           </p>
-          {erroEmails && <p style={{ color: '#dc2626', fontSize: 14 }}>{erroEmails}</p>}
+          {erroEmails && <p className="text-base text-red-600">{erroEmails}</p>}
           {!erroEmails && (
             <DataTable
               columns={['E-mail', 'Tipo de Área', 'Ações']}

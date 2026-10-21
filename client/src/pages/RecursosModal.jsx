@@ -150,7 +150,7 @@ export default function RecursosModal({
       onClose={fechar}
       width={800}
     >
-      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: 4 }}>
+      <div className="max-h-[70vh] overflow-y-auto p-1">
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
           <Carregando texto="Carregando recursos..." />
@@ -221,6 +221,7 @@ export default function RecursosModal({
                       aria-label="Anexos do recurso"
                       type="file"
                       multiple
+                      className="text-sm text-gray-500 file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-gray-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-50"
                       disabled={salvando}
                       onChange={(e) => {
                         setAnexos(Array.from(e.target.files || []))
@@ -249,18 +250,15 @@ export default function RecursosModal({
             <h3>Histórico de recursos</h3>
             {dados.recursos.length === 0 && <p>Nenhum recurso enviado nesta etapa.</p>}
             {dados.recursos.map((recurso) => (
-              <section
-                key={recurso.id}
-                style={{ borderTop: '1px solid #d9d9d9', paddingTop: 12, marginTop: 12 }}
-              >
+              <section key={recurso.id} className="mt-3 border-t border-[#d9d9d9] pt-3">
                 <h4>
                   Recurso de homologação <Badge status={recurso.status} />
                 </h4>
                 <p>Enviado em {new Date(recurso.criado_em).toLocaleString('pt-BR')}.</p>
-                <p style={{ whiteSpace: 'pre-wrap' }}>
+                <p className="whitespace-pre-wrap">
                   <strong>Motivo contestado:</strong> {recurso.motivo_contestado || 'Não informado'}
                 </p>
-                <p style={{ whiteSpace: 'pre-wrap' }}>
+                <p className="whitespace-pre-wrap">
                   <strong>Justificativa do aluno:</strong> {recurso.justificativa}
                 </p>
                 <ul>
@@ -277,7 +275,7 @@ export default function RecursosModal({
                   <p>Julgado em {new Date(recurso.julgado_em).toLocaleString('pt-BR')}.</p>
                 )}
                 {recurso.justificativa_julgamento && (
-                  <p style={{ whiteSpace: 'pre-wrap' }}>
+                  <p className="whitespace-pre-wrap">
                     <strong>Justificativa do julgamento:</strong> {recurso.justificativa_julgamento}
                   </p>
                 )}

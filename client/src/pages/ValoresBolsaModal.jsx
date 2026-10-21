@@ -3,7 +3,18 @@ import { editaisFetch } from '../api'
 import { Alert, Button, Carregando, FormActions, Modal } from '../components'
 import { formatarMoeda } from '../utils/formatarMoeda'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
-import './ValoresBolsaModal.css'
+
+// Botões e campos herdam line-height "normal" do navegador; leading-[normal] mantém a altura.
+const TRILHO =
+  "h-full w-full rounded-full bg-gray-300 transition-[background] duration-150 ease-[ease] after:absolute after:top-[3px] after:left-[3px] after:size-4 after:rounded-full after:bg-white after:shadow-[0_1px_2px_rgba(0,0,0,0.2)] after:transition-transform after:duration-150 after:ease-[ease] after:content-[''] peer-checked:bg-if-green peer-checked:after:translate-x-4 peer-focus-visible:shadow-[0_0_0_3px_rgba(74,222,128,0.35)] peer-disabled:opacity-50"
+
+function classesMoeda(comErro, disponivel) {
+  return [
+    'flex items-center overflow-hidden rounded-xl border transition-shadow duration-150 ease-[ease] focus-within:border-green-300 focus-within:shadow-[0_0_0_3px_rgba(74,222,128,0.25)]',
+    comErro ? 'border-red-300' : 'border-gray-200',
+    disponivel ? 'bg-white' : 'bg-gray-50',
+  ].join(' ')
+}
 
 function paraFormulario(item) {
   return { ...item, valor: item.valor_mensal ?? '' }
@@ -132,7 +143,7 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
 
   return (
     <Modal title="Modalidades e valores de bolsa (2 de 2)" onClose={fechar} width={640}>
-      <p className="valores-bolsa__intro">
+      <p className="mb-4 text-gray-500">
         {edital.nome} ({edital.ano_codigo}). Ative as combinações do catálogo institucional que este
         edital oferece e defina o valor mensal de cada uma, respeitando o valor máximo.
       </p>
@@ -146,26 +157,28 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
         <Carregando texto="Carregando catálogo..." />
       ) : (
         <>
-          <div className="valores-bolsa__resumo">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-2.5 text-sm">
             <span>
-              <strong>{selecionados.length}</strong> de {itens.length} combinações disponíveis neste
-              edital
+              <strong className="text-gray-800">{selecionados.length}</strong> de {itens.length}{' '}
+              combinações disponíveis neste edital
             </span>
           </div>
 
-          <div className="valores-bolsa__grupos">
+          <div className="mb-4 flex flex-col gap-3">
             {agruparPorModalidade(itens).map((grupo) => {
               const ativos = grupo.itens.filter((item) => item.disponivel).length
               return (
                 <section
                   key={grupo.modalidade}
-                  className="valores-bolsa__grupo"
+                  className="overflow-hidden rounded-xl border border-gray-200 bg-white"
                   aria-label={grupo.nome}
                 >
-                  <header className="valores-bolsa__grupo-cabecalho">
-                    <span className="valores-bolsa__sigla">{grupo.modalidade}</span>
-                    <span className="valores-bolsa__nome">{grupo.nome}</span>
-                    <span className="valores-bolsa__contador">
+                  <header className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-4 py-3">
+                    <span className="rounded-md bg-green-100 px-2 py-0.5 text-xs font-bold tracking-[0.02em] text-if-green-dark">
+                      {grupo.modalidade}
+                    </span>
+                    <span className="font-semibold text-gray-800">{grupo.nome}</span>
+                    <span className="ml-auto text-xs text-gray-500">
                       {ativos} de {grupo.itens.length} ativa{grupo.itens.length > 1 ? 's' : ''}
                     </span>
                   </header>
@@ -174,9 +187,13 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
                     const mensagem = erroDoValor(item)
                     const rotulo = `${item.modalidade} ${item.carga_horaria_semanal}h`
                     return (
-                      <div key={item.tipo_bolsa_modalidade} className="valores-bolsa__linha">
-                        <label className="valores-bolsa__chave">
+                      <div
+                        key={item.tipo_bolsa_modalidade}
+                        className="grid grid-cols-[auto_1fr_180px] items-center gap-4 px-4 py-3 max-[560px]:grid-cols-[auto_1fr] [&+&]:border-t [&+&]:border-gray-100"
+                      >
+                        <label className="relative inline-flex h-[22px] w-[38px] cursor-pointer">
                           <input
+                            className="peer absolute m-0 size-full cursor-[inherit] opacity-0"
                             type="checkbox"
                             role="switch"
                             aria-label={`Oferecer ${rotulo}`}
@@ -184,30 +201,23 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
                             disabled={bloqueado}
                             onChange={(e) => alternar(item, e.target.checked)}
                           />
-                          <span className="valores-bolsa__chave-trilho" />
+                          <span className={TRILHO} />
                         </label>
 
-                        <div className="valores-bolsa__ch">
-                          <span className="valores-bolsa__ch-titulo">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-800">
                             {item.carga_horaria_semanal}h semanais
                           </span>
-                          <span className="valores-bolsa__ch-maximo">
+                          <span className="text-xs text-gray-500">
                             Máximo institucional: {formatarMoeda(item.valor_maximo)}
                           </span>
                         </div>
 
-                        <div className="valores-bolsa__valor">
-                          <div
-                            className={[
-                              'valores-bolsa__moeda',
-                              mensagem && 'valores-bolsa__moeda--erro',
-                              !item.disponivel && 'valores-bolsa__moeda--desativada',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                          >
-                            <span className="valores-bolsa__prefixo">R$</span>
+                        <div className="flex flex-col gap-1 max-[560px]:col-span-full">
+                          <div className={classesMoeda(Boolean(mensagem), item.disponivel)}>
+                            <span className="pl-3 text-sm text-gray-400">R$</span>
                             <input
+                              className="min-w-0 flex-1 border-0 bg-transparent py-[9px] pr-3 pl-1.5 text-right [font-family:inherit] text-base leading-[normal] text-gray-800 outline-none disabled:text-gray-400"
                               type="number"
                               step="0.01"
                               min="0.01"
@@ -221,13 +231,13 @@ export default function ValoresBolsaModal({ edital, onSalvo, onFechar }) {
                               }
                             />
                           </div>
-                          {mensagem && <span className="valores-bolsa__erro">{mensagem}</span>}
+                          {mensagem && <span className="text-xs text-if-red">{mensagem}</span>}
                           {item.disponivel &&
                             !bloqueado &&
                             Number(item.valor) !== Number(item.valor_maximo) && (
                               <button
                                 type="button"
-                                className="valores-bolsa__usar-maximo"
+                                className="cursor-pointer self-end border-0 bg-transparent p-0 text-xs leading-[normal] text-if-green-dark hover:underline"
                                 onClick={() =>
                                   atualizar(item.tipo_bolsa_modalidade, {
                                     valor: item.valor_maximo,

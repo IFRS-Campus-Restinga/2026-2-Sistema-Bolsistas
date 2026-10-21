@@ -1,5 +1,3 @@
-import './Spinner.css'
-
 /**
  * Indicador de carregamento circular. Herda a cor do texto (currentColor).
  *
@@ -8,7 +6,7 @@ import './Spinner.css'
 export function Spinner({ size = 16 }) {
   return (
     <svg
-      className="spinner"
+      className="shrink-0 animate-girar motion-reduce:[animation-duration:1.6s]"
       width={size}
       height={size}
       viewBox="0 0 24 24"

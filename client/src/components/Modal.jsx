@@ -1,15 +1,23 @@
-import './Modal.css'
-
 /**
  * Modal genérico com overlay e cabeçalho.
  */
 export function Modal({ title, onClose, children, width = 440 }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal__header">
-          <h3 className="modal__title">{title}</h3>
-          <button onClick={onClose} className="modal__close">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.5)] p-4 backdrop-blur-xs"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[calc(100vh-64px)] w-full overflow-y-auto rounded-2xl bg-white shadow-modal"
+        style={{ maxWidth: width }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#f4f4f4] px-6 py-4">
+          <h3 className="text-[16px] font-bold text-gray-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="flex size-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-gray-400 transition-all duration-150 ease-[ease] hover:bg-gray-100 hover:text-gray-600"
+          >
             <svg
               width="14"
               height="14"
@@ -24,7 +32,7 @@ export function Modal({ title, onClose, children, width = 440 }) {
             </svg>
           </button>
         </div>
-        <div className="modal__body">{children}</div>
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   )

@@ -42,26 +42,19 @@ export default function DesempateModal({ bolsaId, empatados, onSalvo, onFechar }
   return (
     <Modal title={`Desempate: nota ${empatados[0].nota_final}`} onClose={onFechar} width={480}>
       {erro && <Alert tone="error">{erro}</Alert>}
-      <p style={{ marginBottom: 12 }}>
+      <p className="mb-3">
         Estes candidatos têm a mesma nota final. Ordene-os conforme o critério de desempate adotado
         (o primeiro da lista fica à frente na classificação).
       </p>
 
-      <ol style={{ paddingLeft: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+      <ol className="grid list-none gap-2">
         {ordem.map((candidato, indice) => (
           <li
             key={candidato.inscricao}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 12px',
-              border: '1px solid #e5e7eb',
-              borderRadius: 8,
-            }}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2"
           >
-            <strong style={{ width: 24 }}>{indice + 1}º</strong>
-            <span style={{ flex: 1 }}>{candidato.aluno_nome}</span>
+            <strong className="w-6">{indice + 1}º</strong>
+            <span className="flex-1">{candidato.aluno_nome}</span>
             <Button
               size="sm"
               variant="ghost"

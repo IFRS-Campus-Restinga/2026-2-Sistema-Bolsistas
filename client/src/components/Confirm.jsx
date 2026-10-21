@@ -51,7 +51,7 @@ export function ConfirmProvider({ children }) {
       {children}
       {opts && (
         <Modal title={opts.title} onClose={fechar} width={400}>
-          <p className="confirm__message">{opts.message}</p>
+          <p className="mb-5 text-base text-gray-600">{opts.message}</p>
           {erro && <Alert tone="error">{erro}</Alert>}
           <FormActions>
             <Button

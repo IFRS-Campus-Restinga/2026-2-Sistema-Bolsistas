@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { entrarComoPerfilDev } from '../api'
 import { useAuth } from '../contexts/useAuth'
 import { Spinner } from './Spinner'
-import './TrocaPerfilDev.css'
 
 const PERFIS = [
   { papel: 'aluno', role: 'ALUNO', label: 'Aluno' },
@@ -10,6 +9,11 @@ const PERFIS = [
   { papel: 'coordenador-area', role: 'COORDENADOR_AREA', label: 'Coord. Área' },
   { papel: 'admin', role: 'ADMINISTRADOR', label: 'Admin' },
 ]
+
+const OPCAO =
+  'inline-flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-1 py-1.5 text-2xs leading-[normal] font-semibold disabled:cursor-default'
+const OPCAO_NORMAL = `${OPCAO} border-amber-300 bg-white text-amber-800 enabled:hover:bg-amber-100`
+const OPCAO_ATUAL = `${OPCAO} border-amber-500 bg-amber-500 text-white`
 
 export function TrocaPerfilDev() {
   const { me } = useAuth()
@@ -32,16 +36,18 @@ export function TrocaPerfilDev() {
   }
 
   return (
-    <div className="troca-perfil-dev">
-      <p className="troca-perfil-dev__titulo">Modo dev · trocar perfil</p>
-      <div className="troca-perfil-dev__opcoes">
+    <div className="mb-3 rounded-xl border border-dashed border-amber-500 bg-amber-50 p-2.5">
+      <p className="mb-2 text-[10px] font-bold tracking-[0.08em] text-amber-700 uppercase">
+        Modo dev · trocar perfil
+      </p>
+      <div className="grid grid-cols-2 gap-1.5">
         {PERFIS.map((perfil) => {
           const atual = me.role === perfil.role
           return (
             <button
               key={perfil.papel}
               type="button"
-              className={`troca-perfil-dev__opcao${atual ? ' troca-perfil-dev__opcao--atual' : ''}`}
+              className={atual ? OPCAO_ATUAL : OPCAO_NORMAL}
               onClick={() => trocar(perfil.papel)}
               disabled={atual || trocandoPara !== null}
               aria-pressed={atual}
@@ -53,7 +59,7 @@ export function TrocaPerfilDev() {
         })}
       </div>
       {erro && (
-        <p className="troca-perfil-dev__erro" role="alert">
+        <p className="mt-1.5 text-2xs text-red-600" role="alert">
           {erro}
         </p>
       )}

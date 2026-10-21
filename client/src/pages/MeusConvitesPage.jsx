@@ -130,7 +130,7 @@ export default function MeusConvitesPage() {
       {erro && <Alert tone="error">{erro}</Alert>}
 
       <PageHeader title="Bolsas elegíveis para convite" />
-      <p style={{ marginTop: -8, marginBottom: 16, color: '#6b7280', fontSize: 14 }}>
+      <p className="-mt-2 mb-4 text-base text-gray-500">
         Bolsas cujo período de recursos da homologação já encerrou e que ainda têm vaga livre.
       </p>
       <DataTable

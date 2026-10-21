@@ -48,7 +48,7 @@ export default function CandidatosPage({ bolsa }) {
   }
 
   const linhas = consulta.candidatos.map((candidato) => [
-    <span key="nome" style={{ whiteSpace: 'nowrap' }}>
+    <span key="nome" className="whitespace-nowrap">
       {candidato.aluno_nome}
     </span>,
     candidato.aluno_email || 'Não informado',

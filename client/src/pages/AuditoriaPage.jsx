@@ -13,9 +13,17 @@ import {
   TextInput,
   useToast,
 } from '../components'
-import './AuditoriaPage.css'
 
 const POR_PAGINA = 10
+
+// Campos e botões dos filtros com a mesma altura, para alinharem pela base.
+const ALTURA_FILTRO = 'h-10'
+
+// Botões herdam line-height "normal" do navegador; leading-[normal] mantém a mesma altura.
+const PERIODO =
+  'cursor-pointer rounded-full border px-3 py-1 text-xs leading-[normal] font-medium disabled:cursor-not-allowed disabled:opacity-50'
+const PERIODO_NORMAL = `${PERIODO} border-gray-200 bg-white text-gray-700 enabled:hover:bg-gray-50`
+const PERIODO_ATIVO = `${PERIODO} border-if-green bg-if-green text-white enabled:hover:bg-if-green-dark`
 
 const CAMPOS_VAZIOS = {
   inicio: '',
@@ -213,7 +221,7 @@ export default function AuditoriaPage() {
       <button
         key={chave}
         type="button"
-        className="auditoria-celula-filtro"
+        className="cursor-pointer rounded-md border-0 bg-transparent px-1 py-0.5 [font:inherit] text-inherit hover:bg-green-50 hover:underline hover:decoration-green-300"
         title={titulo}
         onClick={() => aplicarFiltro(filtro)}
       >
@@ -251,14 +259,17 @@ export default function AuditoriaPage() {
     <>
       <PageHeader title="Auditoria" />
 
-      <form onSubmit={filtrar} className="auditoria-filtros">
-        <div className="auditoria-filtros__periodos">
-          <span className="auditoria-filtros__periodos-rotulo">Período:</span>
+      <form
+        onSubmit={filtrar}
+        className="mb-5 grid grid-cols-4 items-end gap-x-4 gap-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-card max-[900px]:grid-cols-2 max-[520px]:grid-cols-1"
+      >
+        <div className="col-span-full flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-500">Período:</span>
           {PERIODOS.map((periodo) => (
             <button
               key={periodo.rotulo}
               type="button"
-              className={`auditoria-periodo${periodoAtivo(periodo.dias) ? ' auditoria-periodo--ativo' : ''}`}
+              className={periodoAtivo(periodo.dias) ? PERIODO_ATIVO : PERIODO_NORMAL}
               onClick={() => aplicarPeriodo(periodo.dias)}
               disabled={!opcoes.hoje}
               aria-pressed={periodoAtivo(periodo.dias)}
@@ -268,16 +279,26 @@ export default function AuditoriaPage() {
           ))}
         </div>
 
-        <FormField label="Data inicial">
-          <TextInput type="date" value={campos.inicio} onChange={atualizarCampo('inicio')} />
+        <FormField className="mb-0" label="Data inicial">
+          <TextInput
+            className={ALTURA_FILTRO}
+            type="date"
+            value={campos.inicio}
+            onChange={atualizarCampo('inicio')}
+          />
         </FormField>
 
-        <FormField label="Data final">
-          <TextInput type="date" value={campos.fim} onChange={atualizarCampo('fim')} />
+        <FormField className="mb-0" label="Data final">
+          <TextInput
+            className={ALTURA_FILTRO}
+            type="date"
+            value={campos.fim}
+            onChange={atualizarCampo('fim')}
+          />
         </FormField>
 
-        <FormField label="Ação">
-          <Select value={campos.acao} onChange={atualizarCampo('acao')}>
+        <FormField className="mb-0" label="Ação">
+          <Select className={ALTURA_FILTRO} value={campos.acao} onChange={atualizarCampo('acao')}>
             <option value="">Todas</option>
             {opcoes.acoes.map((opcao) => (
               <option key={opcao.valor} value={opcao.valor}>
@@ -287,8 +308,12 @@ export default function AuditoriaPage() {
           </Select>
         </FormField>
 
-        <FormField label="Entidade">
-          <Select value={campos.entidade} onChange={atualizarCampo('entidade')}>
+        <FormField className="mb-0" label="Entidade">
+          <Select
+            className={ALTURA_FILTRO}
+            value={campos.entidade}
+            onChange={atualizarCampo('entidade')}
+          >
             <option value="">Todas</option>
             {opcoes.entidades.map((opcao) => (
               <option key={opcao.valor} value={opcao.valor}>
@@ -298,8 +323,9 @@ export default function AuditoriaPage() {
           </Select>
         </FormField>
 
-        <FormField label="Usuário">
+        <FormField className="mb-0" label="Usuário">
           <TextInput
+            className={ALTURA_FILTRO}
             type="search"
             placeholder="Nome ou e-mail"
             value={campos.usuario}
@@ -307,9 +333,10 @@ export default function AuditoriaPage() {
           />
         </FormField>
 
-        <div className="auditoria-filtros__descricao">
-          <FormField label="Descrição">
+        <div className="col-span-2 max-[520px]:col-auto">
+          <FormField className="mb-0" label="Descrição">
             <TextInput
+              className={ALTURA_FILTRO}
               type="search"
               placeholder="Trecho da descrição"
               value={campos.descricao}
@@ -318,11 +345,11 @@ export default function AuditoriaPage() {
           </FormField>
         </div>
 
-        <div className="auditoria-filtros__acoes">
-          <Button type="button" variant="outline" onClick={limpar}>
+        <div className="flex justify-end gap-2 max-[900px]:col-span-2 max-[520px]:col-auto">
+          <Button type="button" variant="outline" onClick={limpar} className={ALTURA_FILTRO}>
             Limpar
           </Button>
-          <Button type="submit" variant="accent" loading={carregando}>
+          <Button type="submit" variant="accent" loading={carregando} className={ALTURA_FILTRO}>
             Filtrar
           </Button>
         </div>
@@ -330,7 +357,7 @@ export default function AuditoriaPage() {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      <div className="auditoria-resumo">
+      <div className="mb-2 flex min-h-[30px] items-center justify-between gap-3 text-sm text-gray-500">
         <span role="status">
           {!carregando &&
             !erro &&

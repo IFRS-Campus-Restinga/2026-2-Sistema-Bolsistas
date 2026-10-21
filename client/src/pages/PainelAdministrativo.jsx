@@ -13,7 +13,12 @@ import {
   Select,
   StatCard,
 } from '../components'
-import './PainelAdministrativo.css'
+
+const VAZIO = 'py-6 text-center text-base text-gray-400'
+const LINHAS = 'flex list-none flex-col gap-3.5'
+const LINHA = 'grid grid-cols-[minmax(110px,30%)_minmax(0,1fr)_72px] items-center gap-3 text-sm'
+const NUMERO = 'text-right whitespace-nowrap text-gray-500 tabular-nums'
+const NUMERO_DESTAQUE = 'text-base text-gray-900'
 
 const ETAPAS_DO_FUNIL = [
   { chave: 'enviadas', rotulo: 'Enviadas' },
@@ -38,9 +43,17 @@ function Barra({ valor, total, escala, descricao }) {
   const larguraValor = total > 0 ? (valor / total) * 100 : 0
 
   return (
-    <div className="painel-barra" title={descricao}>
-      <div className="painel-barra__trilho" style={{ width: `${larguraTrilho}%` }}>
-        {valor > 0 && <div className="painel-barra__valor" style={{ width: `${larguraValor}%` }} />}
+    <div className="py-1" title={descricao}>
+      <div
+        className="h-3 overflow-hidden rounded bg-gray-100"
+        style={{ width: `${larguraTrilho}%` }}
+      >
+        {valor > 0 && (
+          <div
+            className="h-full min-w-1 rounded bg-if-green"
+            style={{ width: `${larguraValor}%` }}
+          />
+        )}
       </div>
     </div>
   )
@@ -48,9 +61,9 @@ function Barra({ valor, total, escala, descricao }) {
 
 function Cartao({ titulo, acao, children }) {
   return (
-    <section className="painel-cartao">
-      <header className="painel-cartao__cabecalho">
-        <h3 className="painel-cartao__titulo">{titulo}</h3>
+    <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-card">
+      <header className="mb-4 flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] font-bold text-gray-900">{titulo}</h3>
         {acao}
       </header>
       {children}
@@ -62,25 +75,25 @@ function FunilSelecao({ funil }) {
   const enviadas = funil.enviadas
 
   if (enviadas === 0) {
-    return <p className="painel-vazio">Nenhuma inscrição enviada ainda.</p>
+    return <p className={VAZIO}>Nenhuma inscrição enviada ainda.</p>
   }
 
   return (
-    <ul className="painel-linhas">
+    <ul className={LINHAS}>
       {ETAPAS_DO_FUNIL.map(({ chave, rotulo }, indice) => {
         const valor = funil[chave]
         const contexto = indice === 0 ? '' : `de ${enviadas}`
         return (
-          <li key={chave} className="painel-linha">
-            <span className="painel-linha__rotulo">{rotulo}</span>
+          <li key={chave} className={LINHA}>
+            <span className="text-gray-700">{rotulo}</span>
             <Barra
               valor={valor}
               total={enviadas}
               escala={enviadas}
               descricao={`${rotulo}: ${valor} ${contexto}`.trim()}
             />
-            <span className="painel-linha__numero">
-              <strong>{valor}</strong> {contexto}
+            <span className={NUMERO}>
+              <strong className={NUMERO_DESTAQUE}>{valor}</strong> {contexto}
             </span>
           </li>
         )
@@ -91,16 +104,16 @@ function FunilSelecao({ funil }) {
 
 function VagasPorTipo({ vagas }) {
   if (vagas.total === 0) {
-    return <p className="painel-vazio">Nenhuma bolsa ofertada ainda.</p>
+    return <p className={VAZIO}>Nenhuma bolsa ofertada ainda.</p>
   }
 
   const maiorTotal = Math.max(...vagas.por_tipo.map((item) => item.total))
 
   return (
-    <ul className="painel-linhas">
+    <ul className={LINHAS}>
       {vagas.por_tipo.map((item) => (
-        <li key={item.tipo} className="painel-linha">
-          <span className="painel-linha__rotulo">{item.rotulo}</span>
+        <li key={item.tipo} className={LINHA}>
+          <span className="text-gray-700">{item.rotulo}</span>
           {item.total > 0 ? (
             <>
               <Barra
@@ -109,12 +122,12 @@ function VagasPorTipo({ vagas }) {
                 escala={maiorTotal}
                 descricao={`${item.rotulo}: ${item.ocupadas} de ${item.total} vagas ocupadas`}
               />
-              <span className="painel-linha__numero">
-                <strong>{item.ocupadas}</strong> de {item.total}
+              <span className={NUMERO}>
+                <strong className={NUMERO_DESTAQUE}>{item.ocupadas}</strong> de {item.total}
               </span>
             </>
           ) : (
-            <span className="painel-linha__sem-dado">Nenhuma vaga ofertada</span>
+            <span className="col-[2/-1] text-gray-400">Nenhuma vaga ofertada</span>
           )}
         </li>
       ))}
@@ -124,20 +137,27 @@ function VagasPorTipo({ vagas }) {
 
 function Pendencias({ pendencias }) {
   return (
-    <ul className="painel-pendencias">
+    <ul className="flex list-none flex-col gap-2">
       {PENDENCIAS.map(({ chave, rotulo }) => {
         const quantidade = pendencias[chave]
         const pendente = quantidade > 0
         return (
           <li
             key={chave}
-            className={`painel-pendencia${pendente ? ' painel-pendencia--ativa' : ''}`}
+            className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm ${pendente ? 'bg-orange-50 text-gray-700' : 'bg-gray-50 text-gray-500'}`}
           >
-            <span className="painel-pendencia__icone" aria-hidden="true">
-              {pendente ? <IconAlertTriangle /> : <IconCheck />}
+            <span
+              className={`flex ${pendente ? 'text-orange-600' : 'text-green-600'}`}
+              aria-hidden="true"
+            >
+              {pendente ? <IconAlertTriangle size={18} /> : <IconCheck size={18} />}
             </span>
-            <span className="painel-pendencia__rotulo">{rotulo}</span>
-            <span className="painel-pendencia__numero">{pendente ? quantidade : 'Nenhum'}</span>
+            <span className="flex-1">{rotulo}</span>
+            <span
+              className={`tabular-nums ${pendente ? 'font-bold text-gray-900' : 'font-medium text-gray-400'}`}
+            >
+              {pendente ? quantidade : 'Nenhum'}
+            </span>
           </li>
         )
       })}
@@ -147,17 +167,20 @@ function Pendencias({ pendencias }) {
 
 function AtividadeRecente({ atividades }) {
   if (atividades.length === 0) {
-    return <p className="painel-vazio">Nenhuma atividade registrada ainda.</p>
+    return <p className={VAZIO}>Nenhuma atividade registrada ainda.</p>
   }
 
   return (
-    <ul className="painel-atividades">
+    <ul className="flex list-none flex-col">
       {atividades.map((log) => (
-        <li key={log.id} className="painel-atividade">
+        <li
+          key={log.id}
+          className="flex items-start gap-3 border-b border-gray-100 py-2.5 last:border-b-0"
+        >
           <Badge status={log.acao} label={log.acao_display} />
-          <div className="painel-atividade__texto">
-            <p className="painel-atividade__descricao">{log.descricao}</p>
-            <p className="painel-atividade__meta">
+          <div className="min-w-0">
+            <p className="text-sm wrap-anywhere text-gray-900">{log.descricao}</p>
+            <p className="mt-0.5 text-xs text-gray-400">
               {log.usuario_nome || 'Sistema'} · {new Date(log.data_hora).toLocaleString('pt-BR')}
             </p>
           </div>
@@ -210,9 +233,11 @@ export default function PainelAdministrativo({ onNavigate }) {
   const totalPendencias = Object.values(pendencias).reduce((soma, valor) => soma + valor, 0)
 
   return (
-    <div className={`painel${carregando ? ' painel--atualizando' : ''}`}>
-      <div className="painel-filtro">
-        <FormField label="Edital">
+    <div
+      className={`flex flex-col gap-5 transition-opacity duration-200 ease-[ease] ${carregando ? 'opacity-60' : ''}`}
+    >
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <FormField label="Edital" className="mb-0 min-w-[min(100%,360px)]">
           <Select value={edital} onChange={(event) => setEdital(event.target.value)}>
             <option value="">Todos os editais</option>
             {dados.editais.map((item) => (
@@ -222,7 +247,7 @@ export default function PainelAdministrativo({ onNavigate }) {
             ))}
           </Select>
         </FormField>
-        <span className="painel-filtro__contexto">
+        <span className="pb-2.5 text-sm text-gray-500">
           {dados.editais_em_vigor}{' '}
           {plural(dados.editais_em_vigor, 'edital em vigor', 'editais em vigor')} de{' '}
           {dados.editais.length} {plural(dados.editais.length, 'publicado', 'publicados')}
@@ -231,7 +256,7 @@ export default function PainelAdministrativo({ onNavigate }) {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      <div className="painel-indicadores">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
         <StatCard
           label="Bolsas ofertadas"
           value={bolsas.ofertadas}
@@ -262,7 +287,7 @@ export default function PainelAdministrativo({ onNavigate }) {
         />
       </div>
 
-      <div className="painel-grade">
+      <div className="grid grid-cols-2 gap-4 max-[900px]:grid-cols-1">
         <Cartao titulo="Status da seleção">
           <FunilSelecao funil={funil} />
         </Cartao>
@@ -280,7 +305,7 @@ export default function PainelAdministrativo({ onNavigate }) {
           acao={
             <button
               type="button"
-              className="painel-cartao__link"
+              className="cursor-pointer border-0 bg-transparent p-0 text-sm leading-[normal] font-semibold text-if-green hover:underline"
               onClick={() => onNavigate?.('auditoria')}
             >
               Ver auditoria →

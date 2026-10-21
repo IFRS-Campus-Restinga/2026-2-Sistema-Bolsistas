@@ -303,15 +303,13 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
 
   return (
     <Modal title={`Inscrição: ${tituloProjeto}`} onClose={onFechar} width={600}>
-      <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -8, marginBottom: 16 }}>
-        Etapa {etapa} de 3
-      </p>
+      <p className="-mt-2 mb-4 text-xs text-gray-400">Etapa {etapa} de 3</p>
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
       {etapa === 1 && (
         <>
-          <p style={{ marginBottom: 16 }}>
+          <p className="mb-4">
             Antes de se inscrever, leia com atenção o edital{' '}
             {editalLink ? (
               <a href={editalLink} target="_blank" rel="noopener noreferrer">
@@ -323,7 +321,7 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
             , que define prazos, critérios de avaliação e regras do processo seletivo.
           </p>
 
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14 }}>
+          <label className="flex items-start gap-2 text-base">
             <input
               type="checkbox"
               checked={termosAceitos}
@@ -377,11 +375,8 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
 
           <FormField label="Documentos adicionais (opcional, até 5)">
             {adicionais.map((slot) => (
-              <div
-                key={slot.key}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
-              >
-                <div style={{ flex: 1 }}>
+              <div key={slot.key} className="mb-2 flex items-center gap-2">
+                <div className="flex-1">
                   <FileField
                     value={slot.documento?.nome_original || ''}
                     onChange={(arquivo) => selecionarAdicional(slot.key, arquivo)}
@@ -439,10 +434,10 @@ export default function InscricaoWizard({ bolsa, inscricaoExistente, onFechar, o
 
       {etapa === 3 && (
         <>
-          <p style={{ fontWeight: 600, marginBottom: 8 }}>
+          <p className="mb-2 font-semibold">
             {jaEnviada ? 'Resumo da inscrição:' : 'Confira antes de enviar:'}
           </p>
-          <ul style={{ paddingLeft: 20, marginBottom: 16 }}>
+          <ul className="mb-4 pl-5">
             <li>Edital lido e aceito</li>
             <li>Histórico Escolar: {historico?.nome_original}</li>
             <li>Comprovante de Matrícula: {matricula?.nome_original}</li>

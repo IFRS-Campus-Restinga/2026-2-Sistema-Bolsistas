@@ -1,10 +1,33 @@
 import { useState } from 'react'
 import { Paginacao } from './Paginacao'
 import { useCarregamentoVisivel } from './useCarregamentoVisivel'
-import './DataTable.css'
 
 const LINHAS_ESQUELETO = 4
 const LARGURAS_ESQUELETO = ['70%', '55%', '80%', '60%']
+
+const CAIXA = 'rounded-2xl border border-gray-100 bg-white shadow-card'
+const WRAPPER = `${CAIXA} overflow-x-auto overflow-y-hidden`
+const TABELA = 'w-full border-collapse text-base'
+const LINHA =
+  'border-b border-[#f8f8f8] transition-colors duration-100 ease-[ease] last:border-b-0 hover:bg-green-50/30'
+const CELULA = 'px-5 py-3.5 text-center align-middle text-gray-700'
+
+function Cabecalho({ columns }) {
+  return (
+    <thead>
+      <tr className="border-b border-[#f0f0f0] bg-[#fafafa]">
+        {columns.map((col, i) => (
+          <th
+            key={i}
+            className="px-5 py-3 text-center text-[10px] font-bold tracking-widest whitespace-nowrap text-gray-400 uppercase"
+          >
+            {col}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  )
+}
 
 /**
  * Tabela de dados genérica — suporta ReactNode nas células (badges, botões).
@@ -35,29 +58,21 @@ export function DataTable({
   const linhasVisiveis = paginar ? rows.slice((pagina - 1) * porPagina, pagina * porPagina) : rows
 
   if (loading && !mostrarEsqueleto) {
-    return <div className="data-table__aguardando" role="status" aria-busy="true" />
+    return <div className="min-h-30" role="status" aria-busy="true" />
   }
 
   if (mostrarEsqueleto) {
     return (
-      <div className="data-table__wrapper" role="status" aria-busy="true" aria-label="Carregando">
-        <table className="data-table">
-          <thead>
-            <tr className="data-table__header-row">
-              {columns.map((col, i) => (
-                <th key={i} className="data-table__th">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div className={WRAPPER} role="status" aria-busy="true" aria-label="Carregando">
+        <table className={TABELA}>
+          <Cabecalho columns={columns} />
           <tbody>
             {Array.from({ length: LINHAS_ESQUELETO }, (_, i) => (
-              <tr key={i} className="data-table__row">
+              <tr key={i} className={LINHA}>
                 {columns.map((_, j) => (
-                  <td key={j} className="data-table__td">
+                  <td key={j} className={CELULA}>
                     <span
-                      className="data-table__esqueleto"
+                      className="inline-block h-3 animate-brilho rounded-md bg-[linear-gradient(90deg,#f3f4f6_25%,#e5e7eb_37%,#f3f4f6_63%)] bg-size-[400%_100%] motion-reduce:animate-none"
                       style={{ width: LARGURAS_ESQUELETO[(i + j) % LARGURAS_ESQUELETO.length] }}
                     />
                   </td>
@@ -72,8 +87,8 @@ export function DataTable({
 
   if (rows.length === 0) {
     return (
-      <div className="data-table__empty">
-        <div className="data-table__empty-icon">
+      <div className={`${CAIXA} p-12 text-center`}>
+        <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-gray-100">
           <svg
             width="18"
             height="18"
@@ -88,29 +103,21 @@ export function DataTable({
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </div>
-        <p className="data-table__empty-text">{emptyMessage}</p>
+        <p className="text-base font-medium text-gray-400">{emptyMessage}</p>
       </div>
     )
   }
 
   return (
     <>
-      <div className="data-table__wrapper">
-        <table className="data-table">
-          <thead>
-            <tr className="data-table__header-row">
-              {columns.map((col, i) => (
-                <th key={i} className="data-table__th">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div className={WRAPPER}>
+        <table className={TABELA}>
+          <Cabecalho columns={columns} />
           <tbody>
             {linhasVisiveis.map((row, i) => (
-              <tr key={i} className="data-table__row">
+              <tr key={i} className={LINHA}>
                 {row.map((cell, j) => (
-                  <td key={j} className="data-table__td">
+                  <td key={j} className={CELULA}>
                     {cell}
                   </td>
                 ))}

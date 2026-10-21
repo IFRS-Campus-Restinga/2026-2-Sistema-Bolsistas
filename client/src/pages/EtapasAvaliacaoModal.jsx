@@ -85,16 +85,12 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
 
   const linhas = etapas.map((etapa) => [
     etapa.nome,
-    etapa.peso === null ? (
-      <span style={{ color: '#9ca3af' }}>Igual</span>
-    ) : (
-      formatarPeso(etapa.peso)
-    ),
+    etapa.peso === null ? <span className="text-gray-400">Igual</span> : formatarPeso(etapa.peso),
     formatarPeso(etapa.peso_efetivo),
     formatarDataHora(etapa.data_hora),
     <LocalEtapa key="local" local={etapa.local} />,
     podeEditar ? (
-      <div key="acoes" style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+      <div key="acoes" className="flex justify-center gap-1.5">
         <Button size="sm" variant="outline" onClick={() => abrirEdicao(etapa)}>
           Editar
         </Button>
@@ -103,7 +99,7 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
         </Button>
       </div>
     ) : (
-      <span key="acoes" style={{ color: '#9ca3af' }}>
+      <span key="acoes" className="text-gray-400">
         —
       </span>
     ),
@@ -112,21 +108,13 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
   return (
     <>
       <Modal title={`Etapas de avaliação: ${bolsa.edital_nome}`} onClose={onFechar} width={760}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <p style={{ margin: 0, color: '#4b5563', fontSize: 14 }}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <p className="text-base text-gray-600">
             Etapas sem peso dividem igualmente o que sobra de 100%. Se nenhuma etapa tiver peso,
             todas ficam com o mesmo peso.
           </p>
           {podeEditar && (
-            <div style={{ flexShrink: 0 }}>
+            <div className="shrink-0">
               <Button variant="accent" onClick={abrirNovaEtapa}>
                 <IconPlus /> Adicionar Etapa
               </Button>
@@ -150,7 +138,7 @@ export default function EtapasAvaliacaoModal({ bolsa: bolsaInicial, onAtualizada
         />
 
         {etapas.length > 0 && (
-          <p style={{ textAlign: 'right', margin: '8px 0 0', color: '#4b5563' }}>
+          <p className="mt-2 text-right text-gray-600">
             <strong>Total:</strong> {formatarPeso(somaEfetiva)}
           </p>
         )}

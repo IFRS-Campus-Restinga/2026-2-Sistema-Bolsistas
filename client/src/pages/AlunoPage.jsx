@@ -89,7 +89,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
             }
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
             <StatCard
               label="Bolsas Abertas"
               value={totalBolsas ?? '0'}

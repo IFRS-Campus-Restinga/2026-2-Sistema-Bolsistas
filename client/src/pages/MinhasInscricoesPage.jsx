@@ -332,8 +332,8 @@ function ComprovanteModal({ inscricao, onFechar }) {
       {inscricao.data_decisao && (
         <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
       )}
-      <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
-      <ul style={{ paddingLeft: 20 }}>
+      <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
+      <ul className="pl-5">
         {inscricao.documentos.map((doc) => (
           <li key={doc.id}>
             <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
@@ -344,7 +344,7 @@ function ComprovanteModal({ inscricao, onFechar }) {
       </ul>
 
       {inscricao.link_lattes && (
-        <p style={{ marginTop: 8 }}>
+        <p className="mt-2">
           <strong>Lattes:</strong>{' '}
           <a href={inscricao.link_lattes} target="_blank" rel="noopener noreferrer">
             {inscricao.link_lattes}

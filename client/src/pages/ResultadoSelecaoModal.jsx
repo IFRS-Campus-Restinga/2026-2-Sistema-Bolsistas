@@ -50,7 +50,7 @@ export default function ResultadoSelecaoModal({ bolsaId, onFechar }) {
           <p>
             <strong>Edital:</strong> {resultado.edital_nome}
           </p>
-          <p style={{ marginBottom: 12 }}>
+          <p className="mb-3">
             <strong>Vagas:</strong> {resultado.quantidade_vagas}
             {resultado.nota_minima && (
               <>

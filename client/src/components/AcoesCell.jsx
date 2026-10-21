@@ -4,9 +4,13 @@ import { Button } from './Button'
 import { IconDotsHorizontal } from './Icons'
 import { Spinner } from './Spinner'
 import { useCarregamentoVisivel } from './useCarregamentoVisivel'
-import './AcoesCell.css'
 
 const ALTURA_ESTIMADA_ITEM = 36
+
+const CELULA = 'justify-center text-sm text-gray-400'
+
+const ITEM =
+  'flex cursor-pointer items-center rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm leading-[normal] font-medium enabled:hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50'
 
 /**
  * Célula de ações de uma linha de tabela.
@@ -75,13 +79,13 @@ export function AcoesCell({ mostrar = true, acoes = [], ocupado = false }) {
   }
 
   if (!mostrar || acoes.length === 0) {
-    return <div className="acoes-cell">Sem ações disponíveis</div>
+    return <div className={`flex ${CELULA}`}>Sem ações disponíveis</div>
   }
 
   if (acoes.length === 1) {
     const [acao] = acoes
     return (
-      <div className="acoes-cell">
+      <div className={`flex ${CELULA}`}>
         <Button
           size="sm"
           variant={acao.variant || 'outline'}
@@ -96,11 +100,11 @@ export function AcoesCell({ mostrar = true, acoes = [], ocupado = false }) {
   }
 
   return (
-    <div className="acoes-cell acoes-cell--menu">
+    <div className={`relative inline-flex ${CELULA}`}>
       <button
         ref={gatilhoRef}
         type="button"
-        className="acoes-cell__gatilho"
+        className="inline-flex size-8 cursor-pointer items-center justify-center rounded-xl border-0 bg-transparent text-gray-600 transition-[background] duration-150 ease-[ease] enabled:hover:bg-gray-50 disabled:cursor-progress"
         onClick={alternarMenu}
         disabled={ocupado || mostrarSpinner}
         aria-haspopup="menu"
@@ -114,13 +118,18 @@ export function AcoesCell({ mostrar = true, acoes = [], ocupado = false }) {
       {aberto &&
         posicao &&
         createPortal(
-          <div ref={painelRef} className="acoes-cell__painel" role="menu" style={posicao}>
+          <div
+            ref={painelRef}
+            className="fixed z-[1000] flex min-w-40 flex-col rounded-xl border border-gray-200 bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+            role="menu"
+            style={posicao}
+          >
             {acoes.map((acao) => (
               <button
                 key={acao.label}
                 type="button"
                 role="menuitem"
-                className={`acoes-cell__item${acao.variant === 'danger' ? ' acoes-cell__item--danger' : ''}`}
+                className={`${ITEM} ${acao.variant === 'danger' ? 'text-if-red' : 'text-gray-700'}`}
                 disabled={acao.disabled}
                 onClick={() => {
                   setAberto(false)

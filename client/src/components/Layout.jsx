@@ -1,6 +1,5 @@
 import { Sidebar } from './Sidebar'
 import { TopHeader } from './TopHeader'
-import './Layout.css'
 
 /**
  * Layout principal da aplicação: Sidebar + TopHeader + área de conteúdo.
@@ -28,7 +27,7 @@ export function Layout({
   children,
 }) {
   return (
-    <div className="layout">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar
         role={role}
         menuItems={menuItems}
@@ -36,9 +35,9 @@ export function Layout({
         onNav={onNav}
         onLogout={onLogout}
       />
-      <div className="layout__main">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopHeader campus={campus} name={userName} role={role} initials={initials} />
-        <main className="layout__content">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-fundo p-8">{children}</main>
       </div>
     </div>
   )
