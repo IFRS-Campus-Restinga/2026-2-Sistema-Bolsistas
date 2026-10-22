@@ -10,6 +10,7 @@ from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
+from bolsistas.services import vincular_por_indicacao
 from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
 
 from .models import (
@@ -235,12 +236,13 @@ class IndicarBolsistaView(_ResultadoPublicadoMixin, APIView):
                 }
             )
 
-        IndicacaoBolsista.objects.create(
+        indicacao = IndicacaoBolsista.objects.create(
             bolsa=bolsa,
             inscricao=inscricao,
             justificativa=dados["justificativa"],
             responsavel=request.user,
         )
+        vincular_por_indicacao(indicacao)
         NotificacaoInscricao.objects.create(
             inscricao=inscricao,
             mensagem=(

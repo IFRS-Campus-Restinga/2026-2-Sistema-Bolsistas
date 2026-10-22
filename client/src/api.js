@@ -104,6 +104,10 @@ export function auditoriaFetch(path = '/logs/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/auditoria`, path, options)
 }
 
+export function bolsistasFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/bolsistas`, path, options)
+}
+
 export function vinculoDiretoFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/vinculo-direto`, path, options)
 }

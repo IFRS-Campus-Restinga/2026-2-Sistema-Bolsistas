@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "auditoria",
     "vinculo_direto",
     "selecao",
+    "bolsistas",
 ]
 
 MIDDLEWARE = [
