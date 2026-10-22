@@ -43,7 +43,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       {active === 'dashboard' && (
         <>
           <PageHeader title={`Painel Coordenação de ${areaLabel}`} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
             <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
             <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
             <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />

@@ -40,7 +40,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'dashboard' && (
         <>
           <PageHeader title="Painel do Coordenador de Projeto" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
             <StatCard label="Meus Projetos" value={0} icon={<IconBriefcase />} color="green" />
             <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="blue" />
             <StatCard label="Vagas Abertas" value={0} icon={<IconCheck />} color="orange" />

@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorArea, CoordenadorProjeto, Usuario
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao, TipoDocumento
@@ -305,6 +306,15 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.status, StatusConvite.APROVADO)
         self.assertEqual(self.convite.responsavel_decisao, self.coordenador)
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
+
+    def test_aprovar_registra_log_de_vinculo(self):
+        self.client.post(self.url("convite-aprovar"))
+
+        log = LogAuditoria.objects.get()
+        self.assertEqual(log.acao, AcaoAuditoria.VINCULO)
+        self.assertEqual(log.entidade, EntidadeAuditoria.BOLSA)
+        self.assertEqual(log.entidade_id, str(self.bolsa.pk))
+        self.assertEqual(log.usuario, self.coordenador)
 
     def test_aprovar_notifica_coordenador_de_area(self):
         self.client.post(self.url("convite-aprovar"))

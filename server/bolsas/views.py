@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
@@ -56,8 +57,8 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="BOLSA_CRIADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.CRIACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" criada.',
         )
@@ -113,8 +114,8 @@ class BolsaDetailView(generics.RetrieveUpdateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="BOLSA_ATUALIZADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" atualizada.',
         )
@@ -161,8 +162,8 @@ class AprovarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_APROVADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.APROVACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" aprovada.',
         )
@@ -205,8 +206,8 @@ class RejeitarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_REJEITADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.REJEICAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" rejeitada.',
         )
@@ -235,8 +236,8 @@ class CancelarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_CANCELADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.CANCELAMENTO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" cancelada.',
         )

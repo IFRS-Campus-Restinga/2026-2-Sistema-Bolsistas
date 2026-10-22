@@ -124,7 +124,7 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
       width={720}
     >
       <form onSubmit={enviar} aria-label="Dados e cronograma do edital">
-        <div style={{ maxHeight: '65vh', overflowY: 'auto', padding: 4 }}>
+        <div className="max-h-[65vh] overflow-y-auto p-1">
           {erro && <Alert tone="error">{erro}</Alert>}
 
           {campos.map(({ label, ...props }) => (
@@ -175,8 +175,8 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
           <Button onClick={solicitarFechamento} disabled={salvando}>
             Descartar
           </Button>
-          <Button type="submit" variant="accent" disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Salvar e continuar'}
+          <Button type="submit" variant="accent" loading={salvando}>
+            Salvar e continuar
           </Button>
         </FormActions>
       </form>

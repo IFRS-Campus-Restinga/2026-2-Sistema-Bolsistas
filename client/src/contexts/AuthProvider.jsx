@@ -2,6 +2,17 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '../api'
 import { AuthContext } from './useAuth'
 
+const PARAMETROS_DO_SISTEMA = [
+  'aba',
+  'pagina',
+  'inicio',
+  'fim',
+  'acao',
+  'entidade',
+  'usuario',
+  'descricao',
+]
+
 /**
  * Provider de autenticação.
  * Chama /whoami/ uma vez e expõe o usuário via useAuth().
@@ -18,9 +29,20 @@ export function AuthProvider({ children }) {
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
-    // Limpa a URL longa do HUB imediatamente
-    if (window.location.search) {
-      window.history.replaceState(null, '', window.location.pathname)
+    // Limpa a URL longa do HUB, preservando só os parâmetros do próprio sistema
+    // (aba e filtros), que permitem recarregar e compartilhar uma tela.
+    const atuais = new URLSearchParams(window.location.search)
+    const mantidos = new URLSearchParams()
+    PARAMETROS_DO_SISTEMA.forEach((nome) => {
+      if (atuais.has(nome)) mantidos.set(nome, atuais.get(nome))
+    })
+    if (atuais.toString() !== mantidos.toString()) {
+      const consulta = mantidos.toString()
+      window.history.replaceState(
+        null,
+        '',
+        consulta ? `${window.location.pathname}?${consulta}` : window.location.pathname
+      )
     }
 
     apiFetch('/whoami/')

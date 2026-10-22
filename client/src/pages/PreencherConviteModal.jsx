@@ -46,6 +46,16 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
       .map((d) => ({ key: crypto.randomUUID(), documento: d }))
   )
   const [processando, setProcessando] = useState(false)
+  const [botaoCarregando, setBotaoCarregando] = useState(null)
+
+  async function comBotao(nome, acao) {
+    setBotaoCarregando(nome)
+    try {
+      await acao()
+    } finally {
+      setBotaoCarregando(null)
+    }
+  }
   const [erro, setErro] = useState('')
 
   async function enviarDocumento(tipo, arquivo) {
@@ -268,11 +278,8 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
 
       <FormField label="Documentos adicionais (opcional, até 5)">
         {adicionais.map((slot) => (
-          <div
-            key={slot.key}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
-          >
-            <div style={{ flex: 1 }}>
+          <div key={slot.key} className="mb-2 flex items-center gap-2">
+            <div className="flex-1">
               <FileField
                 value={slot.documento?.nome_original || ''}
                 onChange={(arquivo) => selecionarAdicional(slot.key, arquivo)}
@@ -299,7 +306,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
         </Button>
       </FormField>
 
-      <p style={{ fontSize: 14, marginTop: 8 }}>
+      <p className="mt-2 text-base">
         Antes de enviar, leia com atenção o edital{' '}
         {convite.edital_link_documento_oficial ? (
           <a href={convite.edital_link_documento_oficial} target="_blank" rel="noopener noreferrer">
@@ -311,9 +318,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
         , que define prazos, critérios de avaliação e regras do processo.
       </p>
 
-      <label
-        style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, marginTop: 8 }}
-      >
+      <label className="mt-2 flex items-start gap-2 text-base">
         <input
           type="checkbox"
           checked={termosAceitos}
@@ -327,12 +332,22 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
           Fechar
         </Button>
         {jaEnviado ? (
-          <Button variant="accent" onClick={salvarEFechar} disabled={processando}>
-            {processando ? 'Salvando...' : 'Salvar Alterações'}
+          <Button
+            variant="accent"
+            onClick={() => comBotao('salvar', salvarEFechar)}
+            disabled={processando}
+            loading={botaoCarregando === 'salvar'}
+          >
+            Salvar Alterações
           </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={salvarEFechar} disabled={processando}>
+            <Button
+              variant="outline"
+              onClick={() => comBotao('salvar', salvarEFechar)}
+              disabled={processando}
+              loading={botaoCarregando === 'salvar'}
+            >
               Salvar
             </Button>
             <Button
@@ -340,7 +355,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
               onClick={pedirConfirmacaoEnvio}
               disabled={processando || !termosAceitos}
             >
-              {processando ? 'Enviando...' : 'Enviar Documentação'}
+              Enviar Documentação
             </Button>
           </>
         )}

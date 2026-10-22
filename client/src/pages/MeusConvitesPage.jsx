@@ -129,28 +129,24 @@ export default function MeusConvitesPage() {
       <PageHeader title="Meus Convites" />
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando convites...</p>
-      ) : (
-        <>
-          <PageHeader title="Bolsas elegíveis para convite" />
-          <p style={{ marginTop: -8, marginBottom: 16, color: '#6b7280', fontSize: 14 }}>
-            Bolsas cujo período de recursos da homologação já encerrou e que ainda têm vaga livre.
-          </p>
-          <DataTable
-            columns={['Projeto', 'Edital', 'Tipo', 'Vagas', 'Ações']}
-            rows={linhasBolsas}
-            emptyMessage="Nenhuma bolsa elegível para vínculo direto no momento."
-          />
+      <PageHeader title="Bolsas elegíveis para convite" />
+      <p className="-mt-2 mb-4 text-base text-gray-500">
+        Bolsas cujo período de recursos da homologação já encerrou e que ainda têm vaga livre.
+      </p>
+      <DataTable
+        columns={['Projeto', 'Edital', 'Tipo', 'Vagas', 'Ações']}
+        rows={linhasBolsas}
+        loading={carregando}
+        emptyMessage="Nenhuma bolsa elegível para vínculo direto no momento."
+      />
 
-          <PageHeader title="Convites enviados" />
-          <DataTable
-            columns={['Aluno', 'Projeto', 'Edital', 'Status', 'Enviado em', 'Ações']}
-            rows={linhasConvites}
-            emptyMessage="Nenhum convite enviado ainda."
-          />
-        </>
-      )}
+      <PageHeader title="Convites enviados" />
+      <DataTable
+        columns={['Aluno', 'Projeto', 'Edital', 'Status', 'Enviado em', 'Ações']}
+        rows={linhasConvites}
+        loading={carregando}
+        emptyMessage="Nenhum convite enviado ainda."
+      />
 
       {bolsaConvidar && (
         <ConvidarBolsistaModal

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { selecaoFetch } from '../api'
-import { Alert, Badge, Button, DataTable, FormActions, Modal } from '../components'
+import { Alert, Badge, Button, Carregando, DataTable, FormActions, Modal } from '../components'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 
 /**
@@ -40,7 +40,7 @@ export default function ResultadoSelecaoModal({ bolsaId, onFechar }) {
 
   return (
     <Modal title="Resultado da seleção" onClose={onFechar} width={640}>
-      {carregando && <p role="status">Carregando resultado...</p>}
+      {carregando && <Carregando texto="Carregando resultado..." />}
       {erro && <Alert tone="error">{erro}</Alert>}
       {resultado && (
         <>
@@ -50,7 +50,7 @@ export default function ResultadoSelecaoModal({ bolsaId, onFechar }) {
           <p>
             <strong>Edital:</strong> {resultado.edital_nome}
           </p>
-          <p style={{ marginBottom: 12 }}>
+          <p className="mb-3">
             <strong>Vagas:</strong> {resultado.quantidade_vagas}
             {resultado.nota_minima && (
               <>
