@@ -1,3 +1,4 @@
+from bolsas.models import STATUS_BOLSA_FINALIZADOS
 from inscricoes.models import StatusInscricao
 
 from .models import STATUS_OCUPAM_VAGA
@@ -12,4 +13,8 @@ def vagas_livres(bolsa):
 
 
 def bolsa_elegivel_para_convite(bolsa):
-    return bolsa.edital.recursos_homologacao_encerrados() and vagas_livres(bolsa) > 0
+    return (
+        bolsa.status not in STATUS_BOLSA_FINALIZADOS
+        and bolsa.edital.recursos_homologacao_encerrados()
+        and vagas_livres(bolsa) > 0
+    )

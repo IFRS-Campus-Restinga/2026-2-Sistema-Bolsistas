@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from accounts.models import Aluno, CoordenadorProjeto, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EtapaAvaliacao, StatusBolsa
+from bolsistas.models import OrigemVinculo, VinculoBolsista
 from editais.models import Edital
 from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
 from projetos.models import Projeto
@@ -338,6 +339,16 @@ class PublicacaoEIndicacaoTests(SelecaoBaseTests):
         self.assertEqual(registrado(AcaoAuditoria.PUBLICACAO, EntidadeAuditoria.SELECAO), 1)
         self.assertEqual(registrado(AcaoAuditoria.DESISTENCIA, EntidadeAuditoria.BOLSA), 1)
         self.assertEqual(registrado(AcaoAuditoria.VINCULO, EntidadeAuditoria.BOLSA), 1)
+
+    def test_indicacao_cria_vinculo_do_bolsista(self):
+        self.publicar()
+        self.assertEqual(self.indicar(self.ana).status_code, 200)
+
+        vinculo = VinculoBolsista.objects.get()
+        self.assertEqual(vinculo.bolsa, self.bolsa)
+        self.assertEqual(vinculo.aluno, self.ana.aluno)
+        self.assertEqual(vinculo.origem, OrigemVinculo.SELECAO)
+        self.assertEqual(vinculo.indicacao, self.ana.indicacao_bolsista)
 
     def test_nao_publica_duas_vezes(self):
         self.publicar()

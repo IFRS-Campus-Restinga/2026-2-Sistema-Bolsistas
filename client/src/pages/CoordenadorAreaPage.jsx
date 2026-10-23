@@ -7,14 +7,17 @@ import {
   IconCalendar,
   IconBriefcase,
   IconUsers,
+  IconCheck,
 } from '../components'
 import EditaisPage from './EditaisPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
+import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
   { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
+  { id: 'finalizacao', label: 'Finalização de Bolsas', icon: <IconCheck /> },
 ]
 
 const AREA_LABELS = {
@@ -52,6 +55,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       )}
 
       {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
+      {active === 'finalizacao' && <FinalizacaoBolsasPage />}
     </Layout>
   )
 }
