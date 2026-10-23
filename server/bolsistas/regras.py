@@ -5,7 +5,7 @@ from inscricoes.models import Recurso, StatusInscricao, StatusRecurso
 from selecao.models import PublicacaoResultado
 from vinculo_direto.models import STATUS_ATIVOS as STATUS_CONVITE_ATIVOS
 
-from .models import RelatorioFinal, SituacaoRelatorio
+from .models import RelatorioFinal, SituacaoRelatorio, StatusVinculo
 
 STATUS_NAO_FINALIZAVEIS = [
     StatusBolsa.SOLICITADA,
@@ -40,6 +40,8 @@ def _motivo_prazo(vinculo):
 
 def motivo_bloqueio_solicitacao(vinculo):
     """Por que o coordenador não pode solicitar o relatório agora; vazio quando pode."""
+    if vinculo.status == StatusVinculo.DESLIGADO:
+        return "O vínculo deste bolsista foi desligado."
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
     if relatorio_do_vinculo(vinculo):
@@ -49,6 +51,8 @@ def motivo_bloqueio_solicitacao(vinculo):
 
 def motivo_bloqueio_envio(vinculo):
     """Por que o aluno não pode enviar o relatório agora; vazio quando pode."""
+    if vinculo.status == StatusVinculo.DESLIGADO:
+        return "O vínculo desta bolsa foi desligado."
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
 
@@ -63,7 +67,9 @@ def motivo_bloqueio_envio(vinculo):
 def pendencias_para_finalizar(bolsa):
     """Bolsistas sem relatório final aprovado, com a situação de cada um."""
     pendentes = []
-    for vinculo in bolsa.vinculos.select_related("aluno", "relatorio_final"):
+    for vinculo in bolsa.vinculos.filter(status=StatusVinculo.ATIVO).select_related(
+        "aluno", "relatorio_final"
+    ):
         relatorio = relatorio_do_vinculo(vinculo)
         if relatorio is None:
             pendentes.append(f"{vinculo.aluno.nome} (não solicitado)")
@@ -124,7 +130,7 @@ def motivo_bloqueio_finalizacao(bolsa):
             f'Esta bolsa está com status "{bolsa.get_status_display()}" e não pode ser finalizada.'
         )
 
-    if not bolsa.vinculos.exists():
+    if not bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists():
         return "A bolsa não tem bolsistas vinculados."
 
     abertos = processos_em_aberto(bolsa)

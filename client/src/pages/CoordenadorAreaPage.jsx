@@ -8,16 +8,23 @@ import {
   IconBriefcase,
   IconUsers,
   IconCheck,
+  IconClipboardList,
 } from '../components'
 import EditaisPage from './EditaisPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
+import MovimentacoesBolsistasPage from './MovimentacoesBolsistasPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
   { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
   { id: 'finalizacao', label: 'Finalização de Bolsas', icon: <IconCheck /> },
+  {
+    id: 'movimentacoes',
+    label: 'Desligamentos e Cancelamentos',
+    icon: <IconClipboardList />,
+  },
 ]
 
 const AREA_LABELS = {
@@ -56,6 +63,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
 
       {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
       {active === 'finalizacao' && <FinalizacaoBolsasPage />}
+      {active === 'movimentacoes' && <MovimentacoesBolsistasPage />}
     </Layout>
   )
 }

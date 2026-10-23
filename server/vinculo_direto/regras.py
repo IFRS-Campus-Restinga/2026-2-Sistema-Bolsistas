@@ -1,4 +1,5 @@
 from bolsas.models import STATUS_BOLSA_FINALIZADOS
+from bolsistas.services import capacidade_efetiva
 from inscricoes.models import StatusInscricao
 
 from .models import STATUS_OCUPAM_VAGA
@@ -9,7 +10,7 @@ def vagas_livres(bolsa):
     ocupadas_por_convite = bolsa.convites_vinculo_direto.filter(
         status__in=STATUS_OCUPAM_VAGA
     ).count()
-    return bolsa.quantidade_vagas - homologadas - ocupadas_por_convite
+    return capacidade_efetiva(bolsa) - homologadas - ocupadas_por_convite
 
 
 def bolsa_elegivel_para_convite(bolsa):
