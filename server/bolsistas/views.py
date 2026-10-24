@@ -16,7 +16,16 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
 
-from .models import RelatorioFinal, SituacaoRelatorio, VinculoBolsista
+from .models import (
+    CancelamentoVaga,
+    OrigemDesligamento,
+    RelatorioFinal,
+    SituacaoRelatorio,
+    SolicitacaoDesligamento,
+    StatusSolicitacaoDesligamento,
+    StatusVinculo,
+    VinculoBolsista,
+)
 from .regras import (
     MOTIVO_BOLSA_ENCERRADA,
     bolsa_aceita_acompanhamento,
@@ -26,12 +35,39 @@ from .regras import (
 )
 from .serializers import (
     BolsaParaFinalizarSerializer,
+    CancelamentoVagaSerializer,
+    DecisaoDesligamentoSerializer,
     EnvioRelatorioSerializer,
     MeuVinculoSerializer,
+    MotivoDesligamentoSerializer,
     ParecerSerializer,
     RelatorioFinalSerializer,
+    SolicitacaoDesligamentoSerializer,
     VinculoDoCoordenadorSerializer,
 )
+from .services import atualizar_status_preenchimento, efetivar_desligamento
+
+
+def _vinculo_do_coordenador(usuario, pk, travar=False):
+    queryset = VinculoBolsista.objects.select_related(
+        "aluno", "bolsa__projeto", "bolsa__coordenador_area__usuario"
+    )
+    if travar:
+        queryset = queryset.select_for_update()
+    return get_object_or_404(
+        queryset,
+        pk=pk,
+        bolsa__projeto__coordenador_projeto__usuario=usuario,
+    )
+
+
+def _garantir_vinculo_ativo(vinculo):
+    if vinculo.status != StatusVinculo.ATIVO:
+        raise ValidationError({"detail": "Este vínculo já foi desligado."})
+    if vinculo.solicitacoes_desligamento.filter(
+        status=StatusSolicitacaoDesligamento.PENDENTE
+    ).exists():
+        raise ValidationError({"detail": "Já existe um pedido de desligamento pendente."})
 
 
 class MeusVinculosView(generics.ListAPIView):
@@ -51,6 +87,235 @@ class MeusVinculosView(generics.ListAPIView):
             )
             .order_by("-criado_em", "-id")
         )
+
+
+class SolicitarMeuDesligamentoView(APIView):
+    """O aluno solicita o desligamento e aguarda a decisão do coordenador do projeto."""
+
+    permission_classes = [IsAuthenticated, IsAluno]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo = get_object_or_404(
+            VinculoBolsista.objects.select_for_update().select_related("bolsa__projeto"),
+            pk=pk,
+            aluno=request.user,
+        )
+        _garantir_vinculo_ativo(vinculo)
+        serializer = MotivoDesligamentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        solicitacao = SolicitacaoDesligamento.objects.create(
+            vinculo=vinculo,
+            solicitante=request.user,
+            origem=OrigemDesligamento.ALUNO,
+            motivo=serializer.validated_data["motivo"],
+        )
+        return Response(
+            SolicitacaoDesligamentoSerializer(solicitacao).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MeusPedidosDesligamentoView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsAluno]
+    serializer_class = SolicitacaoDesligamentoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return SolicitacaoDesligamento.objects.filter(
+            vinculo__aluno=self.request.user
+        ).select_related("vinculo__aluno", "vinculo__bolsa__projeto", "solicitante")
+
+
+class SolicitarDesligamentoCoordenadorView(APIView):
+    """O coordenador desliga imediatamente um bolsista do próprio projeto."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo = _vinculo_do_coordenador(request.user, pk, travar=True)
+        _garantir_vinculo_ativo(vinculo)
+        serializer = MotivoDesligamentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        solicitacao = SolicitacaoDesligamento.objects.create(
+            vinculo=vinculo,
+            solicitante=request.user,
+            origem=OrigemDesligamento.COORDENADOR_PROJETO,
+            motivo=serializer.validated_data["motivo"],
+        )
+        efetivar_desligamento(solicitacao, request.user)
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.DESATIVACAO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=vinculo.bolsa_id,
+            descricao=(
+                f"{vinculo.aluno.nome} foi desligado(a) da bolsa do projeto "
+                f'"{vinculo.bolsa.projeto.titulo}". Motivo: {solicitacao.motivo}'
+            ),
+        )
+        return Response(
+            SolicitacaoDesligamentoSerializer(solicitacao).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PedidosDesligamentoPendentesView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    serializer_class = SolicitacaoDesligamentoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return SolicitacaoDesligamento.objects.filter(
+            vinculo__bolsa__projeto__coordenador_projeto__usuario=self.request.user,
+            origem=OrigemDesligamento.ALUNO,
+            status=StatusSolicitacaoDesligamento.PENDENTE,
+        ).select_related("vinculo__aluno", "vinculo__bolsa__projeto", "solicitante")
+
+
+class DecidirDesligamentoView(APIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        solicitacao = get_object_or_404(
+            SolicitacaoDesligamento.objects.select_for_update().select_related(
+                "vinculo__aluno", "vinculo__bolsa__projeto"
+            ),
+            pk=pk,
+            origem=OrigemDesligamento.ALUNO,
+            vinculo__bolsa__projeto__coordenador_projeto__usuario=request.user,
+        )
+        if solicitacao.status != StatusSolicitacaoDesligamento.PENDENTE:
+            raise ValidationError({"detail": "Este pedido de desligamento já foi decidido."})
+
+        serializer = DecisaoDesligamentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        aprovar = serializer.validated_data["aprovar"]
+
+        if aprovar:
+            if solicitacao.vinculo.status != StatusVinculo.ATIVO:
+                raise ValidationError({"detail": "Este vínculo já foi desligado."})
+            efetivar_desligamento(solicitacao, request.user)
+        else:
+            solicitacao.status = StatusSolicitacaoDesligamento.REJEITADA
+            solicitacao.decidido_por = request.user
+            solicitacao.decidida_em = timezone.now()
+            solicitacao.justificativa_decisao = serializer.validated_data["justificativa"]
+            solicitacao.save(
+                update_fields=[
+                    "status",
+                    "decidido_por",
+                    "decidida_em",
+                    "justificativa_decisao",
+                ]
+            )
+
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.APROVACAO if aprovar else AcaoAuditoria.REJEICAO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=solicitacao.vinculo.bolsa_id,
+            descricao=(
+                f"Pedido de desligamento de {solicitacao.vinculo.aluno.nome} "
+                f"{'aprovado' if aprovar else 'rejeitado'}."
+            ),
+        )
+        return Response(SolicitacaoDesligamentoSerializer(solicitacao).data)
+
+
+class CancelarVagaView(APIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo = _vinculo_do_coordenador(request.user, pk, travar=True)
+        if vinculo.status != StatusVinculo.DESLIGADO:
+            raise ValidationError(
+                {"detail": "A vaga só pode ser cancelada depois do desligamento do bolsista."}
+            )
+        if CancelamentoVaga.objects.filter(vinculo=vinculo).exists():
+            raise ValidationError({"detail": "Esta vaga já foi cancelada."})
+
+        serializer = MotivoDesligamentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cancelamento = CancelamentoVaga.objects.create(
+            vinculo=vinculo,
+            solicitado_por=request.user,
+            justificativa=serializer.validated_data["motivo"],
+        )
+        atualizar_status_preenchimento(vinculo.bolsa)
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.CANCELAMENTO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=vinculo.bolsa_id,
+            descricao=(
+                f'Uma vaga da bolsa do projeto "{vinculo.bolsa.projeto.titulo}" foi cancelada. '
+                f"Justificativa: {cancelamento.justificativa}"
+            ),
+        )
+        return Response(
+            CancelamentoVagaSerializer(cancelamento).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DesligamentosRecentesAreaView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+    serializer_class = SolicitacaoDesligamentoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return SolicitacaoDesligamento.objects.filter(
+            status=StatusSolicitacaoDesligamento.APROVADA,
+            vinculo__bolsa__coordenador_area__usuario=self.request.user,
+        ).select_related("vinculo__aluno", "vinculo__bolsa__projeto", "solicitante")
+
+
+class CienciaDesligamentoView(APIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    def post(self, request, pk):
+        solicitacao = get_object_or_404(
+            SolicitacaoDesligamento,
+            pk=pk,
+            status=StatusSolicitacaoDesligamento.APROVADA,
+            vinculo__bolsa__coordenador_area__usuario=request.user,
+        )
+        if solicitacao.ciencia_area_em is None:
+            solicitacao.ciencia_area_em = timezone.now()
+            solicitacao.save(update_fields=["ciencia_area_em"])
+        return Response(SolicitacaoDesligamentoSerializer(solicitacao).data)
+
+
+class CancelamentosRecentesAreaView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+    serializer_class = CancelamentoVagaSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return CancelamentoVaga.objects.filter(
+            vinculo__bolsa__coordenador_area__usuario=self.request.user
+        ).select_related("vinculo__aluno", "vinculo__bolsa__projeto", "solicitado_por")
+
+
+class CienciaCancelamentoVagaView(APIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    def post(self, request, pk):
+        cancelamento = get_object_or_404(
+            CancelamentoVaga,
+            pk=pk,
+            vinculo__bolsa__coordenador_area__usuario=request.user,
+        )
+        if cancelamento.ciencia_area_em is None:
+            cancelamento.ciencia_area_em = timezone.now()
+            cancelamento.save(update_fields=["ciencia_area_em"])
+        return Response(CancelamentoVagaSerializer(cancelamento).data)
 
 
 class SolicitarRelatorioView(APIView):
@@ -132,7 +397,13 @@ class BolsistasDoCoordenadorView(generics.ListAPIView):
             VinculoBolsista.objects.filter(
                 bolsa__projeto__coordenador_projeto__usuario=self.request.user
             )
-            .select_related("aluno", "bolsa__edital", "bolsa__projeto", "relatorio_final")
+            .select_related(
+                "aluno",
+                "bolsa__edital",
+                "bolsa__projeto",
+                "relatorio_final",
+                "cancelamento_vaga",
+            )
             .order_by("bolsa__projeto__titulo", "aluno__nome")
         )
 
@@ -153,10 +424,17 @@ class BolsasParaFinalizarView(generics.ListAPIView):
             )
             .select_related("projeto__coordenador_projeto__usuario", "edital")
             .annotate(
-                total_bolsistas=Count("vinculos", distinct=True),
+                total_bolsistas=Count(
+                    "vinculos",
+                    filter=Q(vinculos__status=StatusVinculo.ATIVO),
+                    distinct=True,
+                ),
                 relatorios_aprovados=Count(
                     "vinculos",
-                    filter=Q(vinculos__relatorio_final__situacao=SituacaoRelatorio.APROVADO),
+                    filter=Q(
+                        vinculos__status=StatusVinculo.ATIVO,
+                        vinculos__relatorio_final__situacao=SituacaoRelatorio.APROVADO,
+                    ),
                     distinct=True,
                 ),
             )

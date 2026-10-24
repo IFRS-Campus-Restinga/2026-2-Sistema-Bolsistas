@@ -10,7 +10,7 @@ from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
-from bolsistas.services import vincular_por_indicacao
+from bolsistas.services import atualizar_status_preenchimento, vincular_por_indicacao
 from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
 
 from .models import (
@@ -249,9 +249,7 @@ class IndicarBolsistaView(_ResultadoPublicadoMixin, APIView):
                 f'Você foi indicado(a) como bolsista da bolsa do projeto "{bolsa.projeto.titulo}".'
             ),
         )
-        if bolsa.indicacoes.count() >= bolsa.quantidade_vagas:
-            bolsa.status = StatusBolsa.PREENCHIDA
-            bolsa.save(update_fields=["status"])
+        atualizar_status_preenchimento(bolsa)
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.VINCULO,

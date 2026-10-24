@@ -20,7 +20,16 @@ from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista, PublicacaoResultado
 from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
 
-from .models import OrigemVinculo, RelatorioFinal, SituacaoRelatorio, VinculoBolsista
+from .models import (
+    CancelamentoVaga,
+    OrigemVinculo,
+    RelatorioFinal,
+    SituacaoRelatorio,
+    SolicitacaoDesligamento,
+    StatusSolicitacaoDesligamento,
+    StatusVinculo,
+    VinculoBolsista,
+)
 
 migracao_vinculos = import_module("bolsistas.migrations.0002_vinculos_existentes")
 
@@ -909,3 +918,160 @@ class SolicitarRelatorioTests(CenarioBolsista):
         self.client.force_authenticate(self.vinculo_ana.aluno)
 
         self.assertEqual(self.solicitar().status_code, 403)
+
+
+class DesligamentoECancelamentoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.coordenador_area = self.area.perfil_coordenador_area
+        self.bolsa.save(update_fields=["coordenador_area"])
+        self.vinculo_ana = self.vinculo("ana")
+
+    def pedir_como_aluno(self, motivo="Não consigo continuar no projeto."):
+        self.client.force_authenticate(self.vinculo_ana.aluno)
+        return self.client.post(
+            reverse(
+                "bolsistas:solicitar-meu-desligamento",
+                kwargs={"pk": self.vinculo_ana.pk},
+            ),
+            {"motivo": motivo},
+            format="json",
+        )
+
+    def desligar_como_coordenador(self, vinculo=None):
+        vinculo = vinculo or self.vinculo_ana
+        self.client.force_authenticate(self.coordenador)
+        return self.client.post(
+            reverse("bolsistas:desligar-vinculo", kwargs={"pk": vinculo.pk}),
+            {"motivo": "Desempenho insuficiente."},
+            format="json",
+        )
+
+    def test_aluno_cria_pedido_pendente_com_motivo(self):
+        response = self.pedir_como_aluno()
+
+        self.assertEqual(response.status_code, 201, response.data)
+        pedido = SolicitacaoDesligamento.objects.get()
+        self.assertEqual(pedido.status, StatusSolicitacaoDesligamento.PENDENTE)
+        self.assertEqual(pedido.solicitante, self.vinculo_ana.aluno)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
+
+    def test_aluno_precisa_informar_motivo_e_nao_duplica_pedido(self):
+        self.assertEqual(self.pedir_como_aluno(" ").status_code, 400)
+        self.assertEqual(self.pedir_como_aluno().status_code, 201)
+
+        response = self.pedir_como_aluno("Outro motivo")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("pendente", response.data["detail"])
+
+    def test_coordenador_aprova_pedido_e_desliga_vinculo(self):
+        pedido_id = self.pedir_como_aluno().data["id"]
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("bolsistas:decidir-desligamento", kwargs={"pk": pedido_id}),
+            {"aprovar": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.vinculo_ana.refresh_from_db()
+        self.bolsa.refresh_from_db()
+        pedido = SolicitacaoDesligamento.objects.get(pk=pedido_id)
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.DESLIGADO)
+        self.assertIsNotNone(self.vinculo_ana.desligado_em)
+        self.assertEqual(pedido.status, StatusSolicitacaoDesligamento.APROVADA)
+        self.assertIsNotNone(pedido.notificada_area_em)
+        self.assertEqual(self.bolsa.status, StatusBolsa.EM_SELECAO)
+
+    def test_coordenador_rejeita_pedido_com_justificativa(self):
+        pedido_id = self.pedir_como_aluno().data["id"]
+        self.client.force_authenticate(self.coordenador)
+        url = reverse("bolsistas:decidir-desligamento", kwargs={"pk": pedido_id})
+
+        sem_justificativa = self.client.post(url, {"aprovar": False}, format="json")
+        response = self.client.post(
+            url,
+            {"aprovar": False, "justificativa": "Ajustaremos a carga horária."},
+            format="json",
+        )
+
+        self.assertEqual(sem_justificativa.status_code, 400)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
+        self.assertEqual(
+            SolicitacaoDesligamento.objects.get(pk=pedido_id).status,
+            StatusSolicitacaoDesligamento.REJEITADA,
+        )
+
+    def test_coordenador_desliga_imediatamente_e_area_toma_ciencia(self):
+        response = self.desligar_como_coordenador()
+
+        self.assertEqual(response.status_code, 201, response.data)
+        pedido = SolicitacaoDesligamento.objects.get()
+        self.assertEqual(pedido.status, StatusSolicitacaoDesligamento.APROVADA)
+        self.client.force_authenticate(self.area)
+        lista = self.client.get(reverse("bolsistas:desligamentos-area"))
+        ciencia = self.client.post(
+            reverse("bolsistas:ciencia-desligamento", kwargs={"pk": pedido.pk})
+        )
+
+        self.assertEqual(lista.status_code, 200)
+        self.assertEqual(len(lista.data), 1)
+        self.assertEqual(ciencia.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertIsNotNone(pedido.ciencia_area_em)
+
+    def test_cancelamento_reduz_somente_a_vaga_desocupada(self):
+        segundo = self.vinculo("bia")
+        terceiro = self.vinculo("carla")
+        self.desligar_como_coordenador(self.vinculo_ana)
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("bolsistas:cancelar-vaga", kwargs={"pk": self.vinculo_ana.pk}),
+            {"motivo": "Não há prazo para convocar suplente."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.bolsa.refresh_from_db()
+        segundo.refresh_from_db()
+        terceiro.refresh_from_db()
+        self.assertEqual(self.bolsa.quantidade_vagas, 3)
+        self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
+        self.assertEqual(segundo.status, StatusVinculo.ATIVO)
+        self.assertEqual(terceiro.status, StatusVinculo.ATIVO)
+        self.assertTrue(CancelamentoVaga.objects.filter(vinculo=self.vinculo_ana).exists())
+
+    def test_cancelamento_da_unica_vaga_cancela_a_bolsa(self):
+        self.bolsa.quantidade_vagas = 1
+        self.bolsa.save(update_fields=["quantidade_vagas"])
+        self.desligar_como_coordenador()
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("bolsistas:cancelar-vaga", kwargs={"pk": self.vinculo_ana.pk}),
+            {"motivo": "Não haverá substituição."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.bolsa.refresh_from_db()
+        self.assertEqual(self.bolsa.status, StatusBolsa.CANCELADA)
+
+    def test_nao_cancela_vaga_de_vinculo_ativo(self):
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("bolsistas:cancelar-vaga", kwargs={"pk": self.vinculo_ana.pk}),
+            {"motivo": "Sem substituição."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(CancelamentoVaga.objects.exists())

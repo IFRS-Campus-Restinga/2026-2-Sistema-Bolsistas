@@ -143,7 +143,8 @@ def representar_classificacao(bolsa, classificacao):
         "publicado_em": publicacao.publicado_em if publicacao else None,
         "pendencias_publicacao": [] if publicacao else pendencias,
         "pode_publicar": not pendencias,
-        "vagas_preenchidas": len(indicacoes),
+        "vagas_preenchidas": vagas.ocupadas if vagas else 0,
+        "vagas_efetivas": vagas.vagas if vagas else bolsa.quantidade_vagas,
         "vagas_para_suplentes": vagas.vagas_para_suplentes if vagas else 0,
         "candidatos": candidatos,
     }
