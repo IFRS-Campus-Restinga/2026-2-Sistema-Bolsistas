@@ -12,6 +12,7 @@ import {
   IconBank,
   IconMessageCircle,
   IconMail,
+  IconGradCap,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
@@ -19,9 +20,11 @@ import MinhasInscricoesPage from './MinhasInscricoesPage'
 import MeusRecursosPage from './MeusRecursosPage'
 import DadosBancariosPage from './DadosBancariosPage'
 import ConvitesPage from './ConvitesPage'
+import MinhaBolsaPage from './MinhaBolsaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { id: 'minha-bolsa', label: 'Minha Bolsa', icon: <IconGradCap /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
   { id: 'recursos', label: 'Meus Recursos', icon: <IconMessageCircle /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
@@ -117,6 +120,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
       )}
       {active === 'recursos' && <MeusRecursosPage />}
       {active === 'convites' && <ConvitesPage />}
+      {active === 'minha-bolsa' && <MinhaBolsaPage />}
       {active === 'dados-bancarios' && <DadosBancariosPage />}
     </Layout>
   )

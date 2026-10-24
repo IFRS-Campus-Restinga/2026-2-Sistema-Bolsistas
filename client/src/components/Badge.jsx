@@ -39,6 +39,10 @@ const TOM_POR_STATUS = {
   INDICADO: 'green',
   NAO_ASSUMIU: 'gray',
   RESULTADO_PUBLICADO: 'green',
+  AGUARDANDO_AVALIACAO: 'yellow',
+  NAO_SOLICITADO: 'gray',
+  SOLICITADO: 'blue',
+  REPROVADO: 'red',
   // Ações da auditoria, agrupadas por significado
   APROVACAO: 'green',
   PUBLICACAO: 'green',
@@ -89,6 +93,10 @@ const STATUS_LABEL = {
   INDICADO: 'Indicado(a)',
   NAO_ASSUMIU: 'Não assumiu',
   RESULTADO_PUBLICADO: 'Resultado publicado',
+  AGUARDANDO_AVALIACAO: 'Aguardando avaliação',
+  NAO_SOLICITADO: 'Não solicitado',
+  SOLICITADO: 'Solicitado',
+  REPROVADO: 'Reprovado',
 }
 
 const CLASSES_POR_TOM = {

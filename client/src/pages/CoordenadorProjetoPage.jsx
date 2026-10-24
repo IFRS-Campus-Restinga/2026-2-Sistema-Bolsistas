@@ -9,11 +9,13 @@ import {
   IconCheck,
   IconMail,
   IconScale,
+  IconGradCap,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusCandidatosPage from './MeusCandidatosPage'
 import MeusConvitesPage from './MeusConvitesPage'
 import SelecaoPage from './SelecaoPage'
+import MeusBolsistasPage from './MeusBolsistasPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -21,6 +23,7 @@ const menuItems = [
   { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
   { id: 'selecao', label: 'Avaliação e Seleção', icon: <IconScale /> },
   { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
+  { id: 'bolsistas', label: 'Meus Bolsistas', icon: <IconGradCap /> },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
@@ -52,6 +55,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'candidatos' && <MeusCandidatosPage />}
       {active === 'selecao' && <SelecaoPage />}
       {active === 'convites' && <MeusConvitesPage />}
+      {active === 'bolsistas' && <MeusBolsistasPage />}
     </Layout>
   )
 }

@@ -16,6 +16,7 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
+from bolsistas.services import vincular_por_convite
 from inscricoes.models import Documento, TipoDocumento
 
 from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
@@ -132,6 +133,7 @@ class AprovarConviteView(APIView):
         convite.responsavel_decisao = request.user
         convite.data_decisao = timezone.now()
         convite.save(update_fields=["status", "responsavel_decisao", "data_decisao"])
+        vincular_por_convite(convite)
 
         bolsa = convite.bolsa
         if vagas_livres(bolsa) <= 0 and bolsa.status != StatusBolsa.PREENCHIDA:
