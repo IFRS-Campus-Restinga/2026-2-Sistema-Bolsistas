@@ -30,7 +30,13 @@ const datas = [
   ['data_entrega_relatorios', 'Entrega de relatórios'],
 ]
 
-const nomesCampos = [...campos.map((campo) => campo.name), ...datas.map(([nome]) => nome)]
+const CAMPO_DIA_LIMITE = 'dia_limite_frequencia'
+
+const nomesCampos = [
+  ...campos.map((campo) => campo.name),
+  ...datas.map(([nome]) => nome),
+  CAMPO_DIA_LIMITE,
+]
 
 export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
   const confirmar = useConfirm()
@@ -85,6 +91,8 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
     for (const [nome] of datas) {
       corpo[nome] = corpo[nome] || null
     }
+    corpo[CAMPO_DIA_LIMITE] =
+      corpo[CAMPO_DIA_LIMITE] === '' ? null : Number(corpo[CAMPO_DIA_LIMITE])
 
     try {
       const response = await editaisFetch(edital ? `/${edital.id}/` : '/', {
@@ -169,6 +177,28 @@ export default function EditalForm({ edital = null, onSalvar, onCancelar }) {
               )}
             </FormField>
           ))}
+
+          <FormField label="Dia-limite da frequência mensal">
+            <TextInput
+              type="number"
+              name={CAMPO_DIA_LIMITE}
+              min={1}
+              max={31}
+              aria-label="Dia-limite da frequência mensal"
+              value={dados[CAMPO_DIA_LIMITE]}
+              onChange={alterarCampo}
+              disabled={salvando}
+              aria-invalid={Boolean(mensagemCampo(CAMPO_DIA_LIMITE))}
+              aria-describedby={
+                mensagemCampo(CAMPO_DIA_LIMITE) ? `${CAMPO_DIA_LIMITE}-erro` : undefined
+              }
+            />
+            {mensagemCampo(CAMPO_DIA_LIMITE) && (
+              <div id={`${CAMPO_DIA_LIMITE}-erro`} role="alert">
+                <Alert tone="error">{mensagemCampo(CAMPO_DIA_LIMITE)}</Alert>
+              </div>
+            )}
+          </FormField>
         </div>
 
         <FormActions>
