@@ -7,8 +7,10 @@ from server.validators import validar_upload
 from .models import (
     EXTENSOES_RELATORIO,
     TAMANHO_MAX_RELATORIO_MB,
+    CancelamentoVaga,
     RelatorioFinal,
     SituacaoRelatorio,
+    SolicitacaoDesligamento,
     VinculoBolsista,
 )
 from .regras import (
@@ -67,6 +69,85 @@ class RelatorioFinalSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(caminho) if request else caminho
 
 
+class MotivoDesligamentoSerializer(serializers.Serializer):
+    motivo = serializers.CharField(max_length=5000, trim_whitespace=True)
+
+    def validate_motivo(self, motivo):
+        if not motivo.strip():
+            raise serializers.ValidationError("Informe o motivo do desligamento.")
+        return motivo.strip()
+
+
+class DecisaoDesligamentoSerializer(serializers.Serializer):
+    aprovar = serializers.BooleanField()
+    justificativa = serializers.CharField(
+        max_length=5000,
+        required=False,
+        allow_blank=True,
+        default="",
+        trim_whitespace=True,
+    )
+
+    def validate(self, attrs):
+        attrs["justificativa"] = attrs["justificativa"].strip()
+        if not attrs["aprovar"] and not attrs["justificativa"]:
+            raise serializers.ValidationError(
+                {"justificativa": "Informe o motivo da rejeição do pedido."}
+            )
+        return attrs
+
+
+class SolicitacaoDesligamentoSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    origem_display = serializers.CharField(source="get_origem_display", read_only=True)
+    aluno_nome = serializers.CharField(source="vinculo.aluno.nome", read_only=True)
+    bolsa_id = serializers.IntegerField(source="vinculo.bolsa_id", read_only=True)
+    projeto_titulo = serializers.CharField(source="vinculo.bolsa.projeto.titulo", read_only=True)
+    solicitante_nome = serializers.CharField(source="solicitante.nome", read_only=True)
+
+    class Meta:
+        model = SolicitacaoDesligamento
+        fields = [
+            "id",
+            "vinculo",
+            "aluno_nome",
+            "bolsa_id",
+            "projeto_titulo",
+            "solicitante_nome",
+            "origem",
+            "origem_display",
+            "motivo",
+            "status",
+            "status_display",
+            "solicitada_em",
+            "decidida_em",
+            "justificativa_decisao",
+            "notificada_area_em",
+            "ciencia_area_em",
+        ]
+
+
+class CancelamentoVagaSerializer(serializers.ModelSerializer):
+    aluno_nome = serializers.CharField(source="vinculo.aluno.nome", read_only=True)
+    bolsa_id = serializers.IntegerField(source="vinculo.bolsa_id", read_only=True)
+    projeto_titulo = serializers.CharField(source="vinculo.bolsa.projeto.titulo", read_only=True)
+    solicitado_por_nome = serializers.CharField(source="solicitado_por.nome", read_only=True)
+
+    class Meta:
+        model = CancelamentoVaga
+        fields = [
+            "id",
+            "vinculo",
+            "aluno_nome",
+            "bolsa_id",
+            "projeto_titulo",
+            "solicitado_por_nome",
+            "justificativa",
+            "cancelada_em",
+            "ciencia_area_em",
+        ]
+
+
 class MeuVinculoSerializer(serializers.ModelSerializer):
     """Vínculo visto pelo próprio bolsista, com o que ele precisa para o relatório final."""
 
@@ -106,6 +187,8 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "id",
             "origem",
             "origem_display",
+            "status",
+            "desligado_em",
             "criado_em",
             "bolsa_id",
             "bolsa_status",
@@ -156,6 +239,7 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
     relatorio = serializers.SerializerMethodField()
     pode_solicitar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio_solicitacao = serializers.SerializerMethodField()
+    vaga_cancelada = serializers.SerializerMethodField()
 
     class Meta:
         model = VinculoBolsista
@@ -165,6 +249,8 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
             "aluno_email",
             "origem",
             "origem_display",
+            "status",
+            "desligado_em",
             "bolsa_id",
             "bolsa_status",
             "bolsa_tipo_display",
@@ -175,6 +261,7 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
             "relatorio",
             "pode_solicitar_relatorio",
             "motivo_bloqueio_solicitacao",
+            "vaga_cancelada",
         ]
 
     def get_relatorio(self, vinculo):
@@ -188,6 +275,9 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
 
     def get_motivo_bloqueio_solicitacao(self, vinculo):
         return motivo_bloqueio_solicitacao(vinculo)
+
+    def get_vaga_cancelada(self, vinculo):
+        return getattr(vinculo, "cancelamento_vaga", None) is not None
 
 
 class BolsaParaFinalizarSerializer(serializers.ModelSerializer):

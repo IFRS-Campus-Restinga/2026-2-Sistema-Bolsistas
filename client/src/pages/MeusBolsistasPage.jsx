@@ -14,6 +14,7 @@ import {
 import { formatarData } from '../utils/dataHora'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import AvaliarRelatorioModal from './AvaliarRelatorioModal'
+import MotivoModal from './MotivoModal'
 
 const SITUACOES = [
   { valor: '', rotulo: 'Todas' },
@@ -36,6 +37,10 @@ export default function MeusBolsistasPage() {
   const [erro, setErro] = useState('')
   const [filtro, setFiltro] = useState('')
   const [avaliando, setAvaliando] = useState(null)
+  const [pedidos, setPedidos] = useState([])
+  const [desligando, setDesligando] = useState(null)
+  const [cancelando, setCancelando] = useState(null)
+  const [rejeitando, setRejeitando] = useState(null)
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
@@ -43,12 +48,25 @@ export default function MeusBolsistasPage() {
 
     async function carregar() {
       try {
-        const response = await bolsistasFetch('/vinculos/')
-        const dados = await response.json().catch(() => null)
-        if (!response.ok || !Array.isArray(dados)) {
-          throw new Error(mensagemDeErro(dados, 'Não foi possível carregar os bolsistas.'))
+        const [responseVinculos, responsePedidos] = await Promise.all([
+          bolsistasFetch('/vinculos/'),
+          bolsistasFetch('/desligamentos/pendentes/'),
+        ])
+        const [dadosVinculos, dadosPedidos] = await Promise.all([
+          responseVinculos.json().catch(() => null),
+          responsePedidos.json().catch(() => null),
+        ])
+        if (!responseVinculos.ok || !Array.isArray(dadosVinculos)) {
+          throw new Error(mensagemDeErro(dadosVinculos, 'Não foi possível carregar os bolsistas.'))
         }
-        if (ativo) setVinculos(dados)
+        if (!responsePedidos.ok || !Array.isArray(dadosPedidos)) {
+          throw new Error(mensagemDeErro(dadosPedidos, 'Não foi possível carregar os pedidos.'))
+        }
+        if (ativo) {
+          setVinculos(dadosVinculos)
+          setPedidos(dadosPedidos)
+          setErro('')
+        }
       } catch (error) {
         if (ativo) setErro(error.message)
       } finally {
@@ -84,31 +102,92 @@ export default function MeusBolsistasPage() {
 
   function acoesDoVinculo(vinculo) {
     const situacao = situacaoDoRelatorio(vinculo)
+    const acoes = []
     if (situacao === 'NAO_SOLICITADO') {
-      return vinculo.pode_solicitar_relatorio
-        ? [
-            {
-              label: 'Solicitar relatório final',
-              variant: 'accent',
-              onClick: () => solicitarRelatorio(vinculo),
-            },
-          ]
-        : []
+      if (vinculo.pode_solicitar_relatorio) {
+        acoes.push({
+          label: 'Solicitar relatório final',
+          variant: 'accent',
+          onClick: () => solicitarRelatorio(vinculo),
+        })
+      }
+    } else if (vinculo.relatorio.arquivo) {
+      if (situacao === 'AGUARDANDO_AVALIACAO') {
+        acoes.push({
+          label: 'Avaliar relatório',
+          variant: 'accent',
+          onClick: () => setAvaliando(vinculo),
+        })
+      }
+      acoes.push({
+        label: 'Baixar relatório',
+        variant: 'outline',
+        onClick: () => window.open(vinculo.relatorio.arquivo, '_blank', 'noopener'),
+      })
     }
-    if (!vinculo.relatorio.arquivo) return []
 
-    const baixar = {
-      label: 'Baixar relatório',
-      variant: 'outline',
-      onClick: () => window.open(vinculo.relatorio.arquivo, '_blank', 'noopener'),
+    if (vinculo.status === 'ATIVO') {
+      acoes.push({
+        label: 'Desligar bolsista',
+        variant: 'danger',
+        onClick: () => setDesligando(vinculo),
+      })
+    } else if (!vinculo.vaga_cancelada) {
+      acoes.push({
+        label: 'Cancelar vaga',
+        variant: 'danger',
+        onClick: () => setCancelando(vinculo),
+      })
     }
-    if (situacao === 'AGUARDANDO_AVALIACAO') {
-      return [
-        { label: 'Avaliar relatório', variant: 'accent', onClick: () => setAvaliando(vinculo) },
-        baixar,
-      ]
+    return acoes
+  }
+
+  async function enviarMotivo(caminho, motivo, mensagem) {
+    const response = await bolsistasFetch(caminho, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivo }),
+    })
+    const dados = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(mensagemDeErro(dados, mensagem))
+    setVersao((atual) => atual + 1)
+  }
+
+  function aprovarPedido(pedido) {
+    confirmar({
+      title: 'Aprovar pedido de desligamento?',
+      message: `${pedido.aluno_nome} será desligado(a) imediatamente e a bolsa voltará para Em Seleção.`,
+      confirmLabel: 'Aprovar desligamento',
+      tone: 'danger',
+      onConfirm: async () => {
+        const response = await bolsistasFetch(`/desligamentos/${pedido.id}/decisao/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aprovar: true }),
+        })
+        const dados = await response.json().catch(() => null)
+        if (!response.ok) {
+          throw new Error(mensagemDeErro(dados, 'Não foi possível aprovar o pedido.'))
+        }
+        toast({ message: 'Pedido aprovado e vínculo desligado.', tone: 'success' })
+        setVersao((atual) => atual + 1)
+      },
+    })
+  }
+
+  async function rejeitarPedido(justificativa) {
+    const response = await bolsistasFetch(`/desligamentos/${rejeitando.id}/decisao/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aprovar: false, justificativa }),
+    })
+    const dados = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(mensagemDeErro(dados, 'Não foi possível rejeitar o pedido.'))
     }
-    return [baixar]
+    setRejeitando(null)
+    toast({ message: 'Pedido de desligamento rejeitado.', tone: 'success' })
+    setVersao((atual) => atual + 1)
   }
 
   const aprovados = vinculos.filter((vinculo) => situacaoDoRelatorio(vinculo) === 'APROVADO')
@@ -124,6 +203,10 @@ export default function MeusBolsistasPage() {
     vinculo.projeto_titulo,
     `${vinculo.edital_ano_codigo} · ${vinculo.bolsa_tipo_display}`,
     vinculo.origem_display,
+    <div key="vinculo" className="flex flex-col items-center gap-1">
+      <Badge status={vinculo.status} />
+      {vinculo.vaga_cancelada && <Badge status="CANCELADA" label="Vaga cancelada" />}
+    </div>,
     <div key="relatorio" className="flex flex-col items-center gap-1">
       <Badge status={situacaoDoRelatorio(vinculo)} />
       {vinculo.prazo_relatorio && !vinculo.relatorio?.arquivo && (
@@ -135,11 +218,36 @@ export default function MeusBolsistasPage() {
     <AcoesCell key="acoes" acoes={acoesDoVinculo(vinculo)} />,
   ])
 
+  const linhasPedidos = pedidos.map((pedido) => [
+    pedido.aluno_nome,
+    pedido.projeto_titulo,
+    pedido.motivo,
+    <Badge key="status" status={pedido.status} />,
+    <AcoesCell
+      key="acoes"
+      acoes={[
+        { label: 'Aprovar', variant: 'accent', onClick: () => aprovarPedido(pedido) },
+        { label: 'Rejeitar', variant: 'danger', onClick: () => setRejeitando(pedido) },
+      ]}
+    />,
+  ])
+
   return (
     <>
       <PageHeader title="Meus Bolsistas" />
 
       {erro && <Alert tone="error">{erro}</Alert>}
+
+      {pedidos.length > 0 && (
+        <section className="mb-7">
+          <h2 className="mb-3 text-base font-bold text-gray-900">Pedidos de desligamento</h2>
+          <DataTable
+            columns={['Aluno', 'Projeto', 'Motivo', 'Status', 'Ações']}
+            rows={linhasPedidos}
+            porPagina={null}
+          />
+        </section>
+      )}
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <FormField label="Situação do relatório final" className="mb-0 min-w-[240px]">
@@ -160,7 +268,15 @@ export default function MeusBolsistasPage() {
       </div>
 
       <DataTable
-        columns={['Bolsista', 'Projeto', 'Edital e tipo', 'Ingresso', 'Relatório final', 'Ações']}
+        columns={[
+          'Bolsista',
+          'Projeto',
+          'Edital e tipo',
+          'Ingresso',
+          'Vínculo',
+          'Relatório final',
+          'Ações',
+        ]}
         rows={linhas}
         loading={carregando}
         emptyMessage={
@@ -178,6 +294,54 @@ export default function MeusBolsistasPage() {
             setAvaliando(null)
             setVersao((atual) => atual + 1)
           }}
+        />
+      )}
+
+      {desligando && (
+        <MotivoModal
+          title="Desligar bolsista"
+          description={`${desligando.aluno_nome} será desligado(a) imediatamente e a bolsa voltará para Em Seleção.`}
+          confirmLabel="Confirmar desligamento"
+          onClose={() => setDesligando(null)}
+          onConfirm={async (motivo) => {
+            await enviarMotivo(
+              `/vinculos/${desligando.id}/desligamento/`,
+              motivo,
+              'Não foi possível desligar o bolsista.'
+            )
+            setDesligando(null)
+            toast({ message: 'Bolsista desligado.', tone: 'success' })
+          }}
+        />
+      )}
+
+      {cancelando && (
+        <MotivoModal
+          title="Cancelar vaga"
+          description="Use esta opção quando não houver mais tempo para substituir o bolsista. Os demais vínculos permanecem ativos."
+          label="Justificativa"
+          confirmLabel="Confirmar cancelamento"
+          onClose={() => setCancelando(null)}
+          onConfirm={async (motivo) => {
+            await enviarMotivo(
+              `/vinculos/${cancelando.id}/cancelar-vaga/`,
+              motivo,
+              'Não foi possível cancelar a vaga.'
+            )
+            setCancelando(null)
+            toast({ message: 'Vaga cancelada.', tone: 'success' })
+          }}
+        />
+      )}
+
+      {rejeitando && (
+        <MotivoModal
+          title="Rejeitar pedido de desligamento"
+          description={`Informe para ${rejeitando.aluno_nome} por que o pedido não será aprovado.`}
+          label="Justificativa"
+          confirmLabel="Confirmar rejeição"
+          onClose={() => setRejeitando(null)}
+          onConfirm={rejeitarPedido}
         />
       )}
     </>

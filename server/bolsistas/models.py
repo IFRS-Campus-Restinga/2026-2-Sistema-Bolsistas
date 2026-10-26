@@ -14,6 +14,11 @@ class OrigemVinculo(models.TextChoices):
     VINCULO_DIRETO = "VINCULO_DIRETO", "Vínculo direto"
 
 
+class StatusVinculo(models.TextChoices):
+    ATIVO = "ATIVO", "Ativo"
+    DESLIGADO = "DESLIGADO", "Desligado"
+
+
 class VinculoBolsista(models.Model):
     """O aluno como bolsista de uma bolsa, venha ele da seleção ou do vínculo direto."""
 
@@ -36,7 +41,13 @@ class VinculoBolsista(models.Model):
         null=True,
         blank=True,
     )
+    status = models.CharField(
+        max_length=10,
+        choices=StatusVinculo.choices,
+        default=StatusVinculo.ATIVO,
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
+    desligado_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["criado_em", "id"]
@@ -57,6 +68,88 @@ class VinculoBolsista(models.Model):
 
     def __str__(self):
         return f"{self.aluno} na bolsa {self.bolsa_id} ({self.get_origem_display()})"
+
+
+class OrigemDesligamento(models.TextChoices):
+    ALUNO = "ALUNO", "Aluno"
+    COORDENADOR_PROJETO = "COORDENADOR_PROJETO", "Coordenador de Projeto"
+
+
+class StatusSolicitacaoDesligamento(models.TextChoices):
+    PENDENTE = "PENDENTE", "Pendente"
+    APROVADA = "APROVADA", "Aprovada"
+    REJEITADA = "REJEITADA", "Rejeitada"
+
+
+class SolicitacaoDesligamento(models.Model):
+    vinculo = models.ForeignKey(
+        VinculoBolsista,
+        on_delete=models.PROTECT,
+        related_name="solicitacoes_desligamento",
+    )
+    solicitante = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="desligamentos_solicitados",
+    )
+    origem = models.CharField(max_length=25, choices=OrigemDesligamento.choices)
+    motivo = models.TextField()
+    status = models.CharField(
+        max_length=10,
+        choices=StatusSolicitacaoDesligamento.choices,
+        default=StatusSolicitacaoDesligamento.PENDENTE,
+    )
+    solicitada_em = models.DateTimeField(auto_now_add=True)
+    decidido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="desligamentos_decididos",
+    )
+    decidida_em = models.DateTimeField(null=True, blank=True)
+    justificativa_decisao = models.TextField(blank=True, default="")
+    notificada_area_em = models.DateTimeField(null=True, blank=True)
+    ciencia_area_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-solicitada_em", "-id"]
+        verbose_name = "solicitação de desligamento"
+        verbose_name_plural = "solicitações de desligamento"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vinculo"],
+                condition=Q(status="PENDENTE"),
+                name="uniq_desligamento_pendente_por_vinculo",
+            )
+        ]
+
+    def __str__(self):
+        return f"Desligamento do vínculo {self.vinculo_id} ({self.get_status_display()})"
+
+
+class CancelamentoVaga(models.Model):
+    vinculo = models.OneToOneField(
+        VinculoBolsista,
+        on_delete=models.PROTECT,
+        related_name="cancelamento_vaga",
+    )
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="vagas_canceladas",
+    )
+    justificativa = models.TextField()
+    cancelada_em = models.DateTimeField(auto_now_add=True)
+    ciencia_area_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-cancelada_em", "-id"]
+        verbose_name = "cancelamento de vaga"
+        verbose_name_plural = "cancelamentos de vagas"
+
+    def __str__(self):
+        return f"Vaga cancelada a partir do vínculo {self.vinculo_id}"
 
 
 class SituacaoRelatorio(models.TextChoices):
