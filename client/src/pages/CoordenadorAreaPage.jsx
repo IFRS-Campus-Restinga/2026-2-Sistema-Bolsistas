@@ -9,11 +9,15 @@ import {
   IconUsers,
   IconCheck,
   IconClipboardList,
+  IconBarChart,
+  IconAlertTriangle,
 } from '../components'
 import EditaisPage from './EditaisPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
 import MovimentacoesBolsistasPage from './MovimentacoesBolsistasPage'
+import SituacaoFrequenciasPage from './SituacaoFrequenciasPage'
+import PendenciasAreaPage from './PendenciasAreaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -25,6 +29,8 @@ const menuItems = [
     label: 'Desligamentos e Cancelamentos',
     icon: <IconClipboardList />,
   },
+  { id: 'frequencias', label: 'Situação das Frequências', icon: <IconBarChart /> },
+  { id: 'pendencias', label: 'Relatório de Pendências', icon: <IconAlertTriangle /> },
 ]
 
 const AREA_LABELS = {
@@ -64,6 +70,8 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
       {active === 'finalizacao' && <FinalizacaoBolsasPage />}
       {active === 'movimentacoes' && <MovimentacoesBolsistasPage />}
+      {active === 'frequencias' && <SituacaoFrequenciasPage />}
+      {active === 'pendencias' && <PendenciasAreaPage />}
     </Layout>
   )
 }

@@ -25,6 +25,7 @@ class EntidadeAuditoria(models.TextChoices):
     COORDENADOR_AREA = "COORDENADOR_AREA", "Coordenador de Área"
     DADOS_BANCARIOS = "DADOS_BANCARIOS", "Dados Bancários"
     RELATORIO_FINAL = "RELATORIO_FINAL", "Relatório Final"
+    FREQUENCIA = "FREQUENCIA", "Frequência"
 
 
 class LogAuditoria(models.Model):

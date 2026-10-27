@@ -43,6 +43,11 @@ const TOM_POR_STATUS = {
   NAO_SOLICITADO: 'gray',
   SOLICITADO: 'blue',
   REPROVADO: 'red',
+  REGISTRADA: 'green',
+  NAO_REGISTRADA: 'red',
+  NAO_INFORMADO: 'gray',
+  AUTORIZADO: 'green',
+  NEGADO: 'red',
   // Ações da auditoria, agrupadas por significado
   APROVACAO: 'green',
   PUBLICACAO: 'green',
@@ -97,6 +102,11 @@ const STATUS_LABEL = {
   NAO_SOLICITADO: 'Não solicitado',
   SOLICITADO: 'Solicitado',
   REPROVADO: 'Reprovado',
+  REGISTRADA: 'Registrada',
+  NAO_REGISTRADA: 'Não Registrada',
+  NAO_INFORMADO: 'Não Informado',
+  AUTORIZADO: 'Autorizado',
+  NEGADO: 'Negado',
 }
 
 const CLASSES_POR_TOM = {
