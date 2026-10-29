@@ -33,7 +33,7 @@ export default function NaoAssumiuModal({ bolsaId, candidato, onSalvo, onFechar 
   return (
     <Modal title="Titular não vai assumir" onClose={onFechar} width={520}>
       {erro && <Alert tone="error">{erro}</Alert>}
-      <p style={{ marginBottom: 12 }}>
+      <p className="mb-3">
         <strong>{candidato.aluno_nome}</strong> ({candidato.posicao}º lugar, nota{' '}
         {candidato.nota_final}) <Badge status={candidato.situacao} />
       </p>
@@ -55,8 +55,8 @@ export default function NaoAssumiuModal({ bolsaId, candidato, onSalvo, onFechar 
         <Button variant="outline" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
-        <Button variant="danger" onClick={salvar} disabled={salvando || !motivo.trim()}>
-          {salvando ? 'Registrando...' : 'Confirmar'}
+        <Button variant="danger" onClick={salvar} disabled={!motivo.trim()} loading={salvando}>
+          Confirmar
         </Button>
       </FormActions>
     </Modal>

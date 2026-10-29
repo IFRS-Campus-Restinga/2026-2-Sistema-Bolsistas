@@ -5,7 +5,9 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorArea, CoordenadorProjeto, Usuario
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
+from bolsistas.models import OrigemVinculo, VinculoBolsista
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao, TipoDocumento
 from projetos.models import Projeto
@@ -66,6 +68,11 @@ class RegrasElegibilidadeTests(VinculoDiretoTestBase):
     def test_bolsa_sem_ocupantes_e_recurso_encerrado_e_elegivel(self):
         self.assertEqual(vagas_livres(self.bolsa), 1)
         self.assertTrue(bolsa_elegivel_para_convite(self.bolsa))
+
+    def test_bolsa_finalizada_nao_e_elegivel(self):
+        for status in [StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA, StatusBolsa.REJEITADA]:
+            self.bolsa.status = status
+            self.assertFalse(bolsa_elegivel_para_convite(self.bolsa), status)
 
     def test_bolsa_com_inscricao_homologada_nao_e_elegivel(self):
         Inscricao.objects.create(
@@ -306,6 +313,15 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.responsavel_decisao, self.coordenador)
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
 
+    def test_aprovar_registra_log_de_vinculo(self):
+        self.client.post(self.url("convite-aprovar"))
+
+        log = LogAuditoria.objects.get()
+        self.assertEqual(log.acao, AcaoAuditoria.VINCULO)
+        self.assertEqual(log.entidade, EntidadeAuditoria.BOLSA)
+        self.assertEqual(log.entidade_id, str(self.bolsa.pk))
+        self.assertEqual(log.usuario, self.coordenador)
+
     def test_aprovar_notifica_coordenador_de_area(self):
         self.client.post(self.url("convite-aprovar"))
         self.assertEqual(NotificacaoConvite.objects.count(), 1)
@@ -317,6 +333,16 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.convite.documentos.all().delete()
         response = self.client.post(self.url("convite-aprovar"))
         self.assertEqual(response.status_code, 400)
+        self.assertFalse(VinculoBolsista.objects.exists())
+
+    def test_aprovar_cria_vinculo_do_bolsista(self):
+        self.client.post(self.url("convite-aprovar"))
+
+        vinculo = VinculoBolsista.objects.get()
+        self.assertEqual(vinculo.bolsa, self.bolsa)
+        self.assertEqual(vinculo.aluno, self.aluno)
+        self.assertEqual(vinculo.origem, OrigemVinculo.VINCULO_DIRETO)
+        self.assertEqual(vinculo.convite, self.convite)
 
     def test_rejeitar_solicitando_reenvio_volta_para_preenchimento(self):
         response = self.client.post(

@@ -1,5 +1,3 @@
-import './PageHeader.css'
-
 /**
  * Cabeçalho de página com título, badge opcional e ação.
  *
@@ -7,9 +5,9 @@ import './PageHeader.css'
  */
 export function PageHeader({ title, action, badge }) {
   return (
-    <div className="page-header">
-      <div className="page-header__left">
-        <h1 className="page-header__title">{title}</h1>
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">{title}</h1>
         {badge}
       </div>
       {action}

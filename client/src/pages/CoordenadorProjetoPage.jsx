@@ -9,11 +9,15 @@ import {
   IconCheck,
   IconMail,
   IconScale,
+  IconGradCap,
+  IconCalendar,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusCandidatosPage from './MeusCandidatosPage'
 import MeusConvitesPage from './MeusConvitesPage'
 import SelecaoPage from './SelecaoPage'
+import MeusBolsistasPage from './MeusBolsistasPage'
+import FrequenciasPage from './FrequenciasPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -21,6 +25,8 @@ const menuItems = [
   { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
   { id: 'selecao', label: 'Avaliação e Seleção', icon: <IconScale /> },
   { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
+  { id: 'bolsistas', label: 'Meus Bolsistas', icon: <IconGradCap /> },
+  { id: 'frequencias', label: 'Frequências', icon: <IconCalendar /> },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
@@ -40,7 +46,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'dashboard' && (
         <>
           <PageHeader title="Painel do Coordenador de Projeto" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
             <StatCard label="Meus Projetos" value={0} icon={<IconBriefcase />} color="green" />
             <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="blue" />
             <StatCard label="Vagas Abertas" value={0} icon={<IconCheck />} color="orange" />
@@ -52,6 +58,8 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'candidatos' && <MeusCandidatosPage />}
       {active === 'selecao' && <SelecaoPage />}
       {active === 'convites' && <MeusConvitesPage />}
+      {active === 'bolsistas' && <MeusBolsistasPage />}
+      {active === 'frequencias' && <FrequenciasPage />}
     </Layout>
   )
 }

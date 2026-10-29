@@ -48,7 +48,7 @@ export default function CandidatosPage({ bolsa }) {
   }
 
   const linhas = consulta.candidatos.map((candidato) => [
-    <span key="nome" style={{ whiteSpace: 'nowrap' }}>
+    <span key="nome" className="whitespace-nowrap">
       {candidato.aluno_nome}
     </span>,
     candidato.aluno_email || 'Não informado',
@@ -70,9 +70,7 @@ export default function CandidatosPage({ bolsa }) {
 
   return (
     <>
-      {consulta.carregando ? (
-        <p role="status">Carregando candidatos...</p>
-      ) : consulta.erro ? (
+      {!consulta.carregando && consulta.erro ? (
         <>
           <Alert tone="error">{consulta.erro}</Alert>
           <Button variant="outline" onClick={tentarNovamente}>
@@ -81,6 +79,7 @@ export default function CandidatosPage({ bolsa }) {
         </>
       ) : (
         <DataTable
+          loading={consulta.carregando}
           columns={['Nome', 'E-mail', 'Status', 'Enviada em', 'Ações']}
           rows={linhas}
           emptyMessage="Nenhum candidato com inscrição enviada para esta bolsa."

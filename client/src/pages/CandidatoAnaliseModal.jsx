@@ -4,6 +4,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   FormActions,
   FormField,
   Modal,
@@ -93,10 +94,10 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
 
   return (
     <Modal title="Análise da inscrição" onClose={fechar} width={720}>
-      <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+      <div className="max-h-[65vh] overflow-y-auto">
         {erro && <Alert tone="error">{erro}</Alert>}
         {carregando ? (
-          <p role="status">Carregando inscrição...</p>
+          <Carregando texto="Carregando inscrição..." />
         ) : (
           candidato && (
             <>
@@ -171,9 +172,10 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
                     <Button
                       type="submit"
                       variant="danger"
-                      disabled={salvando || !justificativa.trim()}
+                      disabled={!justificativa.trim()}
+                      loading={salvando}
                     >
-                      {salvando ? 'Salvando...' : 'Confirmar indeferimento'}
+                      Confirmar indeferimento
                     </Button>
                     <Button variant="outline" onClick={fechar} disabled={salvando}>
                       Fechar
@@ -205,7 +207,7 @@ export default function CandidatoAnaliseModal({ candidatoId, onFechar, onDecisao
               disabled={salvando || !candidato.documentacao_completa}
               onClick={homologar}
             >
-              {salvando ? 'Salvando...' : 'Homologar'}
+              Homologar
             </Button>
           </>
         )}

@@ -28,7 +28,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
   const [comprovante, setComprovante] = useState(null)
   const [recursoInscricaoId, setRecursoInscricaoId] = useState(null)
   const [bolsaInscricao, setBolsaInscricao] = useState(null)
-  const [consultandoRecurso, setConsultandoRecurso] = useState(false)
+  const [consultandoRecurso, setConsultandoRecurso] = useState(null)
   const [resultadoBolsaId, setResultadoBolsaId] = useState(null)
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 
   async function interporRecurso(inscricao) {
     if (consultandoRecurso) return
-    setConsultandoRecurso(true)
+    setConsultandoRecurso(inscricao.id)
     setErro('')
     try {
       const res = await inscricoesFetch(`/${inscricao.id}/recursos/`)
@@ -115,7 +115,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     } catch (e) {
       setErro(e.message)
     } finally {
-      setConsultandoRecurso(false)
+      setConsultandoRecurso(null)
     }
   }
 
@@ -215,7 +215,11 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     ) : (
       ''
     ),
-    <AcoesCell key="acoes" acoes={acoesPorInscricao(inscricao)} />,
+    <AcoesCell
+      key="acoes"
+      acoes={acoesPorInscricao(inscricao)}
+      ocupado={consultandoRecurso === inscricao.id}
+    />,
   ])
 
   if (bolsaInscricao)
@@ -247,6 +251,7 @@ export default function MinhasInscricoesPage({ onHistorico }) {
                 <Button
                   size="sm"
                   disabled={lendoNotificacao !== null}
+                  loading={lendoNotificacao === item.id}
                   onClick={() => marcarLida(item.id)}
                 >
                   Marcar como lida
@@ -264,15 +269,12 @@ export default function MinhasInscricoesPage({ onHistorico }) {
         </section>
       )}
 
-      {carregando ? (
-        <p role="status">Carregando inscrições...</p>
-      ) : (
-        <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
-          rows={linhas}
-          emptyMessage="Você ainda não tem nenhuma inscrição."
-        />
-      )}
+      <DataTable
+        columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Você ainda não tem nenhuma inscrição."
+      />
 
       {edicaoAberta && (
         <InscricaoWizard
@@ -330,8 +332,8 @@ function ComprovanteModal({ inscricao, onFechar }) {
       {inscricao.data_decisao && (
         <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
       )}
-      <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
-      <ul style={{ paddingLeft: 20 }}>
+      <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
+      <ul className="pl-5">
         {inscricao.documentos.map((doc) => (
           <li key={doc.id}>
             <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
@@ -342,7 +344,7 @@ function ComprovanteModal({ inscricao, onFechar }) {
       </ul>
 
       {inscricao.link_lattes && (
-        <p style={{ marginTop: 8 }}>
+        <p className="mt-2">
           <strong>Lattes:</strong>{' '}
           <a href={inscricao.link_lattes} target="_blank" rel="noopener noreferrer">
             {inscricao.link_lattes}

@@ -11,7 +11,6 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorProjeto
-from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
@@ -128,14 +127,6 @@ class EnviarInscricaoView(APIView):
         inscricao.status = StatusInscricao.PENDENTE
         inscricao.data_envio = timezone.now()
         inscricao.save(update_fields=["status", "data_envio"])
-
-        registrar_log(
-            usuario=request.user,
-            acao="INSCRICAO_ENVIADA",
-            entidade="Inscricao",
-            entidade_id=inscricao.pk,
-            descricao=(f'Inscrição enviada para o projeto "{inscricao.bolsa.projeto.titulo}".'),
-        )
 
         return Response(InscricaoSerializer(inscricao, context={"request": request}).data)
 
@@ -320,25 +311,6 @@ class DecisaoInscricaoView(APIView):
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
         NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
-
-        acao = (
-            "INSCRICAO_HOMOLOGADA"
-            if inscricao.status == StatusInscricao.HOMOLOGADA
-            else "INSCRICAO_INDEFERIDA"
-        )
-
-        registrar_log(
-            usuario=request.user,
-            acao=acao,
-            entidade="Inscricao",
-            entidade_id=inscricao.pk,
-            descricao=(
-                f'Inscrição de "{inscricao.aluno.nome}" no projeto '
-                f'"{inscricao.bolsa.projeto.titulo}" foi '
-                f"{inscricao.get_status_display().lower()}."
-            ),
-        )
-
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
 
 
@@ -471,16 +443,6 @@ class RecursosInscricaoView(APIView):
                     anexo.arquivo.save(arquivo.name, arquivo, save=False)
                     arquivos_salvos.append((anexo.arquivo.storage, anexo.arquivo.name))
                     anexo.save()
-
-                    registrar_log(
-                        usuario=request.user,
-                        acao="RECURSO_INTERPOSTO",
-                        entidade="Recurso",
-                        entidade_id=recurso.pk,
-                        descricao=(
-                            f'Recurso interposto no projeto "{inscricao.bolsa.projeto.titulo}".'
-                        ),
-                    )
                 resultado = resposta_recursos(inscricao, request)
             return Response(resultado, status=201)
         except Exception as exc:
@@ -564,22 +526,6 @@ class JulgarRecursoView(APIView):
         if recurso.justificativa_julgamento:
             mensagem += f" Justificativa: {recurso.justificativa_julgamento}"
         NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
-
-        acao = (
-            "RECURSO_DEFERIDO" if recurso.status == StatusRecurso.DEFERIDO else "RECURSO_INDEFERIDO"
-        )
-
-        registrar_log(
-            usuario=request.user,
-            acao=acao,
-            entidade="Recurso",
-            entidade_id=recurso.pk,
-            descricao=(
-                f'Recurso do projeto "{inscricao.bolsa.projeto.titulo}" foi '
-                f"{recurso.get_status_display().lower()}."
-            ),
-        )
-
         return Response(resposta_recursos(inscricao, request))
 
 

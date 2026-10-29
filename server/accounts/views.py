@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from projetos.models import Projeto
 
@@ -43,9 +44,9 @@ def atualizar_tipo_area(request, usuario_id):
 
     registrar_log(
         usuario=request.user,
-        acao="AREA_COORDENADOR_ATUALIZADA",
-        entidade="CoordenadorArea",
-        entidade_id=perfil.pk,
+        acao=AcaoAuditoria.ATUALIZACAO,
+        entidade=EntidadeAuditoria.USUARIO,
+        entidade_id=usuario.pk,
         descricao=f"Área do coordenador {usuario.nome} atualizada.",
     )
 
@@ -69,8 +70,8 @@ def atualizar_status(request, usuario_id):
 
     registrar_log(
         usuario=request.user,
-        acao="USUARIO_ATIVADO" if is_active else "USUARIO_DESATIVADO",
-        entidade="Usuario",
+        acao=AcaoAuditoria.ATIVACAO if is_active else AcaoAuditoria.DESATIVACAO,
+        entidade=EntidadeAuditoria.USUARIO,
         entidade_id=usuario.pk,
         descricao=f"Usuário {usuario.nome} {'ativado' if is_active else 'desativado'}.",
     )
@@ -94,8 +95,8 @@ def emails_coordenadores(request):
         )
         registrar_log(
             usuario=request.user,
-            acao="EMAIL_COORDENADOR_CADASTRADO",
-            entidade="EmailCoordenadorArea",
+            acao=AcaoAuditoria.CRIACAO,
+            entidade=EntidadeAuditoria.COORDENADOR_AREA,
             entidade_id=serializer.instance.pk,
             descricao="E-mail de coordenador de área cadastrado.",
         )
@@ -114,8 +115,8 @@ def email_coordenador_detalhe(request, entrada_id):
             entrada.delete()
             registrar_log(
                 usuario=request.user,
-                acao="EMAIL_COORDENADOR_REMOVIDO",
-                entidade="EmailCoordenadorArea",
+                acao=AcaoAuditoria.EXCLUSAO,
+                entidade=EntidadeAuditoria.COORDENADOR_AREA,
                 entidade_id=entrada_id_log,
                 descricao="E-mail de coordenador de área removido.",
             )
@@ -144,8 +145,8 @@ def email_coordenador_detalhe(request, entrada_id):
 
         registrar_log(
             usuario=request.user,
-            acao="EMAIL_COORDENADOR_ATUALIZADO",
-            entidade="EmailCoordenadorArea",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.COORDENADOR_AREA,
             entidade_id=entrada.pk,
             descricao="E-mail de coordenador de área atualizado.",
         )

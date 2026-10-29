@@ -12,6 +12,8 @@ import {
   IconBank,
   IconMessageCircle,
   IconMail,
+  IconGradCap,
+  IconCalendar,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
@@ -19,9 +21,13 @@ import MinhasInscricoesPage from './MinhasInscricoesPage'
 import MeusRecursosPage from './MeusRecursosPage'
 import DadosBancariosPage from './DadosBancariosPage'
 import ConvitesPage from './ConvitesPage'
+import MinhaBolsaPage from './MinhaBolsaPage'
+import MinhaFrequenciaPage from './MinhaFrequenciaPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { id: 'minha-bolsa', label: 'Minha Bolsa', icon: <IconGradCap /> },
+  { id: 'minha-frequencia', label: 'Minha Frequência', icon: <IconCalendar /> },
   { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
   { id: 'recursos', label: 'Meus Recursos', icon: <IconMessageCircle /> },
   { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
@@ -89,7 +95,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
             }
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
             <StatCard
               label="Bolsas Abertas"
               value={totalBolsas ?? '0'}
@@ -117,6 +123,8 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
       )}
       {active === 'recursos' && <MeusRecursosPage />}
       {active === 'convites' && <ConvitesPage />}
+      {active === 'minha-bolsa' && <MinhaBolsaPage />}
+      {active === 'minha-frequencia' && <MinhaFrequenciaPage />}
       {active === 'dados-bancarios' && <DadosBancariosPage />}
     </Layout>
   )

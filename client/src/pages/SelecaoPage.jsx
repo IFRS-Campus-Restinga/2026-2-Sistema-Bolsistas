@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { bolsasFetch } from '../api'
-import { Alert, Button, FormField, PageHeader, Select } from '../components'
+import { Alert, Button, Carregando, FormField, PageHeader, Select } from '../components'
 import ClassificacaoBolsa from './ClassificacaoBolsa'
 
 const STATUS_EM_SELECAO = ['ABERTA', 'EM_SELECAO', 'PREENCHIDA']
@@ -52,7 +52,7 @@ export default function SelecaoPage() {
     <>
       <PageHeader title="Avaliação e Seleção" />
       {carregando ? (
-        <p role="status">Carregando bolsas...</p>
+        <Carregando texto="Carregando bolsas..." />
       ) : erro ? (
         <>
           <Alert tone="error">{erro}</Alert>

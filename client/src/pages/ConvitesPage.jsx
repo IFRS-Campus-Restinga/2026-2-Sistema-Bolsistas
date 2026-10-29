@@ -142,21 +142,18 @@ export default function ConvitesPage() {
       {erro && (
         <Alert tone="error">
           {erro}{' '}
-          <button type="button" onClick={() => setTentativa((n) => n + 1)}>
+          <Button size="sm" variant="outline" onClick={() => setTentativa((n) => n + 1)}>
             Tentar novamente
-          </button>
+          </Button>
         </Alert>
       )}
 
-      {carregando ? (
-        <p role="status">Carregando convites...</p>
-      ) : (
-        <DataTable
-          columns={['Projeto', 'Edital', 'Tipo', 'Status', 'Ações']}
-          rows={linhas}
-          emptyMessage="Você não recebeu nenhum convite de vínculo direto."
-        />
-      )}
+      <DataTable
+        columns={['Projeto', 'Edital', 'Tipo', 'Status', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Você não recebeu nenhum convite de vínculo direto."
+      />
 
       {edicaoAberta && (
         <PreencherConviteModal
@@ -213,9 +210,9 @@ function ComprovanteConviteModal({ convite, onFechar }) {
         <p>Decisão registrada em {new Date(convite.data_decisao).toLocaleString('pt-BR')}.</p>
       )}
 
-      <p style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Documentos enviados:</p>
+      <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
       {convite.documentos.length ? (
-        <ul style={{ paddingLeft: 20 }}>
+        <ul className="pl-5">
           {convite.documentos.map((doc) => (
             <li key={doc.id}>
               <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">

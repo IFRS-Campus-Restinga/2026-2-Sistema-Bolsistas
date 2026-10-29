@@ -19,7 +19,7 @@ export default function EditaisPage() {
   const [erro, setErro] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [editalEdicao, setEditalEdicao] = useState(null)
-  const [processando, setProcessando] = useState(false)
+  const [processandoId, setProcessandoId] = useState(null)
   const [editalValores, setEditalValores] = useState(null)
   const confirmar = useConfirm()
   const toast = useToast()
@@ -74,7 +74,7 @@ export default function EditaisPage() {
   }
 
   async function abrirEdicao(edital) {
-    setProcessando(true)
+    setProcessandoId(edital.id)
 
     try {
       const response = await editaisFetch(`/${edital.id}/`)
@@ -89,12 +89,12 @@ export default function EditaisPage() {
     } catch (error) {
       toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
-      setProcessando(false)
+      setProcessandoId(null)
     }
   }
 
   async function alterarStatus(edital, acao) {
-    setProcessando(true)
+    setProcessandoId(edital.id)
 
     try {
       const response = await editaisFetch(`/${edital.id}/${acao}/`, {
@@ -128,7 +128,7 @@ export default function EditaisPage() {
     } catch (error) {
       toast({ message: error.message || 'Falha ao conectar ao servidor.', tone: 'error' })
     } finally {
-      setProcessando(false)
+      setProcessandoId(null)
     }
   }
 
@@ -165,16 +165,17 @@ export default function EditaisPage() {
     <AcoesCell
       key={`acoes-${edital.id}`}
       mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
+      ocupado={processandoId === edital.id}
       acoes={[
         {
           label: 'Editar',
-          disabled: processando || mostrarFormulario,
+          disabled: processandoId !== null || mostrarFormulario,
           onClick: () => abrirEdicao(edital),
         },
         {
           label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
           variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
-          disabled: processando || mostrarFormulario,
+          disabled: processandoId !== null || mostrarFormulario,
           onClick: () => confirmarStatus(edital),
         },
       ]}
@@ -189,7 +190,7 @@ export default function EditaisPage() {
           !carregando && (
             <Button
               variant="accent"
-              disabled={processando || mostrarFormulario}
+              disabled={processandoId !== null || mostrarFormulario}
               onClick={() => {
                 setEditalEdicao(null)
                 setMostrarFormulario(true)
@@ -202,17 +203,13 @@ export default function EditaisPage() {
       />
 
       {erro && <Alert tone="error">{erro}</Alert>}
-      {processando && <p role="status">Processando...</p>}
 
-      {carregando ? (
-        <p role="status">Carregando editais...</p>
-      ) : (
-        <DataTable
-          columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
-          rows={linhas}
-          emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
-        />
-      )}
+      <DataTable
+        columns={['Nome', 'Ano-Código', 'Status', 'Documento', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage={erro ? 'Lista indisponível ou vazia.' : 'Nenhum edital cadastrado.'}
+      />
 
       {editalValores && (
         <ValoresBolsaModal
