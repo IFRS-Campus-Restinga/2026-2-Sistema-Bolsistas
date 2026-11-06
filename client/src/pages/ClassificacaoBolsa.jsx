@@ -162,6 +162,9 @@ export default function ClassificacaoBolsa({ bolsaId, onAtualizada }) {
       <div key={`situacao-${candidato.inscricao}`}>
         <Badge status={badgeDaSituacao(candidato)} />
         {candidato.empate_pendente && <span style={estiloMarcador}>Empate a resolver</span>}
+        {candidato.bolsista_em_outra_bolsa && (
+          <span style={estiloMarcador}>Já é bolsista ativo de outra bolsa</span>
+        )}
         {candidato.desistencia && (
           <span style={estiloMarcador}>Motivo: {candidato.desistencia.motivo}</span>
         )}

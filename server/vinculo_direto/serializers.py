@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from accounts.models import Usuario
+from bolsistas.services import MOTIVO_ALUNO_JA_BOLSISTA, tem_vinculo_ativo
 from inscricoes.models import EXTENSOES_DOCUMENTO, Documento
 from server.validators import validar_upload
 
@@ -105,6 +106,8 @@ class ConviteSerializer(serializers.ModelSerializer):
 
         if aluno.role != Usuario.Role.ALUNO:
             raise serializers.ValidationError("O convite só pode ser enviado para um aluno.")
+        if tem_vinculo_ativo(aluno):
+            raise serializers.ValidationError(MOTIVO_ALUNO_JA_BOLSISTA)
         return aluno
 
     def validate(self, attrs):
