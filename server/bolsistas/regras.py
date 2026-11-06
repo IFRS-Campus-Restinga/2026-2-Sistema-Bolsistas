@@ -123,6 +123,28 @@ def processos_em_aberto(bolsa):
     return abertos
 
 
+def motivos_bloqueio_finalizacao(bolsa):
+    """Tudo o que falta resolver para finalizar a bolsa, um item por pendência."""
+    if bolsa.status in STATUS_NAO_FINALIZAVEIS:
+        return [
+            f'Esta bolsa está com status "{bolsa.get_status_display()}" e não pode ser finalizada.'
+        ]
+    if not bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists():
+        return ["A bolsa não tem bolsistas vinculados."]
+
+    motivos = [f"Processo em aberto: {processo}." for processo in processos_em_aberto(bolsa)]
+    motivos += [f"Relatório final de {pendente}." for pendente in pendencias_para_finalizar(bolsa)]
+    return motivos
+
+
+def prazo_relatorio_encerrado(bolsa):
+    """O prazo de entrega do edital passou; a bolsa fica vencida até ser finalizada."""
+    prazo = bolsa.edital.data_entrega_relatorios
+    return (
+        bolsa.status != StatusBolsa.ENCERRADA and prazo is not None and timezone.localdate() > prazo
+    )
+
+
 def motivo_bloqueio_finalizacao(bolsa):
     """Por que a bolsa ainda não pode ser finalizada; vazio quando pode."""
     if bolsa.status in STATUS_NAO_FINALIZAVEIS:

@@ -1,5 +1,6 @@
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -135,6 +136,23 @@ class Bolsa(models.Model):
         blank=True,
         related_name="bolsas_avaliadas",
         help_text="Coordenador de Área que aprovou/rejeitou esta bolsa.",
+    )
+    # Finalização feita pelo coordenador do projeto; a coordenação de área só toma ciência.
+    finalizada_em = models.DateTimeField(null=True, blank=True)
+    finalizada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bolsas_finalizadas",
+    )
+    ciencia_finalizacao_em = models.DateTimeField(null=True, blank=True)
+    ciencia_finalizacao_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ciencias_de_finalizacao",
     )
 
     class Meta:

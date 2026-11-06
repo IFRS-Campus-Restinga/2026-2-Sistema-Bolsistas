@@ -616,7 +616,7 @@ class FinalizarBolsaTests(CenarioBolsista):
         self.vinculo_bia = self.vinculo("bia")
         # Bolsistas indicados pressupõem o resultado da seleção publicado.
         PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
-        self.client.force_authenticate(self.coordenador_area)
+        self.client.force_authenticate(self.coordenador)
 
     def finalizar(self):
         return self.client.post(reverse("bolsas:finalizar", kwargs={"pk": self.bolsa.pk}))
@@ -633,7 +633,10 @@ class FinalizarBolsaTests(CenarioBolsista):
         log = LogAuditoria.objects.get()
         self.assertEqual(log.acao, AcaoAuditoria.ENCERRAMENTO)
         self.assertEqual(log.entidade, EntidadeAuditoria.BOLSA)
-        self.assertEqual(log.usuario, self.coordenador_area)
+        self.assertEqual(log.usuario, self.coordenador)
+        self.assertEqual(self.bolsa.finalizada_por, self.coordenador)
+        self.assertIsNotNone(self.bolsa.finalizada_em)
+        self.assertIsNone(self.bolsa.ciencia_finalizacao_em)
 
     def test_lista_os_relatorios_pendentes(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.AGUARDANDO_AVALIACAO)
@@ -730,15 +733,181 @@ class FinalizarBolsaTests(CenarioBolsista):
 
         self.assertEqual(self.finalizar().status_code, 400)
 
-    def test_coordenador_de_outra_area_nao_finaliza(self):
-        self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))
+    def test_coordenador_de_outro_projeto_nao_finaliza(self):
+        outro = Usuario.objects.create_user(
+            username="outro",
+            email="outro@example.com",
+            nome="Outro",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.aprovar_todos()
+        self.client.force_authenticate(outro)
+
+        self.assertEqual(self.finalizar().status_code, 404)
+        self.bolsa.refresh_from_db()
+        self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
+
+    def test_coordenador_de_area_nao_finaliza(self):
+        self.aprovar_todos()
+        self.client.force_authenticate(self.coordenador_area)
 
         self.assertEqual(self.finalizar().status_code, 403)
 
-    def test_coordenador_de_projeto_nao_finaliza(self):
+
+class BolsasDoCoordenadorProjetoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.vinculo_ana = self.vinculo("ana")
+        self.vinculo_bia = self.vinculo("bia")
+        PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
         self.client.force_authenticate(self.coordenador)
 
-        self.assertEqual(self.finalizar().status_code, 403)
+    def listar(self):
+        response = self.client.get(reverse("bolsistas:bolsas-do-coordenador-projeto"))
+        self.assertEqual(response.status_code, 200, response.data)
+        return response.data
+
+    def test_lista_bolsistas_e_motivos_de_bloqueio(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        Inscricao.objects.create(
+            aluno=self.aluno("caio"), bolsa=self.bolsa, status=StatusInscricao.PENDENTE
+        )
+
+        [bolsa] = self.listar()
+
+        self.assertEqual([b["aluno_nome"] for b in bolsa["bolsistas"]], ["ana", "bia"])
+        self.assertEqual(bolsa["bolsistas"][0]["relatorio"]["situacao"], "APROVADO")
+        self.assertFalse(bolsa["pode_finalizar"])
+        self.assertEqual(
+            bolsa["motivos_bloqueio"],
+            [
+                "Processo em aberto: 1 inscrição aguardando homologação.",
+                "Relatório final de bia (não solicitado).",
+            ],
+        )
+
+    def test_bolsa_sem_pendencias_pode_ser_finalizada(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        self.relatorio(self.vinculo_bia, SituacaoRelatorio.APROVADO)
+
+        [bolsa] = self.listar()
+
+        self.assertTrue(bolsa["pode_finalizar"])
+        self.assertEqual(bolsa["motivos_bloqueio"], [])
+
+    def test_bolsa_em_andamento_sem_bolsista_ativo_nao_aparece(self):
+        VinculoBolsista.objects.update(status=StatusVinculo.DESLIGADO)
+
+        self.assertEqual(self.listar(), [])
+
+    def test_bolsista_desligado_nao_aparece(self):
+        self.vinculo_bia.status = StatusVinculo.DESLIGADO
+        self.vinculo_bia.save(update_fields=["status"])
+
+        [bolsa] = self.listar()
+
+        self.assertEqual([b["aluno_nome"] for b in bolsa["bolsistas"]], ["ana"])
+
+    def test_bolsa_finalizada_mostra_quem_finalizou_e_ciencia(self):
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.finalizada_em = timezone.now()
+        self.bolsa.finalizada_por = self.coordenador
+        self.bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
+
+        [bolsa] = self.listar()
+
+        self.assertEqual(bolsa["finalizada_por_nome"], "Coordenador")
+        self.assertIsNone(bolsa["ciencia_finalizacao_em"])
+        self.assertFalse(bolsa["pode_finalizar"])
+        self.assertEqual(bolsa["motivos_bloqueio"], [])
+
+    def test_prazo_do_relatorio_encerrado_deixa_a_bolsa_vencida(self):
+        self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+
+        [bolsa] = self.listar()
+
+        self.assertTrue(bolsa["prazo_relatorio_encerrado"])
+
+    def test_nao_lista_bolsas_de_outro_coordenador(self):
+        outro = Usuario.objects.create_user(
+            username="outro",
+            email="outro@example.com",
+            nome="Outro",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.client.force_authenticate(outro)
+
+        self.assertEqual(self.listar(), [])
+
+    def test_coordenador_de_area_nao_acessa(self):
+        self.client.force_authenticate(self.coordenador_de_area("area", TipoArea.ENSINO))
+
+        response = self.client.get(reverse("bolsistas:bolsas-do-coordenador-projeto"))
+
+        self.assertEqual(response.status_code, 403)
+
+
+class CienciaFinalizacaoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.coordenador_area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.finalizada_em = timezone.now()
+        self.bolsa.finalizada_por = self.coordenador
+        self.bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
+        self.vinculo("ana")
+        self.client.force_authenticate(self.coordenador_area)
+
+    def ciencia(self):
+        return self.client.post(reverse("bolsas:ciencia-finalizacao", kwargs={"pk": self.bolsa.pk}))
+
+    def test_area_toma_ciencia_da_bolsa_finalizada(self):
+        response = self.ciencia()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.bolsa.refresh_from_db()
+        self.assertIsNotNone(self.bolsa.ciencia_finalizacao_em)
+        self.assertEqual(self.bolsa.ciencia_finalizacao_por, self.coordenador_area)
+
+    def test_ciencia_repetida_mantem_a_primeira(self):
+        self.ciencia()
+        self.bolsa.refresh_from_db()
+        primeira = self.bolsa.ciencia_finalizacao_em
+
+        self.client.force_authenticate(self.coordenador_de_area("outro", TipoArea.ENSINO))
+        self.assertEqual(self.ciencia().status_code, 200)
+
+        self.bolsa.refresh_from_db()
+        self.assertEqual(self.bolsa.ciencia_finalizacao_em, primeira)
+        self.assertEqual(self.bolsa.ciencia_finalizacao_por, self.coordenador_area)
+
+    def test_bolsa_nao_finalizada_nao_recebe_ciencia(self):
+        self.bolsa.status = StatusBolsa.PREENCHIDA
+        self.bolsa.finalizada_em = None
+        self.bolsa.save(update_fields=["status", "finalizada_em"])
+
+        self.assertEqual(self.ciencia().status_code, 404)
+
+    def test_coordenador_de_outra_area_nao_toma_ciencia(self):
+        self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))
+
+        self.assertEqual(self.ciencia().status_code, 403)
+
+    def test_coordenador_de_projeto_nao_toma_ciencia(self):
+        self.client.force_authenticate(self.coordenador)
+
+        self.assertEqual(self.ciencia().status_code, 403)
+
+    def test_lista_da_area_mostra_finalizacao_e_ciencia(self):
+        response = self.client.get(reverse("bolsistas:bolsas-para-finalizar"))
+
+        bolsa = response.data[0]
+        self.assertEqual(bolsa["finalizada_por_nome"], "Coordenador")
+        self.assertIsNotNone(bolsa["finalizada_em"])
+        self.assertIsNone(bolsa["ciencia_finalizacao_em"])
 
 
 class BolsaEncerradaTests(CenarioBolsista):
@@ -803,7 +972,8 @@ class BolsasParaFinalizarTests(CenarioBolsista):
         self.assertEqual(item["total_bolsistas"], 2)
         self.assertEqual(item["relatorios_aprovados"], 1)
         self.assertFalse(item["pode_finalizar"])
-        self.assertIn("bia (não solicitado)", item["motivo_bloqueio"])
+        self.assertEqual(item["motivos_bloqueio"], ["Relatório final de bia (não solicitado)."])
+        self.assertEqual(item["bolsistas_nomes"], ["ana", "bia"])
 
     def test_libera_quando_tudo_aprovado(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
@@ -813,7 +983,7 @@ class BolsasParaFinalizarTests(CenarioBolsista):
 
         self.assertEqual(item["relatorios_aprovados"], 2)
         self.assertTrue(item["pode_finalizar"])
-        self.assertEqual(item["motivo_bloqueio"], "")
+        self.assertEqual(item["motivos_bloqueio"], [])
 
     def test_bolsa_encerrada_aparece_sem_acao(self):
         self.bolsa.status = StatusBolsa.ENCERRADA
@@ -823,12 +993,25 @@ class BolsasParaFinalizarTests(CenarioBolsista):
 
         self.assertEqual(item["status"], StatusBolsa.ENCERRADA)
         self.assertFalse(item["pode_finalizar"])
-        self.assertEqual(item["motivo_bloqueio"], "")
+        self.assertEqual(item["motivos_bloqueio"], [])
 
     def test_bolsa_sem_bolsistas_nao_aparece(self):
         VinculoBolsista.objects.all().delete()
 
         self.assertEqual(self.client.get(self.url).data, [])
+
+    def test_bolsa_em_andamento_sem_bolsista_ativo_nao_aparece(self):
+        VinculoBolsista.objects.update(status=StatusVinculo.DESLIGADO)
+
+        self.assertEqual(self.client.get(self.url).data, [])
+
+    def test_prazo_do_relatorio_encerrado_aparece_para_a_area(self):
+        self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+
+        item = self.client.get(self.url).data[0]
+
+        self.assertTrue(item["prazo_relatorio_encerrado"])
 
     def test_coordenador_de_outra_area_nao_ve(self):
         self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))

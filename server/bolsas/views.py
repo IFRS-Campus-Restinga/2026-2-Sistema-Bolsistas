@@ -173,23 +173,28 @@ class AprovarBolsaView(APIView):
 
 
 class FinalizarBolsaView(APIView):
-    """Encerra a bolsa quando todos os bolsistas tiverem o relatório final aprovado."""
+    """O coordenador do projeto encerra a bolsa quando todos os bolsistas tiverem o
+    relatório final aprovado e não houver processos em aberto."""
 
-    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
 
     @transaction.atomic
     def post(self, request, pk):
-        bolsa = get_object_or_404(Bolsa.objects.select_for_update(), pk=pk)
-
-        if not _area_permitida(bolsa, request.user):
-            raise PermissionDenied("Esta bolsa pertence a outra área e não pode ser finalizada.")
+        bolsa = get_object_or_404(
+            Bolsa.objects.select_for_update().filter(
+                projeto__coordenador_projeto__usuario=request.user
+            ),
+            pk=pk,
+        )
 
         motivo = motivo_bloqueio_finalizacao(bolsa)
         if motivo:
             raise ValidationError({"detail": motivo})
 
         bolsa.status = StatusBolsa.ENCERRADA
-        bolsa.save(update_fields=["status"])
+        bolsa.finalizada_em = timezone.now()
+        bolsa.finalizada_por = request.user
+        bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
 
         registrar_log(
             usuario=request.user,
@@ -198,6 +203,30 @@ class FinalizarBolsaView(APIView):
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" finalizada.',
         )
+
+        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
+
+
+class CienciaFinalizacaoView(APIView):
+    """A coordenação de área toma ciência de uma bolsa finalizada pelo coordenador do projeto."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        bolsa = get_object_or_404(
+            Bolsa.objects.select_for_update(),
+            pk=pk,
+            status=StatusBolsa.ENCERRADA,
+            finalizada_em__isnull=False,
+        )
+        if not _area_permitida(bolsa, request.user):
+            raise PermissionDenied("Esta bolsa pertence a outra área.")
+
+        if bolsa.ciencia_finalizacao_em is None:
+            bolsa.ciencia_finalizacao_em = timezone.now()
+            bolsa.ciencia_finalizacao_por = request.user
+            bolsa.save(update_fields=["ciencia_finalizacao_em", "ciencia_finalizacao_por"])
 
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 

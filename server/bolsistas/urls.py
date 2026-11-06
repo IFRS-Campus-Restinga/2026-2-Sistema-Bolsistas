@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    BolsasDoCoordenadorProjetoView,
     BolsasParaFinalizarView,
     BolsistasDoCoordenadorView,
     CancelamentosRecentesAreaView,
@@ -76,6 +77,11 @@ urlpatterns = [
         name="ciencia-cancelamento",
     ),
     path("bolsas/", BolsasParaFinalizarView.as_view(), name="bolsas-para-finalizar"),
+    path(
+        "projeto/bolsas/",
+        BolsasDoCoordenadorProjetoView.as_view(),
+        name="bolsas-do-coordenador-projeto",
+    ),
     path(
         "vinculos/<int:pk>/solicitar-relatorio/",
         SolicitarRelatorioView.as_view(),

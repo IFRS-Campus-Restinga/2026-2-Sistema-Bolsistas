@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -34,6 +34,7 @@ from .regras import (
     relatorio_do_vinculo,
 )
 from .serializers import (
+    BolsaDoCoordenadorProjetoSerializer,
     BolsaParaFinalizarSerializer,
     CancelamentoVagaSerializer,
     DecisaoDesligamentoSerializer,
@@ -409,7 +410,8 @@ class BolsistasDoCoordenadorView(generics.ListAPIView):
 
 
 class BolsasParaFinalizarView(generics.ListAPIView):
-    """Bolsas da área do coordenador que têm bolsistas, com o andamento dos relatórios finais."""
+    """Bolsas da área do coordenador para acompanhar a finalização: as em andamento com
+    bolsista ativo e as encerradas, que pedem ciência."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     serializer_class = BolsaParaFinalizarSerializer
@@ -418,11 +420,18 @@ class BolsasParaFinalizarView(generics.ListAPIView):
     def get_queryset(self):
         area = self.request.user.perfil_coordenador_area.tipo_area
         return (
-            Bolsa.objects.filter(tipo__in=[area, TipoBolsa.INDISSOCIAVEL], vinculos__isnull=False)
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                tipo__in=[area, TipoBolsa.INDISSOCIAVEL],
+            )
             .exclude(
                 status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
             )
-            .select_related("projeto__coordenador_projeto__usuario", "edital")
+            .select_related("projeto__coordenador_projeto__usuario", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch("vinculos", queryset=VinculoBolsista.objects.select_related("aluno"))
+            )
             .annotate(
                 total_bolsistas=Count(
                     "vinculos",
@@ -514,4 +523,40 @@ class RelatorioFinalArquivoView(APIView):
             raise Http404("Arquivo não encontrado.") from None
         return FileResponse(
             arquivo, as_attachment=True, filename=relatorio.nome_original or "relatorio-final.pdf"
+        )
+
+
+class BolsasDoCoordenadorProjetoView(generics.ListAPIView):
+    """Bolsas dos projetos do coordenador logado para a Finalização: as em andamento com
+    bolsista ativo e as já encerradas."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    serializer_class = BolsaDoCoordenadorProjetoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                projeto__coordenador_projeto__usuario=self.request.user,
+            )
+            .exclude(
+                status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
+            )
+            .distinct()
+            .select_related("projeto", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch(
+                    "vinculos",
+                    queryset=VinculoBolsista.objects.select_related(
+                        "aluno",
+                        "bolsa__edital",
+                        "bolsa__projeto",
+                        "relatorio_final",
+                        "cancelamento_vaga",
+                    ).order_by("aluno__nome"),
+                )
+            )
+            .order_by("data_fim_vigencia", "id")
         )

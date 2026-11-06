@@ -11,12 +11,14 @@ from .models import (
     RelatorioFinal,
     SituacaoRelatorio,
     SolicitacaoDesligamento,
+    StatusVinculo,
     VinculoBolsista,
 )
 from .regras import (
     motivo_bloqueio_envio,
-    motivo_bloqueio_finalizacao,
     motivo_bloqueio_solicitacao,
+    motivos_bloqueio_finalizacao,
+    prazo_relatorio_encerrado,
     relatorio_do_vinculo,
 )
 
@@ -281,10 +283,12 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
 
 
 class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
-    """Bolsa vista pelo coordenador de área, com o andamento dos relatórios finais."""
+    """Bolsa vista pela coordenação de área, só para acompanhar: quem finaliza é o
+    coordenador do projeto, e a área toma ciência das finalizadas."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
     projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
     coordenador_projeto_nome = serializers.CharField(
         source="projeto.coordenador_projeto.usuario.nome", read_only=True
@@ -293,8 +297,13 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
     edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
     total_bolsistas = serializers.IntegerField(read_only=True)
     relatorios_aprovados = serializers.IntegerField(read_only=True)
+    prazo_relatorio_encerrado = serializers.SerializerMethodField()
+    bolsistas_nomes = serializers.SerializerMethodField()
     pode_finalizar = serializers.SerializerMethodField()
-    motivo_bloqueio = serializers.SerializerMethodField()
+    motivos_bloqueio = serializers.SerializerMethodField()
+    finalizada_por_nome = serializers.CharField(
+        source="finalizada_por.nome", read_only=True, default=""
+    )
 
     class Meta:
         model = Bolsa
@@ -303,6 +312,12 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "tipo_display",
+            "modalidade_display",
+            "carga_horaria_semanal",
+            "data_inicio_vigencia",
+            "data_fim_vigencia",
+            "prazo_relatorio_encerrado",
+            "bolsistas_nomes",
             "projeto_titulo",
             "coordenador_projeto_nome",
             "edital_nome",
@@ -310,13 +325,83 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
             "total_bolsistas",
             "relatorios_aprovados",
             "pode_finalizar",
-            "motivo_bloqueio",
+            "motivos_bloqueio",
+            "finalizada_em",
+            "finalizada_por_nome",
+            "ciencia_finalizacao_em",
         ]
 
-    def get_motivo_bloqueio(self, bolsa):
+    def get_prazo_relatorio_encerrado(self, bolsa):
+        return prazo_relatorio_encerrado(bolsa)
+
+    def get_bolsistas_nomes(self, bolsa):
+        # Na bolsa encerrada, os bolsistas que concluíram; em andamento, os ativos.
+        return [v.aluno.nome for v in bolsa.vinculos.all() if v.status == StatusVinculo.ATIVO]
+
+    def get_motivos_bloqueio(self, bolsa):
         if bolsa.status == StatusBolsa.ENCERRADA:
-            return ""
-        return motivo_bloqueio_finalizacao(bolsa)
+            return []
+        return motivos_bloqueio_finalizacao(bolsa)
 
     def get_pode_finalizar(self, bolsa):
-        return bolsa.status != StatusBolsa.ENCERRADA and not self.get_motivo_bloqueio(bolsa)
+        """Pronta para o coordenador do projeto finalizar; a área só acompanha."""
+        return bolsa.status != StatusBolsa.ENCERRADA and not self.get_motivos_bloqueio(bolsa)
+
+
+class BolsaDoCoordenadorProjetoSerializer(serializers.ModelSerializer):
+    """Bolsa vista pelo coordenador do projeto na Finalização: bolsistas ativos com o
+    relatório final, o que impede finalizar e a ciência da coordenação de área."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
+    projeto_titulo = serializers.CharField(source="projeto.titulo", read_only=True)
+    edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
+    prazo_relatorio = serializers.DateField(source="edital.data_entrega_relatorios", read_only=True)
+    prazo_relatorio_encerrado = serializers.SerializerMethodField()
+    finalizada_por_nome = serializers.CharField(
+        source="finalizada_por.nome", read_only=True, default=""
+    )
+    bolsistas = serializers.SerializerMethodField()
+    motivos_bloqueio = serializers.SerializerMethodField()
+    pode_finalizar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bolsa
+        fields = [
+            "id",
+            "status",
+            "status_display",
+            "tipo_display",
+            "modalidade_display",
+            "carga_horaria_semanal",
+            "projeto_titulo",
+            "edital_nome",
+            "edital_ano_codigo",
+            "data_inicio_vigencia",
+            "data_fim_vigencia",
+            "prazo_relatorio",
+            "prazo_relatorio_encerrado",
+            "finalizada_em",
+            "finalizada_por_nome",
+            "ciencia_finalizacao_em",
+            "bolsistas",
+            "motivos_bloqueio",
+            "pode_finalizar",
+        ]
+
+    def get_prazo_relatorio_encerrado(self, bolsa):
+        return prazo_relatorio_encerrado(bolsa)
+
+    def get_bolsistas(self, bolsa):
+        ativos = [v for v in bolsa.vinculos.all() if v.status == StatusVinculo.ATIVO]
+        return VinculoDoCoordenadorSerializer(ativos, many=True, context=self.context).data
+
+    def get_motivos_bloqueio(self, bolsa):
+        if bolsa.status == StatusBolsa.ENCERRADA:
+            return []
+        return motivos_bloqueio_finalizacao(bolsa)
+
+    def get_pode_finalizar(self, bolsa):
+        return bolsa.status != StatusBolsa.ENCERRADA and not self.get_motivos_bloqueio(bolsa)
