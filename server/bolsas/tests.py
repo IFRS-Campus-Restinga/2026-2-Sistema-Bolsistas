@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -121,6 +124,59 @@ class SolicitarBolsaAPITests(APITestCase):
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("edital", resposta.data)
         self.assertFalse(Bolsa.objects.exists())
+
+    def bolsa_vencida(self):
+        return Bolsa.objects.create(
+            projeto=Projeto.objects.create(
+                titulo="Projeto antigo",
+                coordenador_projeto=self.coordenador.perfil_coordenador_projeto,
+            ),
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.PREENCHIDA,
+            data_fim_vigencia=timezone.localdate() - timedelta(days=1),
+        )
+
+    def test_pendencia_em_outro_projeto_bloqueia_a_solicitacao(self):
+        self.bolsa_vencida()
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Resolva as pendências", resposta.data["detail"])
+        [pendencia] = resposta.data["pendencias"]
+        self.assertIn('"Projeto antigo"', pendencia)
+        self.assertEqual(Bolsa.objects.count(), 1)
+
+    def test_bolsa_vencida_ja_finalizada_nao_bloqueia(self):
+        vencida = self.bolsa_vencida()
+        vencida.status = StatusBolsa.ENCERRADA
+        vencida.save(update_fields=["status"])
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED, resposta.data)
+
+    def test_lista_as_pendencias_do_coordenador(self):
+        self.client.force_authenticate(user=self.coordenador)
+        url = reverse("bolsas:pendencias")
+
+        self.assertEqual(self.client.get(url).data, {"pendencias": []})
+
+        self.bolsa_vencida()
+        [pendencia] = self.client.get(url).data["pendencias"]
+        self.assertIn('"Projeto antigo"', pendencia)
+
+    def test_somente_coordenador_de_projeto_consulta_pendencias(self):
+        coordenador_area = cria_coordenador_area("ca2", "ca2@test.com", TipoArea.PESQUISA)
+        self.client.force_authenticate(user=coordenador_area)
+
+        self.assertEqual(self.client.get(reverse("bolsas:pendencias")).status_code, 403)
 
     def test_coordenador_area_nao_pode_solicitar_bolsa(self):
         coordenador_area = cria_coordenador_area("ca", "ca@test.com", TipoArea.PESQUISA)

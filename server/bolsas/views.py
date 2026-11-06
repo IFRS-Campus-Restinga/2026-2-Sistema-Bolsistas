@@ -11,7 +11,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsistas.regras import motivo_bloqueio_finalizacao
+from bolsistas.regras import motivo_bloqueio_finalizacao, pendencias_do_coordenador
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
@@ -54,6 +54,18 @@ class BolsaListCreateView(generics.ListCreateAPIView):
         return queryset.none()
 
     def perform_create(self, serializer):
+        pendencias = pendencias_do_coordenador(self.request.user)
+        if pendencias:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Resolva as pendências dos seus projetos antes de solicitar uma nova "
+                        "bolsa: " + " ".join(pendencias)
+                    ),
+                    "pendencias": pendencias,
+                }
+            )
+
         bolsa = serializer.save()
 
         registrar_log(
@@ -63,6 +75,15 @@ class BolsaListCreateView(generics.ListCreateAPIView):
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" criada.',
         )
+
+
+class PendenciasDoCoordenadorView(APIView):
+    """O que impede o coordenador de projeto logado de solicitar uma nova bolsa."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get(self, request):
+        return Response({"pendencias": pendencias_do_coordenador(request.user)})
 
 
 def _bolsas_disponiveis_qs():

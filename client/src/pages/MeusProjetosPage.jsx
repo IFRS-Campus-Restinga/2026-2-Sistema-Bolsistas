@@ -315,6 +315,8 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
   const [avisoSemEditais, setAvisoSemEditais] = useState(false)
+  // Pendências em qualquer projeto do coordenador que impedem solicitar nova bolsa.
+  const [pendencias, setPendencias] = useState([])
   // combinações modalidade + CH (e valores) disponíveis no edital escolhido no formulário
   const [valoresEdital, setValoresEdital] = useState({ editalId: '', itens: [], erro: '' })
 
@@ -352,11 +354,12 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
 
     async function carregarTudo() {
       try {
-        const [resProjeto, resBolsas, resEditais, resElegiveis] = await Promise.all([
+        const [resProjeto, resBolsas, resEditais, resElegiveis, resPendencias] = await Promise.all([
           projetosFetch(`/${projetoId}/`),
           bolsasFetch('/'),
           editaisFetch('/'),
           vinculoDiretoFetch('/bolsas-elegiveis/'),
+          bolsasFetch('/pendencias/'),
         ])
 
         if (!resProjeto.ok) throw new Error('Não foi possível carregar o projeto.')
@@ -365,12 +368,14 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
         const todasBolsas = resBolsas.ok ? await resBolsas.json() : []
         const todosEditais = resEditais.ok ? await resEditais.json() : []
         const elegiveis = resElegiveis.ok ? await resElegiveis.json() : []
+        const dadosPendencias = resPendencias.ok ? await resPendencias.json() : null
 
         if (!ativo) return
         setProjeto(dadosProjeto)
         setBolsas(todasBolsas.filter((bolsa) => bolsa.projeto === projetoId))
         setEditais(todosEditais.filter((edital) => edital.status === 'EM_VIGOR'))
         setBolsasElegiveisIds(new Set(elegiveis.map((bolsa) => bolsa.id)))
+        setPendencias(dadosPendencias?.pendencias ?? [])
       } catch (e) {
         if (ativo) setErro(e.message)
       } finally {
@@ -539,6 +544,9 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             atuais.map((item) => (item.id === atualizada.id ? atualizada : item))
           )
           toast({ message: 'Bolsa cancelada com sucesso.', tone: 'success' })
+          // Cancelar uma bolsa vencida pode resolver uma pendência.
+          const resPendencias = await bolsasFetch('/pendencias/')
+          if (resPendencias.ok) setPendencias((await resPendencias.json()).pendencias)
         } else {
           const corpo = await res.json().catch(() => null)
           toast({ message: corpo?.detail || 'Erro ao cancelar bolsa.', tone: 'error' })
@@ -624,11 +632,29 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
       <PageHeader
         title="Bolsas do Projeto"
         action={
-          <Button variant="accent" onClick={abrirModalSolicitarBolsa}>
+          <Button
+            variant="accent"
+            onClick={abrirModalSolicitarBolsa}
+            disabled={pendencias.length > 0}
+          >
             <IconPlus /> Solicitar Bolsa
           </Button>
         }
       />
+
+      {pendencias.length > 0 && (
+        <Alert tone="warning">
+          <p className="font-semibold">Resolva as pendências para solicitar uma nova bolsa</p>
+          <p className="mt-1">
+            Estas pendências estão em aberto nos seus projetos. Resolva-as na aba Finalização.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {pendencias.map((pendencia) => (
+              <li key={pendencia}>{pendencia}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
 
       {avisoSemEditais && (
         <Alert tone="warning">

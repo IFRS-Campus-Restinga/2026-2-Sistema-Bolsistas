@@ -11,6 +11,7 @@ from .views import (
     EtapaAvaliacaoDetailView,
     EtapaAvaliacaoListCreateView,
     FinalizarBolsaView,
+    PendenciasDoCoordenadorView,
     RejeitarBolsaView,
 )
 
@@ -19,6 +20,7 @@ app_name = "bolsas"
 urlpatterns = [
     path("", BolsaListCreateView.as_view(), name="lista-criacao"),
     path("disponiveis/", BolsasDisponiveisView.as_view(), name="disponiveis"),
+    path("pendencias/", PendenciasDoCoordenadorView.as_view(), name="pendencias"),
     path("disponiveis/<int:pk>/", BolsaDisponivelDetailView.as_view(), name="disponivel-detalhe"),
     path("<int:pk>/", BolsaDetailView.as_view(), name="detalhe"),
     path("<int:pk>/aprovar/", AprovarBolsaView.as_view(), name="aprovar"),

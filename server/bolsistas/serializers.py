@@ -5,6 +5,7 @@ from bolsas.models import Bolsa, StatusBolsa
 from server.validators import validar_upload
 
 from .models import (
+    EXTENSOES_MODELO_RELATORIO,
     EXTENSOES_RELATORIO,
     TAMANHO_MAX_RELATORIO_MB,
     CancelamentoVaga,
@@ -15,12 +16,22 @@ from .models import (
     VinculoBolsista,
 )
 from .regras import (
+    fora_do_prazo,
     motivo_bloqueio_envio,
     motivo_bloqueio_solicitacao,
     motivos_bloqueio_finalizacao,
     prazo_relatorio_encerrado,
     relatorio_do_vinculo,
 )
+
+
+class SolicitacaoRelatorioSerializer(serializers.Serializer):
+    modelo = serializers.FileField(required=False, allow_null=True)
+
+    def validate_modelo(self, modelo):
+        if modelo is None:
+            return None
+        return validar_upload(modelo, EXTENSOES_MODELO_RELATORIO, TAMANHO_MAX_RELATORIO_MB)
 
 
 class EnvioRelatorioSerializer(serializers.Serializer):
@@ -48,6 +59,7 @@ class ParecerSerializer(serializers.Serializer):
 class RelatorioFinalSerializer(serializers.ModelSerializer):
     situacao_display = serializers.CharField(source="get_situacao_display", read_only=True)
     arquivo = serializers.SerializerMethodField()
+    modelo = serializers.SerializerMethodField()
 
     class Meta:
         model = RelatorioFinal
@@ -56,6 +68,9 @@ class RelatorioFinalSerializer(serializers.ModelSerializer):
             "situacao",
             "situacao_display",
             "solicitado_em",
+            "modelo",
+            "nome_original_modelo",
+            "fora_do_prazo",
             "nome_original",
             "arquivo",
             "enviado_em",
@@ -63,12 +78,20 @@ class RelatorioFinalSerializer(serializers.ModelSerializer):
             "avaliado_em",
         ]
 
+    def _url(self, nome_rota, relatorio):
+        caminho = reverse(nome_rota, kwargs={"pk": relatorio.vinculo_id})
+        request = self.context.get("request")
+        return request.build_absolute_uri(caminho) if request else caminho
+
     def get_arquivo(self, relatorio):
         if not relatorio.arquivo:
             return None
-        caminho = reverse("bolsistas:relatorio-final-arquivo", kwargs={"pk": relatorio.vinculo_id})
-        request = self.context.get("request")
-        return request.build_absolute_uri(caminho) if request else caminho
+        return self._url("bolsistas:relatorio-final-arquivo", relatorio)
+
+    def get_modelo(self, relatorio):
+        if not relatorio.modelo:
+            return None
+        return self._url("bolsistas:relatorio-final-modelo", relatorio)
 
 
 class MotivoDesligamentoSerializer(serializers.Serializer):
@@ -179,6 +202,7 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
     prazo_relatorio = serializers.DateField(
         source="bolsa.edital.data_entrega_relatorios", read_only=True
     )
+    prazo_relatorio_encerrado = serializers.SerializerMethodField()
     relatorio = serializers.SerializerMethodField()
     pode_enviar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio = serializers.SerializerMethodField()
@@ -205,6 +229,7 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "edital_nome",
             "edital_ano_codigo",
             "prazo_relatorio",
+            "prazo_relatorio_encerrado",
             "relatorio",
             "pode_enviar_relatorio",
             "motivo_bloqueio",
@@ -215,6 +240,9 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
         if relatorio is None:
             return None
         return RelatorioFinalSerializer(relatorio, context=self.context).data
+
+    def get_prazo_relatorio_encerrado(self, vinculo):
+        return fora_do_prazo(vinculo.bolsa.edital)
 
     def get_pode_enviar_relatorio(self, vinculo):
         return not motivo_bloqueio_envio(vinculo)
@@ -238,6 +266,7 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
     prazo_relatorio = serializers.DateField(
         source="bolsa.edital.data_entrega_relatorios", read_only=True
     )
+    prazo_relatorio_encerrado = serializers.SerializerMethodField()
     relatorio = serializers.SerializerMethodField()
     pode_solicitar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio_solicitacao = serializers.SerializerMethodField()
@@ -260,6 +289,7 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
             "edital_nome",
             "edital_ano_codigo",
             "prazo_relatorio",
+            "prazo_relatorio_encerrado",
             "relatorio",
             "pode_solicitar_relatorio",
             "motivo_bloqueio_solicitacao",
@@ -271,6 +301,9 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
         if relatorio is None:
             return None
         return RelatorioFinalSerializer(relatorio, context=self.context).data
+
+    def get_prazo_relatorio_encerrado(self, vinculo):
+        return fora_do_prazo(vinculo.bolsa.edital)
 
     def get_pode_solicitar_relatorio(self, vinculo):
         return not motivo_bloqueio_solicitacao(vinculo)
@@ -299,6 +332,7 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
     relatorios_aprovados = serializers.IntegerField(read_only=True)
     prazo_relatorio_encerrado = serializers.SerializerMethodField()
     bolsistas_nomes = serializers.SerializerMethodField()
+    relatorios_fora_do_prazo = serializers.SerializerMethodField()
     pode_finalizar = serializers.SerializerMethodField()
     motivos_bloqueio = serializers.SerializerMethodField()
     finalizada_por_nome = serializers.CharField(
@@ -318,6 +352,7 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
             "data_fim_vigencia",
             "prazo_relatorio_encerrado",
             "bolsistas_nomes",
+            "relatorios_fora_do_prazo",
             "projeto_titulo",
             "coordenador_projeto_nome",
             "edital_nome",
@@ -337,6 +372,16 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
     def get_bolsistas_nomes(self, bolsa):
         # Na bolsa encerrada, os bolsistas que concluíram; em andamento, os ativos.
         return [v.aluno.nome for v in bolsa.vinculos.all() if v.status == StatusVinculo.ATIVO]
+
+    def get_relatorios_fora_do_prazo(self, bolsa):
+        """Bolsistas cujo relatório final foi entregue depois do prazo do edital."""
+        return [
+            v.aluno.nome
+            for v in bolsa.vinculos.all()
+            if v.status == StatusVinculo.ATIVO
+            and (relatorio := relatorio_do_vinculo(v))
+            and relatorio.fora_do_prazo
+        ]
 
     def get_motivos_bloqueio(self, bolsa):
         if bolsa.status == StatusBolsa.ENCERRADA:

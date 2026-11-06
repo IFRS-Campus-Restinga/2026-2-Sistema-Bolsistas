@@ -30,6 +30,22 @@ function Bolsa({ bolsa }) {
   )
 }
 
+// Relatórios entregues depois do prazo do edital ficam visíveis para a ciência da área.
+function ForaDoPrazo({ bolsa }) {
+  const nomes = bolsa.relatorios_fora_do_prazo
+  if (nomes.length === 0) return null
+  return <Badge status="PENDENTE" label={`Relatório fora do prazo: ${nomes.join(', ')}`} />
+}
+
+function Bolsistas({ bolsa }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span>{bolsa.bolsistas_nomes.join(', ') || '—'}</span>
+      <ForaDoPrazo bolsa={bolsa} />
+    </div>
+  )
+}
+
 function Vigencia({ bolsa }) {
   return (
     <div className="flex flex-col items-center gap-1">
@@ -119,7 +135,7 @@ export default function FinalizacaoBolsasPage() {
 
   const linhasFinalizadas = finalizadas.map((bolsa) => [
     <Bolsa key="bolsa" bolsa={bolsa} />,
-    bolsa.bolsistas_nomes.join(', ') || '—',
+    <Bolsistas key="bolsistas" bolsa={bolsa} />,
     bolsa.finalizada_em ? bolsa.finalizada_por_nome : '—',
     bolsa.finalizada_em ? formatarDataHora(bolsa.finalizada_em) : '—',
     // Encerradas antes da finalização pelo projeto foram encerradas pela própria área.
@@ -144,10 +160,13 @@ export default function FinalizacaoBolsasPage() {
     <Bolsa key="bolsa" bolsa={bolsa} />,
     bolsa.coordenador_projeto_nome,
     <Vigencia key="vigencia" bolsa={bolsa} />,
-    <span key="relatorios" className="whitespace-nowrap">
-      <strong className="text-gray-900">{bolsa.relatorios_aprovados}</strong> de{' '}
-      {bolsa.total_bolsistas} {plural(bolsa.total_bolsistas, 'aprovado', 'aprovados')}
-    </span>,
+    <div key="relatorios" className="flex flex-col items-center gap-1">
+      <span className="whitespace-nowrap">
+        <strong className="text-gray-900">{bolsa.relatorios_aprovados}</strong> de{' '}
+        {bolsa.total_bolsistas} {plural(bolsa.total_bolsistas, 'aprovado', 'aprovados')}
+      </span>
+      <ForaDoPrazo bolsa={bolsa} />
+    </div>,
     <Situacao key="situacao" bolsa={bolsa} />,
   ])
 

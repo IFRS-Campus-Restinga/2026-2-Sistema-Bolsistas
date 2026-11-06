@@ -17,6 +17,7 @@ import {
 import { formatarData, formatarDataHora } from '../utils/dataHora'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import AvaliarRelatorioModal from './AvaliarRelatorioModal'
+import SolicitarRelatorioModal from './SolicitarRelatorioModal'
 
 const FILTROS = {
   andamento: { rotulo: 'Em andamento', aceita: (bolsa) => bolsa.status !== 'ENCERRADA' },
@@ -46,6 +47,13 @@ function Bolsista({ vinculo, encerrada, onSolicitar, onAvaliar }) {
       onClick: () => window.open(relatorio.arquivo, '_blank', 'noopener'),
     })
   }
+  if (relatorio?.modelo) {
+    acoes.push({
+      label: 'Baixar modelo enviado',
+      variant: 'outline',
+      onClick: () => window.open(relatorio.modelo, '_blank', 'noopener'),
+    })
+  }
 
   // Sem ação possível, explica o porquê em vez de deixar a linha muda.
   let aviso = ''
@@ -61,7 +69,10 @@ function Bolsista({ vinculo, encerrada, onSolicitar, onAvaliar }) {
         <p className="font-medium text-gray-900">{vinculo.aluno_nome}</p>
         <p className="text-xs text-gray-400">{vinculo.aluno_email}</p>
       </div>
-      <Badge status={relatorio?.situacao ?? 'NAO_SOLICITADO'} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge status={relatorio?.situacao ?? 'NAO_SOLICITADO'} />
+        {relatorio?.fora_do_prazo && <Badge status="PENDENTE" label="Fora do prazo" />}
+      </div>
       <div className="flex min-w-[200px] items-center justify-end gap-3">
         {aviso && <span className="max-w-[260px] text-right text-xs text-gray-500">{aviso}</span>}
         {acoes.length > 0 && <AcoesCell acoes={acoes} />}
@@ -170,6 +181,7 @@ export default function FinalizacaoProjetoPage() {
   const [erro, setErro] = useState('')
   const [filtro, setFiltro] = useState('andamento')
   const [avaliando, setAvaliando] = useState(null)
+  const [solicitando, setSolicitando] = useState(null)
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
@@ -198,26 +210,6 @@ export default function FinalizacaoProjetoPage() {
   }, [versao])
 
   const recarregar = () => setVersao((atual) => atual + 1)
-
-  function solicitarRelatorio(vinculo) {
-    confirmar({
-      title: 'Solicitar relatório final?',
-      message: `${vinculo.aluno_nome} poderá enviar o relatório final até ${formatarData(vinculo.prazo_relatorio)}, prazo definido no edital.`,
-      confirmLabel: 'Solicitar',
-      tone: 'accent',
-      onConfirm: async () => {
-        const response = await bolsistasFetch(`/vinculos/${vinculo.id}/solicitar-relatorio/`, {
-          method: 'POST',
-        })
-        const dados = await response.json().catch(() => null)
-        if (!response.ok) {
-          throw new Error(mensagemDeErro(dados, 'Não foi possível solicitar o relatório.'))
-        }
-        toast({ message: 'Relatório final solicitado.', tone: 'success' })
-        recarregar()
-      },
-    })
-  }
 
   function finalizar(bolsa) {
     confirmar({
@@ -284,11 +276,22 @@ export default function FinalizacaoProjetoPage() {
             key={bolsa.id}
             bolsa={bolsa}
             onFinalizar={() => finalizar(bolsa)}
-            onSolicitar={solicitarRelatorio}
+            onSolicitar={setSolicitando}
             onAvaliar={setAvaliando}
           />
         ))}
       </div>
+
+      {solicitando && (
+        <SolicitarRelatorioModal
+          vinculo={solicitando}
+          onFechar={() => setSolicitando(null)}
+          onSolicitado={() => {
+            setSolicitando(null)
+            recarregar()
+          }}
+        />
+      )}
 
       {avaliando && (
         <AvaliarRelatorioModal

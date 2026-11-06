@@ -12,6 +12,7 @@ from .views import (
     DesligamentosRecentesAreaView,
     MeusPedidosDesligamentoView,
     MeusVinculosView,
+    ModeloRelatorioArquivoView,
     ParecerRelatorioView,
     PedidosDesligamentoPendentesView,
     RelatorioFinalArquivoView,
@@ -96,6 +97,11 @@ urlpatterns = [
         "vinculos/<int:pk>/relatorio-final/arquivo/",
         RelatorioFinalArquivoView.as_view(),
         name="relatorio-final-arquivo",
+    ),
+    path(
+        "vinculos/<int:pk>/relatorio-final/modelo/",
+        ModeloRelatorioArquivoView.as_view(),
+        name="relatorio-final-modelo",
     ),
     path("vinculos/<int:pk>/parecer/", ParecerRelatorioView.as_view(), name="parecer"),
 ]

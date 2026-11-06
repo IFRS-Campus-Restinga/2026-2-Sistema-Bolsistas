@@ -1,6 +1,6 @@
 from django.utils import timezone
 
-from bolsas.models import StatusBolsa
+from bolsas.models import Bolsa, StatusBolsa
 from inscricoes.models import Recurso, StatusInscricao, StatusRecurso
 from selecao.models import PublicacaoResultado
 from vinculo_direto.models import STATUS_ATIVOS as STATUS_CONVITE_ATIVOS
@@ -29,13 +29,17 @@ def relatorio_do_vinculo(vinculo):
 
 
 def _motivo_prazo(vinculo):
-    """Problema com o prazo de entrega do edital; usa a data do servidor."""
-    prazo = vinculo.bolsa.edital.data_entrega_relatorios
-    if prazo is None:
+    """O edital precisa definir o prazo de entrega. Passado o prazo, a solicitação e o
+    envio continuam permitidos, mas o relatório fica marcado como entregue fora do prazo."""
+    if vinculo.bolsa.edital.data_entrega_relatorios is None:
         return "O edital não define o prazo de entrega dos relatórios."
-    if timezone.localdate() > prazo:
-        return f"O prazo de entrega do relatório final terminou em {prazo:%d/%m/%Y}."
     return ""
+
+
+def fora_do_prazo(edital):
+    """O prazo de entrega dos relatórios do edital já passou; usa a data do servidor."""
+    prazo = edital.data_entrega_relatorios
+    return prazo is not None and timezone.localdate() > prazo
 
 
 def motivo_bloqueio_solicitacao(vinculo):
@@ -139,10 +143,7 @@ def motivos_bloqueio_finalizacao(bolsa):
 
 def prazo_relatorio_encerrado(bolsa):
     """O prazo de entrega do edital passou; a bolsa fica vencida até ser finalizada."""
-    prazo = bolsa.edital.data_entrega_relatorios
-    return (
-        bolsa.status != StatusBolsa.ENCERRADA and prazo is not None and timezone.localdate() > prazo
-    )
+    return bolsa.status != StatusBolsa.ENCERRADA and fora_do_prazo(bolsa.edital)
 
 
 def motivo_bloqueio_finalizacao(bolsa):
@@ -172,3 +173,62 @@ def motivo_bloqueio_finalizacao(bolsa):
         )
 
     return ""
+
+
+STATUS_BOLSA_EM_ANDAMENTO = [StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO, StatusBolsa.PREENCHIDA]
+
+
+def _rotulo_bolsa(bolsa):
+    return f'{bolsa.modalidade} {bolsa.carga_horaria_semanal}h do projeto "{bolsa.projeto.titulo}"'
+
+
+def pendencias_do_coordenador(usuario):
+    """O que o coordenador de projeto precisa resolver, em qualquer projeto dele, antes de
+    solicitar uma nova bolsa; vazio quando pode solicitar."""
+    hoje = timezone.localdate()
+    pendencias = []
+
+    bolsas = (
+        Bolsa.objects.filter(
+            projeto__coordenador_projeto__usuario=usuario,
+            status__in=STATUS_BOLSA_EM_ANDAMENTO,
+        )
+        .select_related("projeto", "edital")
+        .order_by("data_fim_vigencia", "id")
+    )
+    for bolsa in bolsas:
+        fim = bolsa.data_fim_vigencia
+        prazo = bolsa.edital.data_entrega_relatorios
+        if fim is not None and fim < hoje:
+            pendencias.append(
+                f"A bolsa {_rotulo_bolsa(bolsa)} venceu em {fim:%d/%m/%Y} e não foi finalizada."
+            )
+        elif (
+            prazo is not None
+            and prazo < hoje
+            and bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists()
+        ):
+            # Combinado: passou o prazo do relatório, a bolsa fica vencida até ser finalizada.
+            pendencias.append(
+                f"O prazo dos relatórios finais da bolsa {_rotulo_bolsa(bolsa)} terminou em "
+                f"{prazo:%d/%m/%Y} e a bolsa não foi finalizada."
+            )
+
+    sem_parecer = (
+        RelatorioFinal.objects.filter(
+            situacao=SituacaoRelatorio.AGUARDANDO_AVALIACAO,
+            vinculo__status=StatusVinculo.ATIVO,
+            vinculo__bolsa__projeto__coordenador_projeto__usuario=usuario,
+        )
+        .select_related("vinculo__aluno", "vinculo__bolsa__projeto")
+        .order_by("enviado_em", "id")
+    )
+    for relatorio in sem_parecer:
+        vinculo = relatorio.vinculo
+        pendencias.append(
+            f"O relatório final de {vinculo.aluno.nome} "
+            f'(projeto "{vinculo.bolsa.projeto.titulo}") aguarda seu parecer.'
+        )
+
+    # TODO: termo de compromisso pendente entra quando a US53 (termo assinado) existir.
+    return pendencias

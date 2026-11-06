@@ -6,6 +6,7 @@ import {
   Button,
   Carregando,
   FileField,
+  IconFileText,
   IconGradCap,
   PageHeader,
   useToast,
@@ -43,6 +44,32 @@ function ParecerDoRelatorio({ relatorio }) {
   return null
 }
 
+function ModeloDoRelatorio({ relatorio }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <span className="flex min-w-0 items-center gap-2.5 text-sm text-gray-700">
+        <span className="shrink-0 text-gray-400">
+          <IconFileText size={18} />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-medium text-gray-900">Modelo do coordenador</span>
+          <span className="block truncate text-xs text-gray-500">
+            {relatorio.nome_original_modelo || 'modelo de relatório'}: siga este formato no seu
+            relatório.
+          </span>
+        </span>
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => window.open(relatorio.modelo, '_blank', 'noopener')}
+      >
+        Baixar modelo
+      </Button>
+    </div>
+  )
+}
+
 function RelatorioFinal({ vinculo, onEnviado }) {
   const toast = useToast()
   const [arquivo, setArquivo] = useState(null)
@@ -78,13 +105,18 @@ function RelatorioFinal({ vinculo, onEnviado }) {
     <section className="mt-5 border-t border-gray-100 pt-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-[15px] font-bold text-gray-900">Relatório final</h3>
-        <Badge status={relatorio?.situacao ?? 'NAO_SOLICITADO'} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {relatorio?.fora_do_prazo && <Badge status="PENDENTE" label="Enviado fora do prazo" />}
+          <Badge status={relatorio?.situacao ?? 'NAO_SOLICITADO'} />
+        </div>
       </div>
 
       <p className="mb-3 text-sm text-gray-500">
-        {vinculo.prazo_relatorio
-          ? `Entrega até ${formatarData(vinculo.prazo_relatorio)}.`
-          : 'O edital ainda não definiu o prazo de entrega.'}
+        {!vinculo.prazo_relatorio
+          ? 'O edital ainda não definiu o prazo de entrega.'
+          : vinculo.prazo_relatorio_encerrado && vinculo.pode_enviar_relatorio
+            ? `O prazo terminou em ${formatarData(vinculo.prazo_relatorio)}. Você ainda pode enviar, mas o relatório ficará marcado como entregue fora do prazo.`
+            : `Entrega até ${formatarData(vinculo.prazo_relatorio)}.`}
         {relatorio?.arquivo && (
           <>
             {' '}
@@ -96,6 +128,7 @@ function RelatorioFinal({ vinculo, onEnviado }) {
         )}
       </p>
 
+      {relatorio?.modelo && <ModeloDoRelatorio relatorio={relatorio} />}
       {relatorio && <ParecerDoRelatorio relatorio={relatorio} />}
       {erro && <Alert tone="error">{erro}</Alert>}
 
