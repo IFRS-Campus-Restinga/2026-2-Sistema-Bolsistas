@@ -5,8 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 
 from bolsas.models import StatusBolsa
-from bolsistas.models import StatusVinculo
-from bolsistas.services import capacidade_efetiva
+from bolsistas.services import STATUS_VINCULO_OCUPA_VAGA, capacidade_efetiva
 from editais.models import Edital
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 
@@ -230,7 +229,7 @@ def situacao_vagas(bolsa):
         and resultado.inscricao_id not in desistentes
         and resultado.inscricao.status == StatusInscricao.HOMOLOGADA
     ]
-    ocupadas = bolsa.vinculos.filter(status=StatusVinculo.ATIVO).count()
+    ocupadas = bolsa.vinculos.filter(status__in=STATUS_VINCULO_OCUPA_VAGA).count()
     return SituacaoVagas(
         capacidade_efetiva(bolsa),
         ocupadas,

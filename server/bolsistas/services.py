@@ -17,6 +17,7 @@ def vincular_por_indicacao(indicacao):
         aluno=indicacao.inscricao.aluno,
         origem=OrigemVinculo.SELECAO,
         indicacao=indicacao,
+        status=StatusVinculo.AGUARDANDO_TERMO,
     )
 
 
@@ -26,6 +27,7 @@ def vincular_por_convite(convite):
         aluno=convite.aluno,
         origem=OrigemVinculo.VINCULO_DIRETO,
         convite=convite,
+        status=StatusVinculo.AGUARDANDO_TERMO,
     )
 
 
@@ -35,8 +37,15 @@ def capacidade_efetiva(bolsa):
     return max(bolsa.quantidade_vagas - canceladas, 0)
 
 
-def quantidade_vinculos_ativos(bolsa):
-    return bolsa.vinculos.filter(status=StatusVinculo.ATIVO).count()
+STATUS_VINCULO_OCUPA_VAGA = [
+    StatusVinculo.AGUARDANDO_TERMO,
+    StatusVinculo.ATIVO,
+]
+
+
+def quantidade_vinculos_ocupantes(bolsa):
+    """Conta vínculos que já reservam uma vaga, mesmo antes da assinatura do termo."""
+    return bolsa.vinculos.filter(status__in=STATUS_VINCULO_OCUPA_VAGA).count()
 
 
 def atualizar_status_preenchimento(bolsa):
@@ -47,7 +56,7 @@ def atualizar_status_preenchimento(bolsa):
     capacidade = capacidade_efetiva(bolsa)
     if capacidade == 0:
         novo_status = StatusBolsa.CANCELADA
-    elif quantidade_vinculos_ativos(bolsa) >= capacidade:
+    elif quantidade_vinculos_ocupantes(bolsa) >= capacidade:
         novo_status = StatusBolsa.PREENCHIDA
     else:
         novo_status = StatusBolsa.EM_SELECAO

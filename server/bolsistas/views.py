@@ -1,3 +1,4 @@
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404
@@ -10,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import Usuario
+from accounts.models import Aluno, Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
@@ -24,6 +25,7 @@ from .models import (
     SolicitacaoDesligamento,
     StatusSolicitacaoDesligamento,
     StatusVinculo,
+    TermoCompromisso,
     VinculoBolsista,
 )
 from .regras import (
@@ -36,16 +38,21 @@ from .regras import (
 from .serializers import (
     BolsaParaFinalizarSerializer,
     CancelamentoVagaSerializer,
+    DadosTermoAlunoSerializer,
     DecisaoDesligamentoSerializer,
     EnvioRelatorioSerializer,
+    EnvioTermoAlunoSerializer,
+    EnvioTermoFinalSerializer,
     MeuVinculoSerializer,
     MotivoDesligamentoSerializer,
     ParecerSerializer,
     RelatorioFinalSerializer,
     SolicitacaoDesligamentoSerializer,
+    TermoCompromissoSerializer,
     VinculoDoCoordenadorSerializer,
 )
 from .services import atualizar_status_preenchimento, efetivar_desligamento
+from .termos import calcular_idade, gerar_docx_termo
 
 
 def _vinculo_do_coordenador(usuario, pk, travar=False):
@@ -84,8 +91,229 @@ class MeusVinculosView(generics.ListAPIView):
                 "bolsa__edital",
                 "bolsa__projeto__coordenador_projeto__usuario",
                 "relatorio_final",
+                "termo_compromisso",
             )
             .order_by("-criado_em", "-id")
+        )
+
+
+class DadosTermoAlunoView(APIView):
+    permission_classes = [IsAuthenticated, IsAluno]
+
+    def _perfil(self, request):
+        perfil, _ = Aluno.objects.get_or_create(usuario=request.user)
+        return perfil
+
+    def get(self, request):
+        return Response(DadosTermoAlunoSerializer(self._perfil(request)).data)
+
+    def patch(self, request):
+        perfil = self._perfil(request)
+        serializer = DadosTermoAlunoSerializer(perfil, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+def _vinculo_acessivel_para_termo(usuario, pk, travar=False):
+    queryset = VinculoBolsista.objects.select_related(
+        "aluno__perfil_aluno",
+        "bolsa__edital",
+        "bolsa__projeto__coordenador_projeto__usuario",
+        "termo_compromisso",
+    )
+    if travar:
+        queryset = queryset.select_for_update()
+    if usuario.role == Usuario.Role.ALUNO:
+        return get_object_or_404(queryset, pk=pk, aluno=usuario)
+    if usuario.role == Usuario.Role.COORDENADOR_PROJETO:
+        return get_object_or_404(
+            queryset, pk=pk, bolsa__projeto__coordenador_projeto__usuario=usuario
+        )
+    raise Http404
+
+
+class GerarTermoView(APIView):
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo = _vinculo_do_coordenador(request.user, pk, travar=True)
+        if vinculo.status == StatusVinculo.DESLIGADO:
+            raise ValidationError({"detail": "Não é possível gerar termo para vínculo desligado."})
+        try:
+            perfil = vinculo.aluno.perfil_aluno
+        except Aluno.DoesNotExist:
+            raise ValidationError(
+                {"detail": "O aluno precisa informar a data de nascimento."}
+            ) from None
+        if not perfil.data_nascimento:
+            raise ValidationError({"detail": "O aluno precisa informar a data de nascimento."})
+        if (
+            calcular_idade(perfil.data_nascimento) < 18
+            and not perfil.nome_responsavel_legal.strip()
+        ):
+            raise ValidationError(
+                {"detail": "O aluno precisa informar o nome do responsável legal."}
+            )
+
+        termo = TermoCompromisso.objects.filter(vinculo=vinculo).first()
+        if termo and termo.assinado:
+            raise ValidationError({"detail": "O termo assinado já foi enviado."})
+        tipo, conteudo = gerar_docx_termo(vinculo, perfil)
+        criado = termo is None
+        if termo is None:
+            termo = TermoCompromisso(vinculo=vinculo, gerado_por=request.user)
+        arquivo_anterior = termo.arquivo_gerado.name if termo.arquivo_gerado else ""
+        assinatura_aluno_anterior = (
+            termo.arquivo_assinado_aluno.name if termo.arquivo_assinado_aluno else ""
+        )
+        termo.tipo = tipo
+        termo.data_nascimento = perfil.data_nascimento
+        termo.nome_responsavel_legal = perfil.nome_responsavel_legal.strip()
+        termo.gerado_por = request.user
+        termo.gerado_em = timezone.now()
+        termo.arquivo_assinado_aluno = ""
+        termo.nome_original_assinado_aluno = ""
+        termo.enviado_aluno_em = None
+        termo.arquivo_gerado.save(
+            f"termo_vinculo_{vinculo.pk}.docx", ContentFile(conteudo), save=False
+        )
+        termo.save()
+        if arquivo_anterior and arquivo_anterior != termo.arquivo_gerado.name:
+            termo.arquivo_gerado.storage.delete(arquivo_anterior)
+        if assinatura_aluno_anterior:
+            termo.arquivo_assinado_aluno.storage.delete(assinatura_aluno_anterior)
+        return Response(
+            TermoCompromissoSerializer(termo, context={"request": request}).data,
+            status=status.HTTP_201_CREATED if criado else status.HTTP_200_OK,
+        )
+
+
+class TermoDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        vinculo = _vinculo_acessivel_para_termo(request.user, pk)
+        termo = get_object_or_404(TermoCompromisso, vinculo=vinculo)
+        if not termo.arquivo_gerado:
+            raise Http404
+        return FileResponse(
+            termo.arquivo_gerado.open("rb"),
+            as_attachment=True,
+            filename=f"termo_compromisso_{vinculo.pk}.docx",
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        )
+
+
+class TermoAssinadoView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo = _vinculo_acessivel_para_termo(request.user, pk, travar=True)
+        if vinculo.status == StatusVinculo.DESLIGADO:
+            raise ValidationError({"detail": "O vínculo está desligado."})
+        termo = get_object_or_404(TermoCompromisso.objects.select_for_update(), vinculo=vinculo)
+        serializer_class = (
+            EnvioTermoAlunoSerializer
+            if request.user.role == Usuario.Role.ALUNO
+            else EnvioTermoFinalSerializer
+        )
+        serializer = serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        arquivo = serializer.validated_data["arquivo"]
+
+        if termo.assinado:
+            raise ValidationError({"detail": "O termo final já foi enviado."})
+
+        if request.user.role == Usuario.Role.ALUNO:
+            anterior = termo.arquivo_assinado_aluno.name if termo.arquivo_assinado_aluno else ""
+            termo.arquivo_assinado_aluno = arquivo
+            termo.nome_original_assinado_aluno = arquivo.name
+            termo.enviado_aluno_em = timezone.now()
+            termo.save(
+                update_fields=[
+                    "arquivo_assinado_aluno",
+                    "nome_original_assinado_aluno",
+                    "enviado_aluno_em",
+                ]
+            )
+            if anterior and anterior != termo.arquivo_assinado_aluno.name:
+                termo.arquivo_assinado_aluno.storage.delete(anterior)
+            registrar_log(
+                usuario=request.user,
+                acao=AcaoAuditoria.ATUALIZACAO,
+                entidade=EntidadeAuditoria.BOLSA,
+                entidade_id=vinculo.bolsa_id,
+                descricao=(
+                    f"{vinculo.aluno.nome} enviou sua parte assinada do termo do projeto "
+                    f'"{vinculo.bolsa.projeto.titulo}" para revisão do coordenador.'
+                ),
+            )
+            return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
+
+        if not termo.aluno_assinou:
+            raise ValidationError(
+                {"detail": "O aluno ainda não enviou sua parte assinada do termo."}
+            )
+
+        anterior = termo.arquivo_assinado.name if termo.arquivo_assinado else ""
+        termo.arquivo_assinado = arquivo
+        termo.nome_original_assinado = arquivo.name
+        termo.enviado_por = request.user
+        termo.enviado_em = timezone.now()
+        termo.save()
+        if anterior and anterior != termo.arquivo_assinado.name:
+            termo.arquivo_assinado.storage.delete(anterior)
+
+        vinculo.status = StatusVinculo.ATIVO
+        if vinculo.data_inicio is None:
+            vinculo.data_inicio = timezone.localdate()
+        vinculo.save(update_fields=["status", "data_inicio"])
+        atualizar_status_preenchimento(vinculo.bolsa)
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.ATIVACAO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=vinculo.bolsa_id,
+            descricao=f'Termo assinado enviado para {vinculo.aluno.nome} no projeto "{vinculo.bolsa.projeto.titulo}".',
+        )
+        return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
+
+
+class TermoAssinadoAlunoDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        vinculo = _vinculo_acessivel_para_termo(request.user, pk)
+        termo = get_object_or_404(TermoCompromisso, vinculo=vinculo)
+        if not termo.arquivo_assinado_aluno:
+            raise Http404
+        return FileResponse(
+            termo.arquivo_assinado_aluno.open("rb"),
+            as_attachment=True,
+            filename=(
+                termo.nome_original_assinado_aluno or f"termo_assinado_aluno_{vinculo.pk}.docx"
+            ),
+        )
+
+
+class TermoAssinadoDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        vinculo = _vinculo_acessivel_para_termo(request.user, pk)
+        termo = get_object_or_404(TermoCompromisso, vinculo=vinculo)
+        if not termo.arquivo_assinado:
+            raise Http404
+        return FileResponse(
+            termo.arquivo_assinado.open("rb"),
+            as_attachment=True,
+            filename=termo.nome_original_assinado or f"termo_assinado_{vinculo.pk}.pdf",
         )
 
 
@@ -399,9 +627,11 @@ class BolsistasDoCoordenadorView(generics.ListAPIView):
             )
             .select_related(
                 "aluno",
+                "aluno__perfil_aluno",
                 "bolsa__edital",
                 "bolsa__projeto",
                 "relatorio_final",
+                "termo_compromisso",
                 "cancelamento_vaga",
             )
             .order_by("bolsa__projeto__titulo", "aluno__nome")

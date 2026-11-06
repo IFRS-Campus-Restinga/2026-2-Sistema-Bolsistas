@@ -40,8 +40,8 @@ def _motivo_prazo(vinculo):
 
 def motivo_bloqueio_solicitacao(vinculo):
     """Por que o coordenador não pode solicitar o relatório agora; vazio quando pode."""
-    if vinculo.status == StatusVinculo.DESLIGADO:
-        return "O vínculo deste bolsista foi desligado."
+    if vinculo.status != StatusVinculo.ATIVO:
+        return "O vínculo deste bolsista ainda não está ativo."
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
     if relatorio_do_vinculo(vinculo):
@@ -51,8 +51,8 @@ def motivo_bloqueio_solicitacao(vinculo):
 
 def motivo_bloqueio_envio(vinculo):
     """Por que o aluno não pode enviar o relatório agora; vazio quando pode."""
-    if vinculo.status == StatusVinculo.DESLIGADO:
-        return "O vínculo desta bolsa foi desligado."
+    if vinculo.status != StatusVinculo.ATIVO:
+        return "O vínculo desta bolsa ainda não está ativo."
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
 

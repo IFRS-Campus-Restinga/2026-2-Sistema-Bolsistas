@@ -15,6 +15,7 @@ import { formatarData } from '../utils/dataHora'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import AvaliarRelatorioModal from './AvaliarRelatorioModal'
 import MotivoModal from './MotivoModal'
+import TermoAssinadoModal from './TermoAssinadoModal'
 
 const SITUACOES = [
   { valor: '', rotulo: 'Todas' },
@@ -41,6 +42,7 @@ export default function MeusBolsistasPage() {
   const [desligando, setDesligando] = useState(null)
   const [cancelando, setCancelando] = useState(null)
   const [rejeitando, setRejeitando] = useState(null)
+  const [enviandoTermo, setEnviandoTermo] = useState(null)
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
@@ -100,9 +102,75 @@ export default function MeusBolsistasPage() {
     })
   }
 
+  async function executarGeracaoTermo(vinculo) {
+    const response = await bolsistasFetch(`/vinculos/${vinculo.id}/termo/gerar/`, {
+      method: 'POST',
+    })
+    const dados = await response.json().catch(() => null)
+    if (!response.ok) {
+      toast({ message: mensagemDeErro(dados, 'Não foi possível gerar o termo.'), tone: 'error' })
+      return
+    }
+    toast({
+      message: vinculo.termo ? 'Novo Termo de Compromisso gerado.' : 'Termo de Compromisso gerado.',
+      tone: 'success',
+    })
+    setVersao((atual) => atual + 1)
+  }
+
+  function gerarTermo(vinculo) {
+    if (!vinculo.termo?.aluno_assinou) {
+      executarGeracaoTermo(vinculo)
+      return
+    }
+    confirmar({
+      title: 'Gerar novo termo?',
+      message:
+        'O aluno já assinou a versão atual. Ao gerar um novo termo, essa assinatura será invalidada e o aluno precisará enviar outra versão assinada.',
+      confirmLabel: 'Gerar novo termo',
+      tone: 'danger',
+      onConfirm: () => executarGeracaoTermo(vinculo),
+    })
+  }
+
   function acoesDoVinculo(vinculo) {
     const situacao = situacaoDoRelatorio(vinculo)
     const acoes = []
+    if (vinculo.pode_gerar_termo && !vinculo.termo?.assinado) {
+      acoes.push({
+        label: vinculo.termo ? 'Gerar novo termo' : 'Gerar termo',
+        variant: 'accent',
+        onClick: () => gerarTermo(vinculo),
+      })
+    }
+    if (vinculo.termo) {
+      acoes.push({
+        label: vinculo.termo.assinado ? 'Baixar termo assinado' : 'Baixar termo em DOCX',
+        variant: 'outline',
+        onClick: () =>
+          window.open(
+            vinculo.termo.assinado
+              ? vinculo.termo.arquivo_assinado_url
+              : vinculo.termo.arquivo_gerado_url,
+            '_blank',
+            'noopener'
+          ),
+      })
+      if (vinculo.termo.aluno_assinou && !vinculo.termo.assinado) {
+        acoes.push({
+          label: 'Revisar assinatura do aluno',
+          variant: 'outline',
+          onClick: () =>
+            window.open(vinculo.termo.arquivo_assinado_aluno_url, '_blank', 'noopener'),
+        })
+        acoes.push({
+          label: 'Enviar termo final',
+          variant: 'accent',
+          onClick: () => setEnviandoTermo(vinculo),
+        })
+      }
+    }
+
     if (situacao === 'NAO_SOLICITADO') {
       if (vinculo.pode_solicitar_relatorio) {
         acoes.push({
@@ -191,6 +259,9 @@ export default function MeusBolsistasPage() {
   }
 
   const aprovados = vinculos.filter((vinculo) => situacaoDoRelatorio(vinculo) === 'APROVADO')
+  const termosAguardandoCoordenador = vinculos.filter(
+    (vinculo) => vinculo.termo?.aluno_assinou && !vinculo.termo.assinado
+  )
   const visiveis = filtro
     ? vinculos.filter((vinculo) => situacaoDoRelatorio(vinculo) === filtro)
     : vinculos
@@ -237,6 +308,14 @@ export default function MeusBolsistasPage() {
       <PageHeader title="Meus Bolsistas" />
 
       {erro && <Alert tone="error">{erro}</Alert>}
+
+      {termosAguardandoCoordenador.map((vinculo) => (
+        <Alert key={`termo-${vinculo.id}`} tone="warning">
+          {vinculo.aluno_nome} assinou sua parte do Termo de Compromisso do projeto “
+          {vinculo.projeto_titulo}”. Revise o arquivo e envie a versão final assinada pelo
+          coordenador.
+        </Alert>
+      ))}
 
       {pedidos.length > 0 && (
         <section className="mb-7">
@@ -285,6 +364,19 @@ export default function MeusBolsistasPage() {
             : 'Seus projetos ainda não têm bolsistas.'
         }
       />
+
+      {enviandoTermo && (
+        <TermoAssinadoModal
+          vinculo={enviandoTermo}
+          final
+          onFechar={() => setEnviandoTermo(null)}
+          onEnviado={() => {
+            setEnviandoTermo(null)
+            toast({ message: 'Termo final enviado e vínculo ativado.', tone: 'success' })
+            setVersao((atual) => atual + 1)
+          }}
+        />
+      )}
 
       {avaliando && (
         <AvaliarRelatorioModal

@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
+from accounts.models import Aluno, CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
 from editais.models import Edital
@@ -28,6 +28,8 @@ from .models import (
     SolicitacaoDesligamento,
     StatusSolicitacaoDesligamento,
     StatusVinculo,
+    TermoCompromisso,
+    TipoTermo,
     VinculoBolsista,
 )
 
@@ -169,6 +171,14 @@ class MigracaoVinculosExistentesTests(CenarioBolsista):
 
 def pdf(nome="relatorio.pdf"):
     return SimpleUploadedFile(nome, b"%PDF-1.4 teste", content_type="application/pdf")
+
+
+def docx(nome="termo.docx"):
+    return SimpleUploadedFile(
+        nome,
+        b"PK teste docx",
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
 
 
 class RelatorioFinalTests(CenarioBolsista):
@@ -1075,3 +1085,161 @@ class DesligamentoECancelamentoTests(CenarioBolsista):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(CancelamentoVaga.objects.exists())
+
+
+class TermoCompromissoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.vinculo_ana = self.vinculo("ana")
+        self.vinculo_ana.status = StatusVinculo.AGUARDANDO_TERMO
+        self.vinculo_ana.save(update_fields=["status"])
+        self.perfil = Aluno.objects.create(
+            usuario=self.vinculo_ana.aluno,
+            matricula="2026001",
+            curso="Tecnologia em Análise e Desenvolvimento de Sistemas",
+            cpf="52998224725",
+            data_nascimento=timezone.localdate().replace(year=timezone.localdate().year - 20),
+        )
+
+    def gerar(self):
+        self.client.force_authenticate(self.coordenador)
+        return self.client.post(
+            reverse("bolsistas:termo-gerar", kwargs={"pk": self.vinculo_ana.pk})
+        )
+
+    def enviar_assinatura_aluno(self):
+        self.client.force_authenticate(self.vinculo_ana.aluno)
+        return self.client.post(
+            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
+            {"arquivo": docx("termo-assinado-aluno.docx")},
+            format="multipart",
+        )
+
+    def test_aluno_informa_dados_para_o_termo(self):
+        self.client.force_authenticate(self.vinculo_ana.aluno)
+        response = self.client.patch(
+            reverse("bolsistas:meus-dados-termo"),
+            {"data_nascimento": "2010-05-10", "nome_responsavel_legal": "Responsável"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.perfil.refresh_from_db()
+        self.assertEqual(self.perfil.nome_responsavel_legal, "Responsável")
+
+    def test_gera_docx_de_maior_de_idade_sem_cpf(self):
+        response = self.gerar()
+        self.assertEqual(response.status_code, 201, response.data)
+        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+        self.assertEqual(termo.tipo, TipoTermo.MAIOR)
+        with termo.arquivo_gerado.open("rb") as arquivo:
+            self.assertEqual(arquivo.read(2), b"PK")
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+        documento = Document(termo.arquivo_gerado.path)
+        texto = "\n".join(paragrafo.text for paragrafo in documento.paragraphs)
+        dados_bolsa = next(
+            paragrafo for paragrafo in documento.paragraphs if paragrafo.text.startswith("Projeto:")
+        )
+        texto_cabecalho = "\n".join(
+            paragrafo.text for secao in documento.sections for paragrafo in secao.header.paragraphs
+        )
+        self.assertNotIn("CPF", texto)
+        self.assertEqual(dados_bolsa.alignment, WD_ALIGN_PARAGRAPH.LEFT)
+        self.assertIn("Ministério da Educação", texto_cabecalho)
+        self.assertIn("Campus Restinga", texto_cabecalho)
+
+    def test_menor_exige_responsavel_legal(self):
+        hoje = timezone.localdate()
+        self.perfil.data_nascimento = hoje.replace(year=hoje.year - 15)
+        self.perfil.nome_responsavel_legal = ""
+        self.perfil.save()
+        response = self.gerar()
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(TermoCompromisso.objects.exists())
+
+    def test_upload_do_aluno_notifica_mas_nao_ativa_o_vinculo(self):
+        self.gerar()
+        response = self.enviar_assinatura_aluno()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+        self.assertIsNone(self.vinculo_ana.data_inicio)
+        termo = TermoCompromisso.objects.get()
+        self.assertTrue(termo.aluno_assinou)
+        self.assertFalse(termo.assinado)
+        self.assertTrue(response.data["arquivo_assinado_aluno_url"])
+
+    def test_gerar_novo_termo_invalida_assinatura_anterior_do_aluno(self):
+        self.gerar()
+        self.enviar_assinatura_aluno()
+        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+        nome_assinatura_anterior = termo.arquivo_assinado_aluno.name
+        storage = termo.arquivo_assinado_aluno.storage
+
+        response = self.gerar()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        termo.refresh_from_db()
+        self.assertFalse(termo.aluno_assinou)
+        self.assertEqual(termo.nome_original_assinado_aluno, "")
+        self.assertIsNone(termo.enviado_aluno_em)
+        self.assertFalse(storage.exists(nome_assinatura_anterior))
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+
+    def test_coordenador_nao_finaliza_antes_da_assinatura_do_aluno(self):
+        self.gerar()
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.post(
+            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
+            {"arquivo": pdf("termo-assinado.pdf")},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+
+    def test_upload_final_do_coordenador_ativa_o_vinculo(self):
+        self.gerar()
+        self.enviar_assinatura_aluno()
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.post(
+            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
+            {"arquivo": pdf("termo-final.pdf")},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+        self.assertEqual(termo.enviado_por, self.coordenador)
+        self.assertTrue(termo.aluno_assinou)
+        self.assertTrue(termo.assinado)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
+        self.assertIsNotNone(self.vinculo_ana.data_inicio)
+
+    def test_upload_do_aluno_rejeita_arquivo_que_nao_e_docx(self):
+        self.gerar()
+        self.client.force_authenticate(self.vinculo_ana.aluno)
+        arquivo = pdf("termo.pdf")
+        response = self.client.post(
+            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
+            {"arquivo": arquivo},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+
+    def test_upload_final_do_coordenador_rejeita_arquivo_que_nao_e_pdf(self):
+        self.gerar()
+        self.enviar_assinatura_aluno()
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.post(
+            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
+            {"arquivo": docx("termo-final.docx")},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)

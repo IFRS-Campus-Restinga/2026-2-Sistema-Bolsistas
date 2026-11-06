@@ -1,16 +1,21 @@
 from django.urls import reverse
 from rest_framework import serializers
 
+from accounts.models import Aluno
 from bolsas.models import Bolsa, StatusBolsa
 from server.validators import validar_upload
 
 from .models import (
     EXTENSOES_RELATORIO,
+    EXTENSOES_TERMO_ALUNO,
+    EXTENSOES_TERMO_FINAL,
     TAMANHO_MAX_RELATORIO_MB,
+    TAMANHO_MAX_TERMO_MB,
     CancelamentoVaga,
     RelatorioFinal,
     SituacaoRelatorio,
     SolicitacaoDesligamento,
+    TermoCompromisso,
     VinculoBolsista,
 )
 from .regras import (
@@ -19,6 +24,89 @@ from .regras import (
     motivo_bloqueio_solicitacao,
     relatorio_do_vinculo,
 )
+
+
+class DadosTermoAlunoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Aluno
+        fields = ["data_nascimento", "nome_responsavel_legal"]
+
+    def validate_data_nascimento(self, valor):
+        from django.utils import timezone
+
+        if valor > timezone.localdate():
+            raise serializers.ValidationError("A data de nascimento não pode estar no futuro.")
+        return valor
+
+
+class EnvioTermoAlunoSerializer(serializers.Serializer):
+    arquivo = serializers.FileField()
+
+    def validate_arquivo(self, arquivo):
+        return validar_upload(arquivo, EXTENSOES_TERMO_ALUNO, TAMANHO_MAX_TERMO_MB)
+
+
+class EnvioTermoFinalSerializer(serializers.Serializer):
+    arquivo = serializers.FileField()
+
+    def validate_arquivo(self, arquivo):
+        return validar_upload(arquivo, EXTENSOES_TERMO_FINAL, TAMANHO_MAX_TERMO_MB)
+
+
+class TermoCompromissoSerializer(serializers.ModelSerializer):
+    tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    arquivo_gerado_url = serializers.SerializerMethodField()
+    arquivo_assinado_aluno_url = serializers.SerializerMethodField()
+    arquivo_assinado_url = serializers.SerializerMethodField()
+    aluno_assinou = serializers.BooleanField(read_only=True)
+    assinado = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = TermoCompromisso
+        fields = [
+            "id",
+            "tipo",
+            "tipo_display",
+            "gerado_em",
+            "aluno_assinou",
+            "nome_original_assinado_aluno",
+            "enviado_aluno_em",
+            "assinado",
+            "nome_original_assinado",
+            "enviado_em",
+            "arquivo_gerado_url",
+            "arquivo_assinado_aluno_url",
+            "arquivo_assinado_url",
+        ]
+
+    def _url(self, nome, termo):
+        caminho = reverse(nome, kwargs={"pk": termo.vinculo_id})
+        request = self.context.get("request")
+        return request.build_absolute_uri(caminho) if request else caminho
+
+    def get_arquivo_gerado_url(self, termo):
+        return self._url("bolsistas:termo-download", termo) if termo.arquivo_gerado else None
+
+    def get_arquivo_assinado_aluno_url(self, termo):
+        return (
+            self._url("bolsistas:termo-aluno-download", termo)
+            if termo.arquivo_assinado_aluno
+            else None
+        )
+
+    def get_arquivo_assinado_url(self, termo):
+        return (
+            self._url("bolsistas:termo-assinado-download", termo)
+            if termo.arquivo_assinado
+            else None
+        )
+
+
+def termo_do_vinculo(vinculo):
+    try:
+        return vinculo.termo_compromisso
+    except TermoCompromisso.DoesNotExist:
+        return None
 
 
 class EnvioRelatorioSerializer(serializers.Serializer):
@@ -178,6 +266,7 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
         source="bolsa.edital.data_entrega_relatorios", read_only=True
     )
     relatorio = serializers.SerializerMethodField()
+    termo = serializers.SerializerMethodField()
     pode_enviar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio = serializers.SerializerMethodField()
 
@@ -204,9 +293,14 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "edital_ano_codigo",
             "prazo_relatorio",
             "relatorio",
+            "termo",
             "pode_enviar_relatorio",
             "motivo_bloqueio",
         ]
+
+    def get_termo(self, vinculo):
+        termo = termo_do_vinculo(vinculo)
+        return TermoCompromissoSerializer(termo, context=self.context).data if termo else None
 
     def get_relatorio(self, vinculo):
         relatorio = relatorio_do_vinculo(vinculo)
@@ -237,6 +331,9 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
         source="bolsa.edital.data_entrega_relatorios", read_only=True
     )
     relatorio = serializers.SerializerMethodField()
+    termo = serializers.SerializerMethodField()
+    pode_gerar_termo = serializers.SerializerMethodField()
+    motivo_bloqueio_termo = serializers.SerializerMethodField()
     pode_solicitar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio_solicitacao = serializers.SerializerMethodField()
     vaga_cancelada = serializers.SerializerMethodField()
@@ -259,10 +356,40 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
             "edital_ano_codigo",
             "prazo_relatorio",
             "relatorio",
+            "termo",
+            "pode_gerar_termo",
+            "motivo_bloqueio_termo",
             "pode_solicitar_relatorio",
             "motivo_bloqueio_solicitacao",
             "vaga_cancelada",
         ]
+
+    def get_termo(self, vinculo):
+        termo = termo_do_vinculo(vinculo)
+        return TermoCompromissoSerializer(termo, context=self.context).data if termo else None
+
+    def get_motivo_bloqueio_termo(self, vinculo):
+        try:
+            perfil = vinculo.aluno.perfil_aluno
+        except Aluno.DoesNotExist:
+            return "O aluno precisa informar a data de nascimento."
+        if not perfil.data_nascimento:
+            return "O aluno precisa informar a data de nascimento."
+        from .termos import calcular_idade
+
+        if (
+            calcular_idade(perfil.data_nascimento) < 18
+            and not perfil.nome_responsavel_legal.strip()
+        ):
+            return "O aluno precisa informar o nome do responsável legal."
+        if vinculo.status == "DESLIGADO":
+            return "O vínculo está desligado."
+        if getattr(vinculo, "termo_compromisso", None) and vinculo.termo_compromisso.assinado:
+            return "O termo assinado já foi enviado."
+        return ""
+
+    def get_pode_gerar_termo(self, vinculo):
+        return not self.get_motivo_bloqueio_termo(vinculo)
 
     def get_relatorio(self, vinculo):
         relatorio = relatorio_do_vinculo(vinculo)
