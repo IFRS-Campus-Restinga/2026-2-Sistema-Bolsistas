@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorArea, EmailCoordenadorArea, TipoArea, Usuario
-from auditoria.models import LogAuditoria
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 
 
 class AuditoriaAcoesAdministradorTests(APITestCase):
@@ -29,7 +29,9 @@ class AuditoriaAcoesAdministradorTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        log = LogAuditoria.objects.get(acao="USUARIO_DESATIVADO")
+        log = LogAuditoria.objects.get(
+            acao=AcaoAuditoria.DESATIVACAO, entidade=EntidadeAuditoria.USUARIO
+        )
         self.assertEqual(log.usuario, self.administrador)
         self.assertEqual(log.entidade_id, str(self.usuario.pk))
 
@@ -49,7 +51,10 @@ class AuditoriaAcoesAdministradorTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(LogAuditoria.objects.filter(acao="AREA_COORDENADOR_ATUALIZADA").exists())
+        log = LogAuditoria.objects.get(
+            acao=AcaoAuditoria.ATUALIZACAO, entidade=EntidadeAuditoria.USUARIO
+        )
+        self.assertEqual(log.entidade_id, str(coordenador.pk))
 
     def test_cadastro_de_email_de_coordenador_gera_log(self):
         response = self.client.post(
@@ -59,7 +64,11 @@ class AuditoriaAcoesAdministradorTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertTrue(LogAuditoria.objects.filter(acao="EMAIL_COORDENADOR_CADASTRADO").exists())
+        self.assertTrue(
+            LogAuditoria.objects.filter(
+                acao=AcaoAuditoria.CRIACAO, entidade=EntidadeAuditoria.COORDENADOR_AREA
+            ).exists()
+        )
 
     def test_atualizacao_e_remocao_de_email_geram_logs(self):
         entrada = EmailCoordenadorArea.objects.create(
@@ -74,8 +83,16 @@ class AuditoriaAcoesAdministradorTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(LogAuditoria.objects.filter(acao="EMAIL_COORDENADOR_ATUALIZADO").exists())
+        self.assertTrue(
+            LogAuditoria.objects.filter(
+                acao=AcaoAuditoria.ATUALIZACAO, entidade=EntidadeAuditoria.COORDENADOR_AREA
+            ).exists()
+        )
 
         response = self.client.delete(url)
         self.assertEqual(response.status_code, 204)
-        self.assertTrue(LogAuditoria.objects.filter(acao="EMAIL_COORDENADOR_REMOVIDO").exists())
+        self.assertTrue(
+            LogAuditoria.objects.filter(
+                acao=AcaoAuditoria.EXCLUSAO, entidade=EntidadeAuditoria.COORDENADOR_AREA
+            ).exists()
+        )

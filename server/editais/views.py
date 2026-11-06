@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import EditalValorBolsa, StatusBolsa
 
@@ -40,8 +41,8 @@ class EditalListCreateView(generics.ListCreateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="EDITAL_CRIADO",
-            entidade="Edital",
+            acao=AcaoAuditoria.CRIACAO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=edital.pk,
             descricao=f'Edital "{edital.nome}" criado.',
         )
@@ -58,8 +59,8 @@ class EditalCronogramaUpdateView(generics.RetrieveUpdateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="CRONOGRAMA_EDITAL_ATUALIZADO",
-            entidade="Edital",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=edital.pk,
             descricao=f'Cronograma do edital "{edital.nome}" atualizado.',
         )
@@ -76,8 +77,8 @@ class EditalDetailView(generics.RetrieveUpdateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="EDITAL_ATUALIZADO",
-            entidade="Edital",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=edital.pk,
             descricao=f'Edital "{edital.nome}" atualizado.',
         )
@@ -111,8 +112,8 @@ class PublicarEditalView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="EDITAL_PUBLICADO",
-            entidade="Edital",
+            acao=AcaoAuditoria.PUBLICACAO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=edital.pk,
             descricao=f'Edital "{edital.nome}" publicado.',
         )
@@ -146,8 +147,8 @@ class EncerrarEditalView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="EDITAL_ENCERRADO",
-            entidade="Edital",
+            acao=AcaoAuditoria.ENCERRAMENTO,
+            entidade=EntidadeAuditoria.EDITAL,
             entidade_id=edital.pk,
             descricao=f'Edital "{edital.nome}" encerrado.',
         )
@@ -208,5 +209,13 @@ class ValoresBolsaEditalView(APIView):
             bolsas_ativas.filter(
                 modalidade=tipo.modalidade, carga_horaria_semanal=tipo.carga_horaria_semanal
             ).update(valor_mensal=item["valor_mensal"])
+
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.EDITAL,
+            entidade_id=edital.pk,
+            descricao=f'Valores de bolsa do edital "{edital.nome}" definidos.',
+        )
 
         return Response(representar_valores_bolsa(edital))

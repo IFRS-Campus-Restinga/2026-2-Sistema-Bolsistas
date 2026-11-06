@@ -55,31 +55,23 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
   }
 
   return (
-    <div
-      style={{
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 24,
-      }}
-    >
+    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
       <strong>Matriz / ementa</strong>
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+      <div className="mt-2 flex items-center gap-3">
         {projeto.arquivo_ementa ? (
           <a
             href={projeto.arquivo_ementa}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            className="inline-flex items-center gap-1"
           >
             <IconPaperclip size={14} />
             {projeto.nome_original_arquivo || 'Abrir arquivo'}
           </a>
         ) : (
-          <span style={{ color: '#9ca3af' }}>Nenhum arquivo anexado.</span>
+          <span className="text-gray-400">Nenhum arquivo anexado.</span>
         )}
         {podeAlterar && projeto.arquivo_ementa && (
           <Button size="sm" variant="danger" onClick={remover} disabled={enviando}>
@@ -89,7 +81,7 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
       </div>
 
       {podeAlterar && (
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-3">
           <FileField
             key={versaoCampo}
             value={enviando ? 'Enviando...' : ''}
@@ -97,7 +89,7 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
             accept=".pdf,.doc,.docx"
             disabled={enviando}
           />
-          <p style={{ fontSize: 12, color: '#9ca3af', margin: '4px 0 0' }}>
+          <p className="mt-1 text-xs text-gray-400">
             {projeto.arquivo_ementa ? 'Enviar outro arquivo substitui o atual. ' : ''}
             .pdf, .doc ou .docx, até 10 MB.
           </p>

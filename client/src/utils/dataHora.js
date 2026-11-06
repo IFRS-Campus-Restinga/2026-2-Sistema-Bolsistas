@@ -19,3 +19,10 @@ export function formatarDataHora(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
+
+// Data pura do backend ("2026-10-21"): só reorganiza o texto, sem passar por fuso horário.
+export function formatarData(dataIso) {
+  if (!dataIso) return ''
+  const [ano, mes, dia] = dataIso.split('-')
+  return `${dia}/${mes}/${ano}`
+}

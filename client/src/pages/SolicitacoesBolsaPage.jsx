@@ -150,23 +150,20 @@ export default function SolicitacoesBolsaPage() {
       {notificacoes.map((notificacao) => (
         <Alert key={notificacao.id} tone="success">
           {notificacao.mensagem}{' '}
-          <button type="button" onClick={() => marcarNotificacaoLida(notificacao)}>
+          <Button size="sm" variant="outline" onClick={() => marcarNotificacaoLida(notificacao)}>
             Marcar como lida
-          </button>
+          </Button>
         </Alert>
       ))}
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando solicitações...</p>
-      ) : (
-        <DataTable
-          columns={['Projeto', 'Tipo', 'Edital', 'Vagas', 'Valor', 'Status', 'Ações']}
-          rows={linhas}
-          emptyMessage="Nenhuma bolsa da sua área."
-        />
-      )}
+      <DataTable
+        columns={['Projeto', 'Tipo', 'Edital', 'Vagas', 'Valor', 'Status', 'Ações']}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Nenhuma bolsa da sua área."
+      />
 
       {modalRejeitar && (
         <Modal title="Rejeitar Solicitação de Bolsa" onClose={() => setModalRejeitar(null)}>
@@ -186,9 +183,10 @@ export default function SolicitacoesBolsaPage() {
             <Button
               variant="danger"
               onClick={confirmarRejeitar}
-              disabled={enviando || !justificativa.trim()}
+              disabled={!justificativa.trim()}
+              loading={enviando}
             >
-              {enviando ? 'Enviando...' : 'Confirmar Rejeição'}
+              Confirmar Rejeição
             </Button>
           </FormActions>
         </Modal>

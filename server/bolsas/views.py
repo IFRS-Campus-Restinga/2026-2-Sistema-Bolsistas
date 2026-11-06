@@ -9,7 +9,9 @@ from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
+from bolsistas.regras import motivo_bloqueio_finalizacao
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
@@ -56,8 +58,8 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="BOLSA_CRIADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.CRIACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" criada.',
         )
@@ -113,8 +115,8 @@ class BolsaDetailView(generics.RetrieveUpdateAPIView):
 
         registrar_log(
             usuario=self.request.user,
-            acao="BOLSA_ATUALIZADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" atualizada.',
         )
@@ -161,10 +163,40 @@ class AprovarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_APROVADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.APROVACAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" aprovada.',
+        )
+
+        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
+
+
+class FinalizarBolsaView(APIView):
+    """Encerra a bolsa quando todos os bolsistas tiverem o relatório final aprovado."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        bolsa = get_object_or_404(Bolsa.objects.select_for_update(), pk=pk)
+
+        if not _area_permitida(bolsa, request.user):
+            raise PermissionDenied("Esta bolsa pertence a outra área e não pode ser finalizada.")
+
+        motivo = motivo_bloqueio_finalizacao(bolsa)
+        if motivo:
+            raise ValidationError({"detail": motivo})
+
+        bolsa.status = StatusBolsa.ENCERRADA
+        bolsa.save(update_fields=["status"])
+
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.ENCERRAMENTO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=bolsa.pk,
+            descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" finalizada.',
         )
 
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
@@ -205,8 +237,8 @@ class RejeitarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_REJEITADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.REJEICAO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" rejeitada.',
         )
@@ -235,8 +267,8 @@ class CancelarBolsaView(APIView):
 
         registrar_log(
             usuario=request.user,
-            acao="BOLSA_CANCELADA",
-            entidade="Bolsa",
+            acao=AcaoAuditoria.CANCELAMENTO,
+            entidade=EntidadeAuditoria.BOLSA,
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" cancelada.',
         )

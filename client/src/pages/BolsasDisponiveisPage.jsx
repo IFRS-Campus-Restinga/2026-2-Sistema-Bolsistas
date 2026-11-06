@@ -4,6 +4,7 @@ import {
   Alert,
   Badge,
   Button,
+  Carregando,
   DataTable,
   IconArrowLeft,
   IconPaperclip,
@@ -70,7 +71,7 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
     bolsa.minha_inscricao_status ? (
       <Badge key="minha-inscricao" status={bolsa.minha_inscricao_status} />
     ) : (
-      <span key="minha-inscricao" style={{ color: '#9ca3af' }}>
+      <span key="minha-inscricao" className="text-gray-400">
         —
       </span>
     ),
@@ -85,23 +86,20 @@ function ListaBolsasDisponiveis({ onVerDetalhes }) {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      {carregando ? (
-        <p role="status">Carregando bolsas...</p>
-      ) : (
-        <DataTable
-          columns={[
-            'Projeto',
-            'Tipo',
-            'Edital',
-            'Carga Horária',
-            'Valor',
-            'Minha Inscrição',
-            'Ações',
-          ]}
-          rows={linhas}
-          emptyMessage="Nenhuma bolsa disponível no momento."
-        />
-      )}
+      <DataTable
+        columns={[
+          'Projeto',
+          'Tipo',
+          'Edital',
+          'Carga Horária',
+          'Valor',
+          'Minha Inscrição',
+          'Ações',
+        ]}
+        rows={linhas}
+        loading={carregando}
+        emptyMessage="Nenhuma bolsa disponível no momento."
+      />
     </>
   )
 }
@@ -137,7 +135,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
     }
   }, [bolsaId, inscricaoId])
 
-  if (carregando) return <p role="status">Carregando bolsa...</p>
+  if (carregando) return <Carregando texto="Carregando bolsa..." />
 
   if (erro || !bolsa) {
     return (
@@ -160,18 +158,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
     <>
       <PageHeader title={bolsa.projeto_titulo} badge={<Badge status={bolsa.status} />} />
 
-      <div
-        style={{
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 8,
-          padding: 16,
-          marginBottom: 24,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
+      <div className="mb-6 flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4">
         <p>
           <strong>Edital:</strong> {bolsa.edital_nome}
         </p>
@@ -202,7 +189,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
         {bolsa.etapas?.length > 0 && (
           <div>
             <strong>Etapas de avaliação:</strong>
-            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+            <ul className="mt-1 pl-5">
               {bolsa.etapas.map((etapa) => (
                 <li key={etapa.id}>
                   {etapa.nome}: peso {formatarPeso(etapa.peso_efetivo)}
@@ -225,7 +212,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
               href={bolsa.projeto_arquivo_ementa}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              className="inline-flex items-center gap-1"
             >
               <IconPaperclip size={14} />
               {bolsa.projeto_nome_arquivo || 'Abrir arquivo'}
@@ -238,7 +225,7 @@ export function BolsaDetalhe({ bolsaId, inscricaoId, onVoltar }) {
 
       {jaInscrito && <Alert tone="warning">{mensagemJaInscrito}</Alert>}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="flex gap-2">
         <Button variant="outline" onClick={onVoltar}>
           Voltar
         </Button>

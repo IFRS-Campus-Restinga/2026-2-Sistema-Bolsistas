@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { selecaoFetch } from '../api'
-import { AcoesCell, Alert, Badge, Button, DataTable, useConfirm, useToast } from '../components'
+import {
+  AcoesCell,
+  Alert,
+  Badge,
+  Button,
+  Carregando,
+  DataTable,
+  useConfirm,
+  useToast,
+} from '../components'
 import { formatarPeso } from '../utils/formatarPeso'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import DesempateModal from './DesempateModal'
@@ -83,7 +92,7 @@ export default function ClassificacaoBolsa({ bolsaId, onAtualizada }) {
     })
   }
 
-  if (consulta.carregando) return <p role="status">Carregando classificação...</p>
+  if (consulta.carregando) return <Carregando texto="Carregando classificação..." />
   if (consulta.erro) {
     return (
       <>
@@ -210,7 +219,7 @@ export default function ClassificacaoBolsa({ bolsaId, onAtualizada }) {
       {!publicado && podeLancar && consulta.dados.pendencias_publicacao.length > 0 && (
         <Alert tone="warning">
           Para publicar o resultado:
-          <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+          <ul className="mt-1 pl-5">
             {consulta.dados.pendencias_publicacao.map((pendencia) => (
               <li key={pendencia}>{pendencia}</li>
             ))}
@@ -226,7 +235,7 @@ export default function ClassificacaoBolsa({ bolsaId, onAtualizada }) {
         </Alert>
       )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div className="mb-3 flex justify-end gap-2">
         {!publicado &&
           gruposEmpate.map((grupo) => (
             <Button key={grupo[0].nota_final} variant="outline" onClick={() => setEmpatados(grupo)}>

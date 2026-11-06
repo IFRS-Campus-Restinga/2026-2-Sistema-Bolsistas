@@ -5,6 +5,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 
 from bolsas.models import StatusBolsa
+from bolsistas.models import StatusVinculo
+from bolsistas.services import capacidade_efetiva
 from editais.models import Edital
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 
@@ -189,13 +191,14 @@ class SituacaoVagas:
     """Como estão as vagas de uma bolsa com resultado publicado."""
 
     vagas: int
+    ocupadas: int
     indicados: set
     desistentes: set
     disponiveis: list  # classificados ainda sem indicação e sem desistência, pela posição
 
     @property
     def vagas_livres(self):
-        return max(self.vagas - len(self.indicados), 0)
+        return max(self.vagas - self.ocupadas, 0)
 
     @property
     def titulares_pendentes(self):
@@ -227,7 +230,14 @@ def situacao_vagas(bolsa):
         and resultado.inscricao_id not in desistentes
         and resultado.inscricao.status == StatusInscricao.HOMOLOGADA
     ]
-    return SituacaoVagas(bolsa.quantidade_vagas, indicados, desistentes, disponiveis)
+    ocupadas = bolsa.vinculos.filter(status=StatusVinculo.ATIVO).count()
+    return SituacaoVagas(
+        capacidade_efetiva(bolsa),
+        ocupadas,
+        indicados,
+        desistentes,
+        disponiveis,
+    )
 
 
 def motivo_bloqueio_indicacao(resultado, vagas):

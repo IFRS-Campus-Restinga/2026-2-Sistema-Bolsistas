@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { vinculoDiretoFetch } from '../api'
-import { Alert, Button, FormActions, FormField, Modal, TextInput } from '../components'
+import { Alert, Button, FormActions, FormField, Modal, Spinner, TextInput } from '../components'
 
 function extrairErro(corpo, mensagemPadrao) {
   if (!corpo) return mensagemPadrao
@@ -63,7 +63,7 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
     <Modal title="Convidar Bolsista" onClose={onFechar} width={520}>
       {erro && <Alert tone="error">{erro}</Alert>}
 
-      <p style={{ marginBottom: 16 }}>
+      <p className="mb-4">
         Convite de vínculo direto para a bolsa do projeto <strong>{bolsa.projeto_titulo}</strong> (
         {bolsa.edital_link_documento_oficial ? (
           <a href={bolsa.edital_link_documento_oficial} target="_blank" rel="noopener noreferrer">
@@ -77,19 +77,10 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
 
       {alunoSelecionado ? (
         <FormField label="Aluno selecionado">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              border: '1px solid #e5e7eb',
-              borderRadius: 8,
-              padding: 10,
-            }}
-          >
+          <div className="flex items-center justify-between rounded-lg border border-gray-200 p-2.5">
             <div>
               <strong>{alunoSelecionado.nome}</strong>
-              <div style={{ fontSize: 13, color: '#6b7280' }}>{alunoSelecionado.email}</div>
+              <div className="text-sm text-gray-500">{alunoSelecionado.email}</div>
             </div>
             <Button variant="outline" size="sm" onClick={() => setAlunoSelecionado(null)}>
               Trocar
@@ -104,30 +95,25 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
             placeholder="Digite ao menos 3 caracteres..."
             autoFocus
           />
-          {buscando && <p style={{ fontSize: 13, color: '#6b7280' }}>Buscando...</p>}
+          {buscando && (
+            <p role="status" className="flex items-center gap-1.5 text-sm text-gray-500">
+              <Spinner size={12} /> Buscando...
+            </p>
+          )}
           {!buscando && buscaValida && resultados.length === 0 && (
-            <p style={{ fontSize: 13, color: '#6b7280' }}>Nenhum aluno encontrado.</p>
+            <p className="text-sm text-gray-500">Nenhum aluno encontrado.</p>
           )}
           {buscaValida && resultados.length > 0 && (
-            <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+            <ul className="mt-2 list-none">
               {resultados.map((aluno) => (
                 <li key={aluno.id}>
                   <button
                     type="button"
                     onClick={() => setAlunoSelecionado(aluno)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: 8,
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      marginBottom: 4,
-                      background: '#fff',
-                      cursor: 'pointer',
-                    }}
+                    className="mb-1 w-full cursor-pointer rounded-md border border-gray-200 bg-white p-2 text-left"
                   >
                     <strong>{aluno.nome}</strong>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{aluno.email}</div>
+                    <div className="text-sm text-gray-500">{aluno.email}</div>
                   </button>
                 </li>
               ))}
@@ -140,8 +126,13 @@ export default function ConvidarBolsistaModal({ bolsa, onFechar, onCriado }) {
         <Button variant="danger" onClick={onFechar} disabled={enviando}>
           Cancelar
         </Button>
-        <Button variant="accent" onClick={enviarConvite} disabled={enviando || !alunoSelecionado}>
-          {enviando ? 'Enviando...' : 'Enviar Convite'}
+        <Button
+          variant="accent"
+          onClick={enviarConvite}
+          disabled={!alunoSelecionado}
+          loading={enviando}
+        >
+          Enviar Convite
         </Button>
       </FormActions>
     </Modal>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
-import { Alert, Button, FormActions, FormField, TextInput } from '../components'
+import { Alert, Button, Carregando, FormActions, FormField, TextInput } from '../components'
 
 const campos = [
   ['data_abertura_inscricoes', 'Abertura das inscrições'],
@@ -100,7 +100,7 @@ export default function CronogramaForm({ edital, onSalvar, onCancelar }) {
   }
 
   if (carregando) {
-    return <p role="status">Carregando cronograma...</p>
+    return <Carregando texto="Carregando cronograma..." />
   }
 
   if (Object.keys(dados).length === 0) {
@@ -150,8 +150,8 @@ export default function CronogramaForm({ edital, onSalvar, onCancelar }) {
           Voltar
         </Button>
         {podeEditar && (
-          <Button type="submit" variant="accent" disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Salvar cronograma'}
+          <Button type="submit" variant="accent" loading={salvando}>
+            Salvar cronograma
           </Button>
         )}
       </FormActions>

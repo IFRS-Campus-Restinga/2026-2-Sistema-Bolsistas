@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Layout,
   Button,
@@ -11,6 +12,7 @@ import {
 } from '../components'
 import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
+import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
 
 const menuItems = [
@@ -23,13 +25,18 @@ const menuItems = [
   { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
 ]
 
-export default function AdministradorPage({ me, initials, onVoltarHub }) {
-  const [active, setActive] = useState('dashboard')
-  const [secaoMonitoramento, setSecaoMonitoramento] = useState(null)
+const ABAS = new Set(menuItems.map((item) => item.id))
 
-  function navegar(destino, secao = null) {
-    setSecaoMonitoramento(secao)
+export default function AdministradorPage({ me, initials, onVoltarHub }) {
+  const [parametros, setParametros] = useSearchParams()
+  const [active, setActive] = useState(() =>
+    ABAS.has(parametros.get('aba')) ? parametros.get('aba') : 'dashboard'
+  )
+
+  function navegar(destino) {
     setActive(destino)
+    // A aba fica na URL (recarregar mantém a tela); os filtros da aba anterior saem.
+    setParametros(destino === 'dashboard' ? {} : { aba: destino }, { replace: true })
   }
 
   return (
@@ -37,7 +44,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
       role="Administrador"
       menuItems={menuItems}
       active={active}
-      onNav={(destino) => navegar(destino)}
+      onNav={navegar}
       onLogout={onVoltarHub}
       campus="Campus Restinga"
       userName={me.nome || '(sem nome)'}
@@ -58,26 +65,14 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
             }
           />
 
-          <MonitoramentoPage onNavigate={navegar} />
+          <PainelAdministrativo onNavigate={navegar} />
         </>
       )}
       {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
-      {active === 'inscricoes' && (
-        <MonitoramentoPage secao={secaoMonitoramento || 'inscricoes_ativas'} />
-      )}
-      {active === 'usuarios' && (
-        <UsuariosPage
-          filtroStatus={
-            secaoMonitoramento === 'usuarios_ativos'
-              ? true
-              : secaoMonitoramento === 'usuarios_inativos'
-                ? false
-                : null
-          }
-        />
-      )}
+      {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}
+      {active === 'usuarios' && <UsuariosPage />}
       {active === 'auditoria' && <AuditoriaPage />}
     </Layout>
   )

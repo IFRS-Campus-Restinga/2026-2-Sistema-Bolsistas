@@ -1,46 +1,66 @@
-import './Badge.css'
-
 /**
  * Badge de status — aplica estilo automático pelo nome do status.
  *
  * Uso: <Badge status="ATIVO" />
  */
 
-const STATUS_STYLE = {
-  RASCUNHO: 'badge--gray',
-  PUBLICADO: 'badge--green',
-  ENCERRADO: 'badge--gray',
-  ATIVO: 'badge--green',
-  DESLIGADO: 'badge--red',
-  SOLICITADA: 'badge--yellow',
-  APROVADA: 'badge--green',
-  REJEITADA: 'badge--red',
-  ABERTA: 'badge--green',
-  EM_SELECAO: 'badge--blue',
-  PREENCHIDA: 'badge--green',
-  ENCERRADA: 'badge--gray',
-  CANCELADA: 'badge--red',
-  PENDENTE: 'badge--yellow',
-  HOMOLOGADA: 'badge--blue',
-  INDEFERIDA: 'badge--red',
-  DEFERIDO: 'badge--green',
-  INDEFERIDO: 'badge--red',
-  TITULAR: 'badge--green',
-  SUPLENTE: 'badge--yellow',
-  DESCLASSIFICADO: 'badge--red',
-  EM_ANALISE: 'badge--blue',
-  EXPIRADO: 'badge--gray',
-  EM_VIGOR: 'badge--green',
-  ARQUIVADO: 'badge--gray',
-  EM_PREENCHIMENTO: 'badge--blue',
-  ENVIADO: 'badge--yellow',
-  APROVADO: 'badge--green',
-  REJEITADO: 'badge--red',
-  RECUSADO: 'badge--red',
-  NOTAS_PENDENTES: 'badge--gray',
-  INDICADO: 'badge--green',
-  NAO_ASSUMIU: 'badge--gray',
-  RESULTADO_PUBLICADO: 'badge--green',
+const TOM_POR_STATUS = {
+  RASCUNHO: 'gray',
+  PUBLICADO: 'green',
+  ENCERRADO: 'gray',
+  ATIVO: 'green',
+  DESLIGADO: 'red',
+  SOLICITADA: 'yellow',
+  APROVADA: 'green',
+  REJEITADA: 'red',
+  ABERTA: 'green',
+  EM_SELECAO: 'blue',
+  PREENCHIDA: 'green',
+  ENCERRADA: 'gray',
+  CANCELADA: 'red',
+  PENDENTE: 'yellow',
+  HOMOLOGADA: 'blue',
+  INDEFERIDA: 'red',
+  DEFERIDO: 'green',
+  INDEFERIDO: 'red',
+  TITULAR: 'green',
+  SUPLENTE: 'yellow',
+  DESCLASSIFICADO: 'red',
+  EM_ANALISE: 'blue',
+  EXPIRADO: 'gray',
+  EM_VIGOR: 'green',
+  ARQUIVADO: 'gray',
+  EM_PREENCHIMENTO: 'blue',
+  ENVIADO: 'yellow',
+  APROVADO: 'green',
+  REJEITADO: 'red',
+  RECUSADO: 'red',
+  NOTAS_PENDENTES: 'gray',
+  INDICADO: 'green',
+  NAO_ASSUMIU: 'gray',
+  RESULTADO_PUBLICADO: 'green',
+  AGUARDANDO_AVALIACAO: 'yellow',
+  NAO_SOLICITADO: 'gray',
+  SOLICITADO: 'blue',
+  REPROVADO: 'red',
+  REGISTRADA: 'green',
+  NAO_REGISTRADA: 'red',
+  NAO_INFORMADO: 'gray',
+  AUTORIZADO: 'green',
+  NEGADO: 'red',
+  // Ações da auditoria, agrupadas por significado
+  APROVACAO: 'green',
+  PUBLICACAO: 'green',
+  ATIVACAO: 'green',
+  REJEICAO: 'red',
+  CANCELAMENTO: 'red',
+  EXCLUSAO: 'red',
+  DESATIVACAO: 'red',
+  CRIACAO: 'blue',
+  ATUALIZACAO: 'gray',
+  ENCERRAMENTO: 'gray',
+  DESISTENCIA: 'yellow',
+  VINCULO: 'purple',
 }
 
 const STATUS_LABEL = {
@@ -78,13 +98,33 @@ const STATUS_LABEL = {
   INDICADO: 'Indicado(a)',
   NAO_ASSUMIU: 'Não assumiu',
   RESULTADO_PUBLICADO: 'Resultado publicado',
+  AGUARDANDO_AVALIACAO: 'Aguardando avaliação',
+  NAO_SOLICITADO: 'Não solicitado',
+  SOLICITADO: 'Solicitado',
+  REPROVADO: 'Reprovado',
+  REGISTRADA: 'Registrada',
+  NAO_REGISTRADA: 'Não Registrada',
+  NAO_INFORMADO: 'Não Informado',
+  AUTORIZADO: 'Autorizado',
+  NEGADO: 'Negado',
 }
 
-export function Badge({ status }) {
+const CLASSES_POR_TOM = {
+  green: 'bg-green-100 text-green-700',
+  red: 'bg-red-100 text-red-700',
+  yellow: 'bg-yellow-100 text-yellow-700',
+  blue: 'bg-blue-100 text-blue-700',
+  gray: 'bg-gray-100 text-gray-600',
+  purple: 'bg-purple-100 text-purple-700',
+}
+
+const BASE = 'inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap'
+
+export function Badge({ status, label: labelInformado }) {
   if (!status) {
-    return <span className="badge badge--gray">—</span>
+    return <span className={`${BASE} ${CLASSES_POR_TOM.gray}`}>—</span>
   }
-  const cls = STATUS_STYLE[status] ?? 'badge--gray'
-  const label = STATUS_LABEL[status] ?? status
-  return <span className={`badge ${cls}`}>{label}</span>
+  const tom = TOM_POR_STATUS[status] ?? 'gray'
+  const label = labelInformado ?? STATUS_LABEL[status] ?? status
+  return <span className={`${BASE} ${CLASSES_POR_TOM[tom]}`}>{label}</span>
 }

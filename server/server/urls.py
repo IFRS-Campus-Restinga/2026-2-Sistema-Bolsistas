@@ -35,6 +35,8 @@ urlpatterns = [
     path("api/auditoria/", include("auditoria.urls")),
     path("api/vinculo-direto/", include("vinculo_direto.urls")),
     path("api/selecao/", include("selecao.urls")),
+    path("api/bolsistas/", include("bolsistas.urls")),
+    path("api/frequencias/", include("frequencias.urls")),
 ]
 
 # Em dev o Django serve os uploads; precisa vir ANTES do catch-all do React,

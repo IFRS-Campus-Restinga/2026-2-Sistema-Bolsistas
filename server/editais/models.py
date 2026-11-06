@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.validators import MinLengthValidator
+from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -66,6 +66,15 @@ class Edital(models.Model):
         null=True,
         blank=True,
         help_text="Data de entrega dos relatórios finais",
+    )
+    dia_limite_frequencia = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text=(
+            "Dia do mês seguinte até o qual a frequência do mês deve ser lançada. "
+            "Em meses mais curtos, vale o último dia."
+        ),
     )
 
     def __str__(self):

@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorProjeto, Usuario
+from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
 from projetos.models import Projeto
 
@@ -601,6 +602,17 @@ class ValoresBolsaEditalAPITests(APITestCase):
         self.assertEqual(disponiveis[self.bict_12.id]["valor_mensal"], "500.00")
         self.assertTrue(disponiveis[self.bat_16.id]["disponivel"])
         self.assertEqual(EditalValorBolsa.objects.filter(edital=self.edital).count(), 2)
+
+    def test_definir_valores_registra_log(self):
+        self.salvar((self.bict_12, "500.00"))
+
+        self.assertTrue(
+            LogAuditoria.objects.filter(
+                acao=AcaoAuditoria.ATUALIZACAO,
+                entidade=EntidadeAuditoria.EDITAL,
+                entidade_id=str(self.edital.pk),
+            ).exists()
+        )
 
     def test_valor_acima_do_maximo_institucional(self):
         response = self.salvar((self.bict_12, "600.00"))

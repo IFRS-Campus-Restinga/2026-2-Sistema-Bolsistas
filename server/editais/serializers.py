@@ -58,8 +58,17 @@ class EditalSerializer(serializers.ModelSerializer):
             "status",
             "prazo_inscricao_encerrado",
             *CAMPOS_CRONOGRAMA,
+            "dia_limite_frequencia",
         ]
         read_only_fields = ["id", "status"]
+        extra_kwargs = {
+            "dia_limite_frequencia": {
+                "error_messages": {
+                    "min_value": "Informe um dia entre 1 e 31.",
+                    "max_value": "Informe um dia entre 1 e 31.",
+                }
+            }
+        }
 
     def get_prazo_inscricao_encerrado(self, edital):
         if edital.data_fechamento_inscricoes is None:

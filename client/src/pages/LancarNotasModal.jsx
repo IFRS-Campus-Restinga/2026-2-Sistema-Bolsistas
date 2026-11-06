@@ -68,7 +68,7 @@ export default function LancarNotasModal({ bolsaId, candidato, etapas, onSalvo, 
       width={520}
     >
       {erro && <Alert tone="error">{erro}</Alert>}
-      <p style={{ marginBottom: 12 }}>
+      <p className="mb-3">
         Informe uma nota de 0 a {NOTA_MAXIMA} para cada etapa. As notas podem ser corrigidas até a
         publicação do resultado.
       </p>
@@ -92,7 +92,7 @@ export default function LancarNotasModal({ bolsaId, candidato, etapas, onSalvo, 
       {invalidas.length > 0 && (
         <Alert tone="warning">As notas devem estar entre 0 e {NOTA_MAXIMA}.</Alert>
       )}
-      <p style={{ marginTop: 8 }}>
+      <p className="mt-2">
         <strong>Nota final prevista:</strong> {previa ?? 'preencha todas as etapas para calcular'}
       </p>
 
@@ -100,8 +100,13 @@ export default function LancarNotasModal({ bolsaId, candidato, etapas, onSalvo, 
         <Button variant="outline" onClick={onFechar} disabled={salvando}>
           Cancelar
         </Button>
-        <Button variant="accent" onClick={salvar} disabled={salvando || invalidas.length > 0}>
-          {salvando ? 'Salvando...' : 'Salvar notas'}
+        <Button
+          variant="accent"
+          onClick={salvar}
+          disabled={invalidas.length > 0}
+          loading={salvando}
+        >
+          Salvar notas
         </Button>
       </FormActions>
     </Modal>

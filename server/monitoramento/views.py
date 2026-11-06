@@ -1,13 +1,20 @@
+from collections import Counter
+
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Usuario
 from accounts.permissions import IsAdministrador
-from bolsas.models import Bolsa, StatusBolsa
+from auditoria.models import LogAuditoria
+from auditoria.serializers import LogAuditoriaSerializer
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
 from editais.models import Edital
-from inscricoes.models import Inscricao, StatusInscricao
+from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 from projetos.models import Projeto
+from selecao.models import IndicacaoBolsista, ResultadoInscricao, SituacaoClassificacao
+from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
 
 
 class MonitoramentoGlobalView(APIView):
@@ -131,5 +138,119 @@ class MonitoramentoGlobalView(APIView):
                         for inscricao in inscricoes_encerradas
                     ],
                 },
+            }
+        )
+
+
+STATUS_BOLSA_OFERTADA = [
+    StatusBolsa.APROVADA,
+    StatusBolsa.ABERTA,
+    StatusBolsa.EM_SELECAO,
+    StatusBolsa.PREENCHIDA,
+    StatusBolsa.ENCERRADA,
+]
+
+QUANTIDADE_ATIVIDADES_RECENTES = 5
+
+
+def _edital_do_filtro(request, editais):
+    texto = request.query_params.get("edital", "").strip()
+    if not texto:
+        return None
+    edital = next((edital for edital in editais if str(edital.pk) == texto), None)
+    if edital is None:
+        raise ValidationError({"edital": "Edital inválido."})
+    return edital
+
+
+def _vagas_por_tipo(bolsas, ocupadas_por_bolsa):
+    vagas = {tipo: {"ocupadas": 0, "total": 0} for tipo in TipoBolsa.values}
+    for bolsa in bolsas:
+        vagas[bolsa.tipo]["total"] += bolsa.quantidade_vagas
+        vagas[bolsa.tipo]["ocupadas"] += ocupadas_por_bolsa.get(bolsa.pk, 0)
+    return [{"tipo": tipo, "rotulo": rotulo, **vagas[tipo]} for tipo, rotulo in TipoBolsa.choices]
+
+
+class PainelAdministrativoView(APIView):
+    """Contagens do dashboard do administrador; o filtro opcional `edital` restringe tudo menos a atividade recente."""
+
+    permission_classes = [IsAuthenticated, IsAdministrador]
+
+    def get(self, request):
+        editais = list(
+            Edital.objects.exclude(status=Edital.Status.RASCUNHO).order_by("-ano_codigo", "-pk")
+        )
+        edital = _edital_do_filtro(request, editais)
+
+        bolsas = Bolsa.objects.all()
+        if edital:
+            bolsas = bolsas.filter(edital=edital)
+
+        ofertadas = list(bolsas.filter(status__in=STATUS_BOLSA_OFERTADA))
+        ocupadas_por_bolsa = Counter(
+            IndicacaoBolsista.objects.filter(bolsa__in=ofertadas).values_list("bolsa_id", flat=True)
+        )
+        ocupadas_por_bolsa.update(
+            ConviteVinculoDireto.objects.filter(
+                bolsa__in=ofertadas, status=StatusConvite.APROVADO
+            ).values_list("bolsa_id", flat=True)
+        )
+        vagas_por_tipo = _vagas_por_tipo(ofertadas, ocupadas_por_bolsa)
+
+        enviadas = Inscricao.objects.filter(bolsa__in=bolsas).exclude(
+            status=StatusInscricao.RASCUNHO
+        )
+
+        logs = LogAuditoria.objects.all()[:QUANTIDADE_ATIVIDADES_RECENTES]
+
+        return Response(
+            {
+                "editais": [
+                    {
+                        "id": item.pk,
+                        "nome": item.nome,
+                        "ano_codigo": item.ano_codigo,
+                        "status": item.status,
+                        "status_display": item.get_status_display(),
+                    }
+                    for item in editais
+                ],
+                "edital": edital.pk if edital else None,
+                "editais_em_vigor": sum(
+                    1 for item in editais if item.status == Edital.Status.EM_VIGOR
+                ),
+                "bolsas": {
+                    "ofertadas": len(ofertadas),
+                    "projetos": len({bolsa.projeto_id for bolsa in ofertadas}),
+                },
+                "vagas": {
+                    "ocupadas": sum(item["ocupadas"] for item in vagas_por_tipo),
+                    "total": sum(item["total"] for item in vagas_por_tipo),
+                    "por_tipo": vagas_por_tipo,
+                },
+                "funil": {
+                    "enviadas": enviadas.count(),
+                    "homologadas": enviadas.filter(status=StatusInscricao.HOMOLOGADA).count(),
+                    "classificadas": ResultadoInscricao.objects.filter(
+                        inscricao__in=enviadas,
+                        situacao__in=[
+                            SituacaoClassificacao.TITULAR,
+                            SituacaoClassificacao.SUPLENTE,
+                        ],
+                    ).count(),
+                    "vinculadas": IndicacaoBolsista.objects.filter(bolsa__in=bolsas).count(),
+                },
+                "pendencias": {
+                    "bolsas_aguardando_aprovacao": bolsas.filter(
+                        status=StatusBolsa.SOLICITADA
+                    ).count(),
+                    "recursos_sem_julgamento": Recurso.objects.filter(
+                        inscricao__bolsa__in=bolsas, status=StatusRecurso.PENDENTE
+                    ).count(),
+                    "convites_aguardando_analise": ConviteVinculoDireto.objects.filter(
+                        bolsa__in=bolsas, status=StatusConvite.ENVIADO
+                    ).count(),
+                },
+                "atividade_recente": LogAuditoriaSerializer(logs, many=True).data,
             }
         )
