@@ -66,8 +66,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   const initials = (() => {
-    if (!me?.nome) return '?'
-    const partes = me.nome.trim().split(' ')
+    // Ignora etiquetas como "[dev]" nos usuários de teste.
+    const nome = me?.nome?.replace(/\[[^\]]*\]/g, '').trim()
+    if (!nome) return '?'
+    const partes = nome.split(/\s+/)
     if (partes.length === 1) return partes[0][0].toUpperCase()
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
   })()

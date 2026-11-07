@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { bolsasFetch, inscricoesFetch } from '../api'
+import { bolsasFetch, bolsistasFetch, dadosBancariosFetch, inscricoesFetch } from '../api'
 import {
+  Badge,
   Banner,
   Button,
   Layout,
@@ -49,17 +50,42 @@ const secoes = [
       { id: 'minha-frequencia', label: 'Minha frequência', icon: <IconCalendarCheck /> },
     ],
   },
-  // Dados bancários sai do menu e vai para o menu do avatar na #464.
-  {
-    title: 'Conta',
-    items: [{ id: 'dados-bancarios', label: 'Dados bancários', icon: <IconBank /> }],
-  },
 ]
+
+/**
+ * Situação dos dados bancários do aluno. Recalcula a cada troca de tab, para o aviso
+ * sumir logo depois que o aluno salva o cadastro.
+ */
+function useDadosBancarios(active) {
+  const [situacao, setSituacao] = useState({ pendente: false, temBolsa: false })
+
+  useEffect(() => {
+    let ativo = true
+    Promise.all([
+      dadosBancariosFetch('/').then((res) => (res.ok ? res.json() : null)),
+      bolsistasFetch('/meus-vinculos/').then((res) => (res.ok ? res.json() : [])),
+    ])
+      .then(([dados, vinculos]) => {
+        if (!ativo || !dados) return
+        setSituacao({
+          pendente: !dados.cadastro_completo,
+          temBolsa: Array.isArray(vinculos) && vinculos.some((v) => v.status === 'ATIVO'),
+        })
+      })
+      .catch(() => {})
+    return () => {
+      ativo = false
+    }
+  }, [active])
+
+  return situacao
+}
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
   const [totalBolsas, setTotalBolsas] = useState(null)
   const [totalInscricoes, setTotalInscricoes] = useState(null)
+  const banco = useDadosBancarios(active)
 
   useEffect(() => {
     if (active !== 'dashboard') return undefined
@@ -101,10 +127,32 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
       campus="Campus Restinga"
       userName={me.nome || '(sem nome)'}
       initials={initials}
+      accountItems={[
+        {
+          id: 'dados-bancarios',
+          label: 'Dados bancários',
+          icon: <IconBank />,
+          hint: banco.pendente ? <Badge status="PENDENTE" label="Pendente" /> : undefined,
+          onClick: () => setActive('dados-bancarios'),
+        },
+      ]}
     >
       {active === 'dashboard' && (
         <div>
           <PageHeader title="Painel do Aluno" />
+
+          {banco.pendente && banco.temBolsa && (
+            <Banner
+              tone="warning"
+              title="Cadastre seus dados bancários"
+              description="Sem eles o pagamento da sua bolsa não pode ser processado."
+              action={
+                <Button variant="primary" onClick={() => setActive('dados-bancarios')}>
+                  Cadastrar agora
+                </Button>
+              }
+            />
+          )}
 
           <Banner
             title="Editais de Iniciação Científica e Extensão Abertos!"
