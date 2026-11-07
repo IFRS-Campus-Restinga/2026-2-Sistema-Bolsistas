@@ -39,7 +39,7 @@ function ForaDoPrazo({ bolsa }) {
 
 function Bolsistas({ bolsa }) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <span>{bolsa.bolsistas_nomes.join(', ') || '—'}</span>
       <ForaDoPrazo bolsa={bolsa} />
     </div>
@@ -48,7 +48,7 @@ function Bolsistas({ bolsa }) {
 
 function Vigencia({ bolsa }) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <span className="whitespace-nowrap">
         {bolsa.data_fim_vigencia ? `até ${formatarData(bolsa.data_fim_vigencia)}` : 'Não definida'}
       </span>
@@ -160,7 +160,7 @@ export default function FinalizacaoBolsasPage() {
     <Bolsa key="bolsa" bolsa={bolsa} />,
     bolsa.coordenador_projeto_nome,
     <Vigencia key="vigencia" bolsa={bolsa} />,
-    <div key="relatorios" className="flex flex-col items-center gap-1">
+    <div key="relatorios" className="flex flex-col items-start gap-1">
       <span className="whitespace-nowrap">
         <strong className="text-gray-900">{bolsa.relatorios_aprovados}</strong> de{' '}
         {bolsa.total_bolsistas} {plural(bolsa.total_bolsistas, 'aprovado', 'aprovados')}

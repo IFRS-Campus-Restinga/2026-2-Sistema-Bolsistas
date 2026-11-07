@@ -2,21 +2,22 @@ import { Spinner } from './Spinner'
 import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 
 const BASE =
-  'inline-flex cursor-pointer items-center gap-1.5 rounded-xl leading-none font-semibold whitespace-nowrap transition-all duration-150 ease-[ease] disabled:cursor-not-allowed disabled:opacity-50 aria-busy:disabled:cursor-progress aria-busy:disabled:opacity-85'
+  'inline-flex cursor-pointer items-center rounded-controle leading-none font-medium whitespace-nowrap transition-colors duration-150 ease-[ease] disabled:cursor-not-allowed disabled:opacity-50 aria-busy:disabled:cursor-progress aria-busy:disabled:opacity-85'
 
 const TAMANHOS = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2 text-base',
+  sm: 'h-7 gap-1 px-2.5 text-xs',
+  md: 'h-8 gap-1.5 px-3 text-sm',
 }
 
+// Variantes do protótipo: neutras e discretas; o verde IF fica para a ação principal.
 const VARIANTES = {
   primary: 'border-0 bg-gray-900 text-white shadow-xs enabled:hover:bg-gray-800',
-  accent:
-    'border-0 bg-[linear-gradient(135deg,var(--color-if-green-dark),var(--color-if-green))] text-white shadow-[0_2px_8px_rgba(47,158,65,0.25)] enabled:hover:brightness-90',
-  outline: 'border border-gray-200 bg-white text-gray-700 shadow-xs enabled:hover:bg-gray-50',
-  danger:
-    'border-0 bg-if-red text-white shadow-[0_2px_8px_rgba(205,25,30,0.25)] enabled:hover:brightness-90',
-  ghost: 'border-0 bg-transparent text-gray-600 enabled:hover:bg-gray-100',
+  accent: 'border-0 bg-brand text-white shadow-xs enabled:hover:bg-brand-dark',
+  outline:
+    'border border-gray-200 bg-white text-gray-700 shadow-[0_1px_1px_rgb(0_0_0/0.03)] enabled:hover:border-gray-300 enabled:hover:bg-gray-50',
+  danger: 'border border-red-200 bg-white text-red-600 enabled:hover:bg-red-50',
+  ghost:
+    'border-0 bg-transparent text-gray-600 enabled:hover:bg-gray-100 enabled:hover:text-gray-900',
 }
 
 /**

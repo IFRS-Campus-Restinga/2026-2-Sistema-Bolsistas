@@ -145,7 +145,7 @@ export default function SituacaoFrequenciasPage() {
         valor={contar(celulas, 'NAO_REGISTRADA')}
         tom="text-red-700"
       />,
-      <div key="nao-informadas" className="flex flex-col items-center gap-0.5">
+      <div key="nao-informadas" className="flex flex-col items-start gap-0.5">
         <Contagem valor={contar(celulas, 'NAO_INFORMADO')} tom="text-gray-700" />
         {atrasadas > 0 && (
           <span className="text-xs font-semibold text-red-600">

@@ -1,21 +1,62 @@
 @layer theme, base, components, utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..800;1,14..32,400&display=swap');
+
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/preflight.css' layer(base);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 /* static: gera todas as variáveis, mesmo as que nenhuma classe usa (o IFLogo usa via var()). */
 @theme static {
-  /* Instituto Federal */
+  /*
+   * Design system "Clean SaaS" do protótipo: base neutra (zinc) e o verde IF só como acento.
+   * Cores da marca: Manual de Aplicação da Marca IF.
+   */
+  --color-brand: #2f9e41;
+  --color-brand-dark: #23792f;
+  --color-brand-soft: #e8f5ea;
   --color-if-red: #cd191e;
-  --color-if-green: #2f9e41;
-  --color-if-green-dark: #1a6b2c;
+  /* Nomes antigos do verde IF, mantidos para as telas que ainda os usam. */
+  --color-if-green: var(--color-brand);
+  --color-if-green-dark: var(--color-brand-dark);
+
+  /* Papéis de cor: fundo da página, superfícies, bordas e texto. */
+  --color-fundo: #fafafa;
+  --color-superficie: #ffffff;
+  --color-superficie-suave: #f4f4f5;
+  --color-borda: #e4e4e7;
+  --color-borda-suave: #f0f0f1;
+  --color-texto: #18181b;
+  --color-texto-suave: #52525b;
+  --color-texto-apagado: #a1a1aa;
 
   /* Animações */
   --animate-girar: girar 0.7s linear infinite;
   --animate-deslizar: deslizar 1.1s ease-in-out infinite;
   --animate-surgir: surgir 0.2s ease;
   --animate-brilho: brilho 1.4s ease infinite;
+  --animate-aparecer: aparecer 0.15s ease-out;
+  --animate-entrar-direita: entrar-direita 0.2s ease-out;
+
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes entrar-direita {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   @keyframes girar {
     to {
@@ -52,16 +93,18 @@
     }
   }
 
-  /* Fundo das páginas */
-  --color-fundo: #f8f9fa;
-
   /* Sombreamento */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-modal: 0 20px 60px -12px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 16px -4px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
+  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.06);
+  --shadow-modal: 0 24px 48px -12px rgb(0 0 0 / 0.22), 0 4px 12px rgb(0 0 0 / 0.06);
 
   /* Tipografia */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
+  /* Raios: cards e painéis (card) e campos e botões (controle). */
+  --radius-card: 12px;
+  --radius-controle: 8px;
   --radius-xl: 12px;
   --radius-2xl: 16px;
 
@@ -84,20 +127,24 @@
   --text-4xl--line-height: 1.5;
 
   /*
-   * Cores com os hex que o app já usa (paleta do Tailwind 3). As do Tailwind 4 são
-   * em OKLCH e ficam levemente diferentes; assim gray-400 continua sendo #9ca3af.
+   * Cores de status com os hex que o app já usa (paleta do Tailwind 3). As do Tailwind 4
+   * são em OKLCH e ficam levemente diferentes.
    */
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
-  --color-gray-950: #030712;
+  /*
+   * Neutros: gray-* aponta para a paleta zinc do protótipo, então as telas existentes
+   * trocam de neutro sem mudar classe. Telas novas podem usar zinc-* direto.
+   */
+  --color-gray-50: var(--color-zinc-50);
+  --color-gray-100: var(--color-zinc-100);
+  --color-gray-200: var(--color-zinc-200);
+  --color-gray-300: var(--color-zinc-300);
+  --color-gray-400: var(--color-zinc-400);
+  --color-gray-500: var(--color-zinc-500);
+  --color-gray-600: var(--color-zinc-600);
+  --color-gray-700: var(--color-zinc-700);
+  --color-gray-800: var(--color-zinc-800);
+  --color-gray-900: var(--color-zinc-900);
+  --color-gray-950: var(--color-zinc-950);
 
   --color-red-50: #fef2f2;
   --color-red-100: #fee2e2;
@@ -217,10 +264,26 @@
   body {
     font-size: 14px;
     line-height: 1.5;
-    color: #374151;
+    font-feature-settings: 'cv11', 'ss01';
+    color: var(--color-texto);
     background: var(--color-fundo);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-zinc-300);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-zinc-400);
   }
 
   #root {

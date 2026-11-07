@@ -7,7 +7,7 @@ import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 
 const ALTURA_ESTIMADA_ITEM = 36
 
-const CELULA = 'justify-center text-sm text-gray-400'
+const CELULA = 'justify-start text-sm text-gray-400'
 
 const ITEM =
   'flex cursor-pointer items-center rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm leading-[normal] font-medium enabled:hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50'

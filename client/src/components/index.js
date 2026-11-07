@@ -36,6 +36,17 @@ export { Alert } from './Alert'
 export { AcoesCell } from './AcoesCell'
 export { LocalEtapa } from './LocalEtapa'
 
+// Design system do protótipo (#456)
+export { Card } from './Card'
+export { SectionTitle } from './SectionTitle'
+export { KeyValue } from './KeyValue'
+export { Tabs } from './Tabs'
+export { EmptyState } from './EmptyState'
+export { Hint } from './Hint'
+export { Drawer } from './Drawer'
+export { Timeline } from './Timeline'
+export { Stepper } from './Stepper'
+
 // Form / Input (#179)
 export { FormField, FormActions, TextInput, TextArea, Select, FileField } from './FormField'
 export { Modal } from './Modal'

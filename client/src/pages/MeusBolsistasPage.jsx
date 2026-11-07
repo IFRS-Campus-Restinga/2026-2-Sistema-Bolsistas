@@ -127,7 +127,7 @@ export default function MeusBolsistasPage() {
     vinculo.projeto_titulo,
     `${vinculo.edital_ano_codigo} · ${vinculo.bolsa_tipo_display}`,
     vinculo.origem_display,
-    <div key="vinculo" className="flex flex-col items-center gap-1">
+    <div key="vinculo" className="flex flex-col items-start gap-1">
       <Badge status={vinculo.status} />
       {vinculo.vaga_cancelada && <Badge status="CANCELADA" label="Vaga cancelada" />}
     </div>,

@@ -17,7 +17,7 @@ import { mensagemDeErro } from '../utils/mensagemDeErro'
 function SituacaoSolicitacao({ pendencia }) {
   if (!pendencia.solicitada_em) return <span className="text-sm text-gray-400">Não solicitada</span>
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge status="SOLICITADO" label="Solicitada" />
       <span className="text-xs text-gray-400">{formatarDataHora(pendencia.solicitada_em)}</span>
       {pendencia.lida_em && <span className="text-xs text-gray-400">Lida pelo coordenador</span>}
