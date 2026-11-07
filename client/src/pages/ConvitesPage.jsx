@@ -203,9 +203,6 @@ function ComprovanteConviteModal({ convite, onFechar }) {
       {convite.status === 'REJEITADO' && convite.justificativa_rejeicao && (
         <Alert tone="error">Motivo da rejeição: {convite.justificativa_rejeicao}</Alert>
       )}
-      {convite.status === 'APROVADO' && (
-        <Alert tone="success">Vínculo direto aprovado, bolsa efetivada.</Alert>
-      )}
       {convite.data_decisao && (
         <p>Decisão registrada em {new Date(convite.data_decisao).toLocaleString('pt-BR')}.</p>
       )}

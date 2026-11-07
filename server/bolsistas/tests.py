@@ -423,6 +423,12 @@ class MeusVinculosTests(CenarioBolsista):
         self.vinculo("bia")
         self.client.force_authenticate(self.vinculo_ana.aluno)
 
+    def test_traz_a_sigla_da_modalidade_e_a_data_do_servidor(self):
+        item = self.client.get(self.url).data[0]
+
+        self.assertEqual(item["bolsa_modalidade"], "BICT")
+        self.assertEqual(item["hoje"], timezone.localdate())
+
     def test_aluno_ve_o_modelo_anexado_pelo_coordenador(self):
         relatorio = self.relatorio(self.vinculo_ana, SituacaoRelatorio.SOLICITADO)
         relatorio.modelo = SimpleUploadedFile("modelo.docx", b"modelo")
@@ -1471,3 +1477,41 @@ class PendenciasDoCoordenadorTests(CenarioBolsista):
         )
 
         self.assertEqual(pendencias_do_coordenador(outro), [])
+
+
+class VigenciaEfetivaTests(CenarioBolsista):
+    def test_bolsa_sem_datas_proprias_usa_a_vigencia_do_edital(self):
+        self.edital.data_inicio_vigencia = timezone.localdate()
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+
+        self.assertEqual(self.bolsa.inicio_vigencia, self.edital.data_inicio_vigencia)
+        self.assertEqual(self.bolsa.fim_vigencia, self.edital.data_fim_vigencia)
+
+    def test_datas_da_bolsa_sao_excecao_ao_edital(self):
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_fim_vigencia"])
+        self.bolsa.data_fim_vigencia = timezone.localdate() + timedelta(days=100)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+
+        self.assertEqual(self.bolsa.fim_vigencia, self.bolsa.data_fim_vigencia)
+
+    def test_vigencia_do_edital_vencida_vira_pendencia_do_coordenador(self):
+        self.vinculo("ana")
+        self.edital.data_fim_vigencia = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_fim_vigencia"])
+
+        [pendencia] = pendencias_do_coordenador(self.coordenador)
+
+        self.assertIn("venceu em", pendencia)
+
+    def test_aluno_ve_a_vigencia_do_edital(self):
+        vinculo = self.vinculo("ana")
+        self.edital.data_inicio_vigencia = timezone.localdate()
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+        self.client.force_authenticate(vinculo.aluno)
+
+        item = self.client.get(reverse("bolsistas:meus-vinculos")).data[0]
+
+        self.assertEqual(item["data_fim_vigencia"], self.edital.data_fim_vigencia.isoformat())

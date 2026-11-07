@@ -1,4 +1,5 @@
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import serializers
 
 from bolsas.models import Bolsa, StatusBolsa
@@ -180,6 +181,8 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
     bolsa_id = serializers.IntegerField(source="bolsa.id", read_only=True)
     bolsa_status = serializers.CharField(source="bolsa.status", read_only=True)
     bolsa_tipo_display = serializers.CharField(source="bolsa.get_tipo_display", read_only=True)
+    bolsa_modalidade = serializers.CharField(source="bolsa.modalidade", read_only=True)
+    hoje = serializers.SerializerMethodField()
     bolsa_modalidade_display = serializers.CharField(
         source="bolsa.get_modalidade_display", read_only=True
     )
@@ -189,10 +192,8 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
     valor_mensal = serializers.DecimalField(
         source="bolsa.valor_mensal", max_digits=10, decimal_places=2, read_only=True
     )
-    data_inicio_vigencia = serializers.DateField(
-        source="bolsa.data_inicio_vigencia", read_only=True
-    )
-    data_fim_vigencia = serializers.DateField(source="bolsa.data_fim_vigencia", read_only=True)
+    data_inicio_vigencia = serializers.DateField(source="bolsa.inicio_vigencia", read_only=True)
+    data_fim_vigencia = serializers.DateField(source="bolsa.fim_vigencia", read_only=True)
     projeto_titulo = serializers.CharField(source="bolsa.projeto.titulo", read_only=True)
     coordenador_nome = serializers.CharField(
         source="bolsa.projeto.coordenador_projeto.usuario.nome", read_only=True
@@ -219,7 +220,9 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "bolsa_id",
             "bolsa_status",
             "bolsa_tipo_display",
+            "bolsa_modalidade",
             "bolsa_modalidade_display",
+            "hoje",
             "carga_horaria_semanal",
             "valor_mensal",
             "data_inicio_vigencia",
@@ -234,6 +237,10 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "pode_enviar_relatorio",
             "motivo_bloqueio",
         ]
+
+    def get_hoje(self, vinculo):
+        """Data do servidor, para a tela contar os dias da vigência sem usar o relógio local."""
+        return timezone.localdate()
 
     def get_relatorio(self, vinculo):
         relatorio = relatorio_do_vinculo(vinculo)
@@ -339,6 +346,10 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
         source="finalizada_por.nome", read_only=True, default=""
     )
 
+    # Vigência efetiva: a da bolsa (exceção) ou a do edital.
+    data_inicio_vigencia = serializers.DateField(source="inicio_vigencia", read_only=True)
+    data_fim_vigencia = serializers.DateField(source="fim_vigencia", read_only=True)
+
     class Meta:
         model = Bolsa
         fields = [
@@ -411,6 +422,10 @@ class BolsaDoCoordenadorProjetoSerializer(serializers.ModelSerializer):
     bolsistas = serializers.SerializerMethodField()
     motivos_bloqueio = serializers.SerializerMethodField()
     pode_finalizar = serializers.SerializerMethodField()
+
+    # Vigência efetiva: a da bolsa (exceção) ou a do edital.
+    data_inicio_vigencia = serializers.DateField(source="inicio_vigencia", read_only=True)
+    data_fim_vigencia = serializers.DateField(source="fim_vigencia", read_only=True)
 
     class Meta:
         model = Bolsa

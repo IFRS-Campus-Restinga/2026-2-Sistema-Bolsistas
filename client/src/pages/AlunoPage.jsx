@@ -192,7 +192,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
       )}
       {active === 'recursos' && <MeusRecursosPage />}
       {active === 'convites' && <ConvitesPage />}
-      {active === 'minha-bolsa' && <MinhaBolsaPage />}
+      {active === 'minha-bolsa' && <MinhaBolsaPage onNav={setActive} />}
       {active === 'minha-frequencia' && <MinhaFrequenciaPage />}
       {active === 'dados-bancarios' && <DadosBancariosPage />}
     </Layout>

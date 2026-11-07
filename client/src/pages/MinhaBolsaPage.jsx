@@ -1,76 +1,94 @@
 import { useEffect, useState } from 'react'
-import { bolsistasFetch } from '../api'
+import { bolsistasFetch, dadosBancariosFetch, frequenciasFetch } from '../api'
 import {
   Alert,
-  Badge,
   Button,
+  Card,
   Carregando,
+  EmptyState,
   FileField,
+  IconAward,
+  IconDownload,
   IconFileText,
-  IconGradCap,
+  KeyValue,
   PageHeader,
+  SectionTitle,
+  StatusPill,
   useToast,
 } from '../components'
 import { formatarData, formatarDataHora } from '../utils/dataHora'
 import { formatarMoeda } from '../utils/formatarMoeda'
+import { formatarMesCurto } from '../utils/mesReferencia'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import MotivoModal from './MotivoModal'
 
-function vigencia(vinculo) {
-  if (!vinculo.data_inicio_vigencia || !vinculo.data_fim_vigencia) return 'Não definida'
-  return `${formatarData(vinculo.data_inicio_vigencia)} a ${formatarData(vinculo.data_fim_vigencia)}`
+const MODALIDADE_LABEL = {
+  BICT: 'Iniciação Científica',
+  BIDTI: 'Desenv. Tecnológico e Inovação',
+  BAT: 'Apoio Técnico',
 }
 
-function Informacao({ rotulo, children }) {
+const UM_DIA = 24 * 60 * 60 * 1000
+
+// Datas puras do backend ("2026-09-08"); `hoje` também vem do servidor.
+function diasEntre(inicio, fim) {
+  return Math.round((new Date(`${fim}T00:00:00`) - new Date(`${inicio}T00:00:00`)) / UM_DIA)
+}
+
+function VigenciaBar({ inicio, fim, hoje }) {
+  const total = diasEntre(inicio, fim)
+  const passado = Math.max(0, diasEntre(inicio, hoje))
+  const restantes = Math.max(0, diasEntre(hoje, fim))
+  const percentual = total > 0 ? Math.min(100, (passado / total) * 100) : 0
+
   return (
     <div>
-      <dt className="text-xs font-semibold text-gray-500">{rotulo}</dt>
-      <dd className="text-gray-800">{children}</dd>
+      <div className="mb-1.5 flex justify-between text-xs text-gray-500">
+        <span>{formatarData(inicio)}</span>
+        <span>{restantes} dias restantes</span>
+        <span>{formatarData(fim)}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className="h-full rounded-full bg-brand" style={{ width: `${percentual}%` }} />
+      </div>
     </div>
   )
 }
 
-function ParecerDoRelatorio({ relatorio }) {
-  if (relatorio.situacao === 'APROVADO') {
-    return <Alert tone="success">Relatório aprovado pelo coordenador do projeto.</Alert>
-  }
-  if (relatorio.situacao === 'REPROVADO') {
-    return (
-      <Alert tone="warning">
-        Relatório reprovado: {relatorio.justificativa} Envie uma nova versão dentro do prazo.
-      </Alert>
-    )
-  }
-  return null
-}
-
-function ModeloDoRelatorio({ relatorio }) {
+function CartaoTermo() {
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-      <span className="flex min-w-0 items-center gap-2.5 text-sm text-gray-700">
-        <span className="shrink-0 text-gray-400">
-          <IconFileText size={18} />
-        </span>
-        <span className="min-w-0">
-          <span className="block font-medium text-gray-900">Modelo do coordenador</span>
-          <span className="block truncate text-xs text-gray-500">
-            {relatorio.nome_original_modelo || 'modelo de relatório'}: siga este formato no seu
-            relatório.
-          </span>
-        </span>
-      </span>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => window.open(relatorio.modelo, '_blank', 'noopener')}
-      >
-        Baixar modelo
-      </Button>
-    </div>
+    <Card>
+      <SectionTitle title="Termo de compromisso" />
+      <p className="text-sm text-gray-500">
+        A geração e o envio do termo assinado pelo sistema ainda não estão disponíveis.
+      </p>
+    </Card>
   )
 }
 
-function RelatorioFinal({ vinculo, onEnviado }) {
+function CartaoDadosBancarios({ dados, onNav }) {
+  const completo = dados?.cadastro_completo
+  return (
+    <Card>
+      <SectionTitle title="Dados bancários" />
+      {completo ? (
+        <dl className="grid grid-cols-2 gap-3">
+          <KeyValue label="Banco">{dados.banco}</KeyValue>
+          <KeyValue label="Agência / conta">
+            {dados.agencia} / {dados.conta}
+          </KeyValue>
+        </dl>
+      ) : (
+        <Alert tone="warning">Não cadastrados.</Alert>
+      )}
+      <Button size="sm" className="mt-3" onClick={() => onNav('dados-bancarios')}>
+        {completo ? 'Alterar' : 'Cadastrar'}
+      </Button>
+    </Card>
+  )
+}
+
+function CartaoRelatorio({ vinculo, onEnviado }) {
   const toast = useToast()
   const [arquivo, setArquivo] = useState(null)
   const [enviando, setEnviando] = useState(false)
@@ -102,164 +120,181 @@ function RelatorioFinal({ vinculo, onEnviado }) {
   }
 
   return (
-    <section className="mt-5 border-t border-gray-100 pt-5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-[15px] font-bold text-gray-900">Relatório final</h3>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {relatorio?.fora_do_prazo && <Badge status="PENDENTE" label="Enviado fora do prazo" />}
-          <Badge status={relatorio?.situacao ?? 'NAO_SOLICITADO'} />
-        </div>
-      </div>
-
-      <p className="mb-3 text-sm text-gray-500">
-        {!vinculo.prazo_relatorio
-          ? 'O edital ainda não definiu o prazo de entrega.'
-          : vinculo.prazo_relatorio_encerrado && vinculo.pode_enviar_relatorio
-            ? `O prazo terminou em ${formatarData(vinculo.prazo_relatorio)}. Você ainda pode enviar, mas o relatório ficará marcado como entregue fora do prazo.`
-            : `Entrega até ${formatarData(vinculo.prazo_relatorio)}.`}
-        {relatorio?.arquivo && (
-          <>
-            {' '}
-            Enviado em {formatarDataHora(relatorio.enviado_em)}:{' '}
-            <a href={relatorio.arquivo} target="_blank" rel="noopener noreferrer">
-              {relatorio.nome_original || 'relatório final'}
-            </a>
-          </>
-        )}
-      </p>
-
-      {relatorio?.modelo && <ModeloDoRelatorio relatorio={relatorio} />}
-      {relatorio && <ParecerDoRelatorio relatorio={relatorio} />}
-      {erro && <Alert tone="error">{erro}</Alert>}
-
-      {vinculo.pode_enviar_relatorio ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-[260px] flex-1">
-            <FileField
-              value={arquivo?.name || ''}
-              onChange={setArquivo}
-              accept=".pdf"
-              disabled={enviando}
-            />
-          </div>
-          <Button variant="accent" onClick={enviar} disabled={!arquivo} loading={enviando}>
-            {relatorio?.arquivo ? 'Reenviar relatório' : 'Enviar relatório'}
-          </Button>
-        </div>
+    <Card>
+      <SectionTitle title="Relatório final" />
+      {!relatorio ? (
+        <p className="text-sm text-gray-500">
+          {vinculo.data_fim_vigencia
+            ? `Será solicitado próximo ao fim da vigência (${formatarData(vinculo.data_fim_vigencia)}).`
+            : 'Será solicitado pelo coordenador do projeto próximo ao fim da vigência.'}
+        </p>
       ) : (
-        relatorio?.situacao !== 'APROVADO' && (
-          <p className="text-sm text-gray-500">{vinculo.motivo_bloqueio}</p>
-        )
-      )}
-      {vinculo.pode_enviar_relatorio && (
-        <p className="mt-2 text-xs text-gray-400">Somente PDF, com até 10 MB.</p>
-      )}
-    </section>
-  )
-}
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <StatusPill status={relatorio.situacao} />
+            {relatorio.fora_do_prazo && <StatusPill label="Enviado fora do prazo" tone="warning" />}
+          </div>
 
-function SituacaoDesligamento({ pedido }) {
-  if (!pedido) return null
-  if (pedido.status === 'PENDENTE') {
-    return (
-      <Alert tone="warning">
-        Seu pedido de desligamento está aguardando a decisão do coordenador do projeto. Motivo:{' '}
-        {pedido.motivo}
-      </Alert>
-    )
-  }
-  if (pedido.status === 'REJEITADA') {
-    return (
-      <Alert tone="error">
-        Seu pedido de desligamento foi rejeitado. Motivo: {pedido.justificativa_decisao}
-      </Alert>
-    )
-  }
-  return <Alert tone="success">Seu desligamento foi aprovado.</Alert>
-}
-
-function CartaoVinculo({ vinculo, pedido, onEnviado, onPedirDesligamento }) {
-  return (
-    <article className="rounded-2xl border border-gray-100 bg-white p-6 shadow-card">
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{vinculo.projeto_titulo}</h2>
-          <p className="text-sm text-gray-500">
-            {vinculo.edital_ano_codigo} · {vinculo.edital_nome}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge status={vinculo.status} />
-          <Badge status={vinculo.bolsa_status} />
-        </div>
-      </header>
-
-      <dl className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <Informacao rotulo="Coordenador do projeto">{vinculo.coordenador_nome}</Informacao>
-        <Informacao rotulo="Tipo e modalidade">
-          {vinculo.bolsa_tipo_display} · {vinculo.bolsa_modalidade_display}
-        </Informacao>
-        <Informacao rotulo="Carga horária">{vinculo.carga_horaria_semanal}h semanais</Informacao>
-        <Informacao rotulo="Valor mensal">{formatarMoeda(vinculo.valor_mensal)}</Informacao>
-        <Informacao rotulo="Vigência">{vigencia(vinculo)}</Informacao>
-        <Informacao rotulo="Forma de ingresso">{vinculo.origem_display}</Informacao>
-      </dl>
-
-      <section className="mt-5 border-t border-gray-100 pt-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-[15px] font-bold text-gray-900">Desligamento</h3>
-          {vinculo.status === 'ATIVO' && pedido?.status !== 'PENDENTE' && (
-            <Button variant="danger" size="sm" onClick={() => onPedirDesligamento(vinculo)}>
-              Pedir desligamento
-            </Button>
+          {relatorio.modelo && (
+            <a
+              href={relatorio.modelo}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex w-full items-center gap-2.5 rounded-controle border border-gray-200 px-3 py-2 text-left no-underline hover:bg-gray-50"
+            >
+              <IconFileText size={16} className="text-gray-400" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-gray-900">
+                  Modelo do coordenador
+                </span>
+                <span className="block truncate text-xs text-gray-500">
+                  {relatorio.nome_original_modelo || 'modelo de relatório'}
+                </span>
+              </span>
+              <IconDownload size={15} className="text-gray-400" />
+            </a>
           )}
-        </div>
-        <SituacaoDesligamento pedido={pedido} />
-        {!pedido && vinculo.status === 'ATIVO' && (
-          <p className="text-sm text-gray-500">
-            Se você não puder continuar no projeto, envie um pedido com o motivo para avaliação do
-            coordenador.
-          </p>
-        )}
-      </section>
 
-      <RelatorioFinal vinculo={vinculo} onEnviado={onEnviado} />
-    </article>
+          {relatorio.arquivo && (
+            <p className="mt-2 text-xs text-gray-500">
+              Enviado em {formatarDataHora(relatorio.enviado_em)}:{' '}
+              <a href={relatorio.arquivo} target="_blank" rel="noopener noreferrer">
+                {relatorio.nome_original || 'relatório final'}
+              </a>
+            </p>
+          )}
+
+          {relatorio.situacao === 'REPROVADO' && relatorio.justificativa && (
+            <p className="mt-2 text-sm text-gray-600">{relatorio.justificativa}</p>
+          )}
+
+          {vinculo.pode_enviar_relatorio && (
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="text-xs text-gray-500">
+                {vinculo.prazo_relatorio_encerrado
+                  ? `O prazo terminou em ${formatarData(vinculo.prazo_relatorio)}; o envio ficará marcado como fora do prazo.`
+                  : `Entrega até ${formatarData(vinculo.prazo_relatorio)}. Somente PDF, até 10 MB.`}
+              </p>
+              {erro && <Alert tone="error">{erro}</Alert>}
+              <FileField
+                value={arquivo?.name || ''}
+                onChange={setArquivo}
+                accept=".pdf"
+                disabled={enviando}
+              />
+              <div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={enviar}
+                  disabled={!arquivo}
+                  loading={enviando}
+                >
+                  {relatorio.arquivo ? 'Reenviar relatório' : 'Enviar relatório'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
   )
 }
 
-export default function MinhaBolsaPage() {
+function Pagamentos({ meses, valorMensal, onNav }) {
+  const lancados = meses.filter((mes) => mes.status_pagamento)
+  return (
+    <div className="mt-6">
+      <SectionTitle
+        title="Pagamentos"
+        action={
+          <Button variant="ghost" size="sm" onClick={() => onNav('minha-frequencia')}>
+            Ver frequência
+          </Button>
+        }
+      />
+      {lancados.length === 0 ? (
+        <EmptyState compact title="Nenhum mês lançado ainda" />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {lancados.map((mes) => (
+            <Card key={mes.mes_referencia} className="p-4!">
+              <div className="text-xs text-gray-500 capitalize">
+                {formatarMesCurto(mes.mes_referencia)}
+              </div>
+              <div className="mt-1 text-[15px] font-semibold text-gray-900 tabular-nums">
+                {mes.status_pagamento === 'NEGADO' ? '—' : formatarMoeda(valorMensal)}
+              </div>
+              <div className="mt-2">
+                <StatusPill status={mes.status_pagamento} size="sm" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Desligamento({ pedido, onPedir }) {
+  return (
+    <div className="mt-8 rounded-card border border-red-200 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-gray-900">Pedir desligamento</div>
+          <p className="text-sm text-gray-500">
+            O coordenador do projeto analisa o pedido. Você será notificado(a) da decisão.
+          </p>
+        </div>
+        {pedido?.status === 'PENDENTE' ? (
+          <StatusPill status="PENDENTE" label="Pedido em análise" />
+        ) : (
+          <Button variant="danger" onClick={onPedir}>
+            Pedir desligamento
+          </Button>
+        )}
+      </div>
+      {pedido?.status === 'REJEITADA' && (
+        <p className="mt-3 text-sm text-gray-600">
+          Seu último pedido foi rejeitado: {pedido.justificativa_decisao}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export default function MinhaBolsaPage({ onNav }) {
   const toast = useToast()
-  const [vinculos, setVinculos] = useState(null)
-  const [pedidos, setPedidos] = useState([])
+  const [dados, setDados] = useState(null)
   const [erro, setErro] = useState('')
   const [versao, setVersao] = useState(0)
-  const [desligando, setDesligando] = useState(null)
+  const [desligando, setDesligando] = useState(false)
 
   useEffect(() => {
     let ativo = true
 
     async function carregar() {
       try {
-        const [responseVinculos, responsePedidos] = await Promise.all([
+        const [rVinculos, rPedidos, rBanco, rFrequencias] = await Promise.all([
           bolsistasFetch('/meus-vinculos/'),
           bolsistasFetch('/meus-desligamentos/'),
+          dadosBancariosFetch('/'),
+          frequenciasFetch('/minhas/'),
         ])
-        const [dadosVinculos, dadosPedidos] = await Promise.all([
-          responseVinculos.json().catch(() => null),
-          responsePedidos.json().catch(() => null),
-        ])
-        if (!responseVinculos.ok || !Array.isArray(dadosVinculos)) {
-          throw new Error(mensagemDeErro(dadosVinculos, 'Não foi possível carregar sua bolsa.'))
-        }
-        if (!responsePedidos.ok || !Array.isArray(dadosPedidos)) {
-          throw new Error(
-            mensagemDeErro(dadosPedidos, 'Não foi possível carregar seus desligamentos.')
-          )
+        const [vinculos, pedidos, banco, historico] = await Promise.all(
+          [rVinculos, rPedidos, rBanco, rFrequencias].map((r) => r.json().catch(() => null))
+        )
+        if (!rVinculos.ok || !Array.isArray(vinculos)) {
+          throw new Error(mensagemDeErro(vinculos, 'Não foi possível carregar sua bolsa.'))
         }
         if (ativo) {
-          setVinculos(dadosVinculos)
-          setPedidos(dadosPedidos)
+          setDados({
+            // O aluno só pode ter um vínculo ativo; os encerrados ficam fora desta tela.
+            vinculo: vinculos.find((vinculo) => vinculo.status === 'ATIVO') ?? null,
+            pedidos: Array.isArray(pedidos) ? pedidos : [],
+            banco: rBanco.ok ? banco : null,
+            historico: Array.isArray(historico) ? historico : [],
+          })
           setErro('')
         }
       } catch (error) {
@@ -274,67 +309,106 @@ export default function MinhaBolsaPage() {
   }, [versao])
 
   const recarregar = () => setVersao((atual) => atual + 1)
-  const pedidoPorVinculo = pedidos.reduce((porVinculo, pedido) => {
-    if (!porVinculo[pedido.vinculo]) porVinculo[pedido.vinculo] = pedido
-    return porVinculo
-  }, {})
+
+  if (erro) {
+    return (
+      <>
+        <PageHeader title="Minha bolsa" />
+        <Alert tone="error">{erro}</Alert>
+      </>
+    )
+  }
+  if (!dados) return <Carregando texto="Carregando sua bolsa..." />
+
+  const { vinculo } = dados
+  if (!vinculo) {
+    return (
+      <>
+        <PageHeader title="Minha bolsa" />
+        <EmptyState
+          icon={<IconAward />}
+          title="Você ainda não tem uma bolsa ativa"
+          description="Inscreva-se em uma bolsa ou aceite um convite para começar."
+          action={
+            <Button variant="primary" onClick={() => onNav('bolsas')}>
+              Ver bolsas disponíveis
+            </Button>
+          }
+        />
+      </>
+    )
+  }
+
+  const pedido = dados.pedidos.find((item) => item.vinculo === vinculo.id)
+  const meses = dados.historico.find((item) => item.vinculo_id === vinculo.id)?.meses ?? []
 
   async function pedirDesligamento(motivo) {
-    const response = await bolsistasFetch(`/meus-vinculos/${desligando.id}/desligamento/`, {
+    const response = await bolsistasFetch(`/meus-vinculos/${vinculo.id}/desligamento/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ motivo }),
     })
-    const dados = await response.json().catch(() => null)
+    const resposta = await response.json().catch(() => null)
     if (!response.ok) {
-      throw new Error(mensagemDeErro(dados, 'Não foi possível enviar o pedido.'))
+      throw new Error(mensagemDeErro(resposta, 'Não foi possível enviar o pedido.'))
     }
-    setDesligando(null)
+    setDesligando(false)
     toast({ message: 'Pedido de desligamento enviado.', tone: 'success' })
     recarregar()
   }
 
   return (
     <>
-      <PageHeader title="Minha Bolsa" />
+      <PageHeader title="Minha bolsa" badge={<StatusPill status={vinculo.status} />} />
 
-      {erro && <Alert tone="error">{erro}</Alert>}
-
-      {!vinculos && !erro && <Carregando texto="Carregando sua bolsa..." />}
-
-      {vinculos?.length === 0 && (
-        <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-card">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-gray-100 text-gray-400">
-            <IconGradCap />
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-xs text-gray-500">{vinculo.projeto_titulo}</div>
+            <div className="mt-0.5 text-xl font-semibold tracking-tight text-gray-900">
+              {vinculo.bolsa_modalidade} · {vinculo.carga_horaria_semanal}h semanais
+            </div>
+            <div className="text-sm text-gray-500">
+              {MODALIDADE_LABEL[vinculo.bolsa_modalidade] ?? vinculo.bolsa_modalidade_display} ·
+              Coordenação: {vinculo.coordenador_nome}
+            </div>
           </div>
-          <p className="text-base font-medium text-gray-500">Você ainda não é bolsista.</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Quando for indicado em uma seleção ou tiver um vínculo direto aprovado, sua bolsa
-            aparece aqui.
-          </p>
+          <div className="text-right">
+            <div className="text-xs text-gray-500">Valor mensal</div>
+            <div className="text-xl font-semibold text-gray-900 tabular-nums">
+              {formatarMoeda(vinculo.valor_mensal)}
+            </div>
+          </div>
         </div>
-      )}
-
-      {vinculos?.length > 0 && (
-        <div className="flex flex-col gap-5">
-          {vinculos.map((vinculo) => (
-            <CartaoVinculo
-              key={vinculo.id}
-              vinculo={vinculo}
-              pedido={pedidoPorVinculo[vinculo.id]}
-              onEnviado={recarregar}
-              onPedirDesligamento={setDesligando}
+        <div className="mt-5">
+          {vinculo.data_inicio_vigencia && vinculo.data_fim_vigencia ? (
+            <VigenciaBar
+              inicio={vinculo.data_inicio_vigencia}
+              fim={vinculo.data_fim_vigencia}
+              hoje={vinculo.hoje}
             />
-          ))}
+          ) : (
+            <p className="text-xs text-gray-500">Vigência ainda não definida.</p>
+          )}
         </div>
-      )}
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <CartaoTermo />
+        <CartaoDadosBancarios dados={dados.banco} onNav={onNav} />
+        <CartaoRelatorio vinculo={vinculo} onEnviado={recarregar} />
+      </div>
+
+      <Pagamentos meses={meses} valorMensal={vinculo.valor_mensal} onNav={onNav} />
+
+      <Desligamento pedido={pedido} onPedir={() => setDesligando(true)} />
 
       {desligando && (
         <MotivoModal
           title="Pedir desligamento"
-          description={`Informe por que você não poderá continuar na bolsa do projeto “${desligando.projeto_titulo}”. O coordenador do projeto analisará o pedido.`}
+          description={`Informe por que você não poderá continuar na bolsa do projeto “${vinculo.projeto_titulo}”. O coordenador do projeto analisará o pedido.`}
           confirmLabel="Enviar pedido"
-          onClose={() => setDesligando(null)}
+          onClose={() => setDesligando(false)}
           onConfirm={pedirDesligamento}
         />
       )}

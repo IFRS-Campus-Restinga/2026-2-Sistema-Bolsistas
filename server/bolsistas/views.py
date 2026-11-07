@@ -14,7 +14,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa, fim_vigencia_efetivo
 
 from .models import (
     CancelamentoVaga,
@@ -590,5 +590,5 @@ class BolsasDoCoordenadorProjetoView(generics.ListAPIView):
                     ).order_by("aluno__nome"),
                 )
             )
-            .order_by("data_fim_vigencia", "id")
+            .order_by(fim_vigencia_efetivo(), "id")
         )

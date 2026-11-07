@@ -68,7 +68,9 @@ function GrupoDaBolsa({ grupo, onSolicitar }) {
 
       {grupo.frequencias.length > 0 && (
         <div className="mb-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">Frequências não informadas</h3>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">
+            Frequências aguardando lançamento
+          </h3>
           <DataTable
             columns={['Bolsista', 'Mês', 'Prazo', 'Solicitação', 'Ações']}
             rows={linhasFrequencias}

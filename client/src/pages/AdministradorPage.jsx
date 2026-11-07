@@ -16,6 +16,7 @@ import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
 import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
+import AdminEditaisPage from './AdminEditaisPage'
 
 const secoes = [
   { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
@@ -80,7 +81,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
           <PainelAdministrativo onNavigate={navegar} />
         </>
       )}
-      {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
+      {active === 'editais' && <AdminEditaisPage />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
       {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}

@@ -245,7 +245,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 
             return (
               <Alert key={item.id} tone={recursoDeferido ? 'success' : 'warning'}>
-                {recursoDeferido && <Badge status="DEFERIDO" />}
                 <p>{item.mensagem}</p>
                 <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
                 <Button

@@ -1,6 +1,6 @@
 from django.utils import timezone
 
-from bolsas.models import Bolsa, StatusBolsa
+from bolsas.models import Bolsa, StatusBolsa, fim_vigencia_efetivo
 from inscricoes.models import Recurso, StatusInscricao, StatusRecurso
 from selecao.models import PublicacaoResultado
 from vinculo_direto.models import STATUS_ATIVOS as STATUS_CONVITE_ATIVOS
@@ -194,10 +194,10 @@ def pendencias_do_coordenador(usuario):
             status__in=STATUS_BOLSA_EM_ANDAMENTO,
         )
         .select_related("projeto", "edital")
-        .order_by("data_fim_vigencia", "id")
+        .order_by(fim_vigencia_efetivo(), "id")
     )
     for bolsa in bolsas:
-        fim = bolsa.data_fim_vigencia
+        fim = bolsa.fim_vigencia
         prazo = bolsa.edital.data_entrega_relatorios
         if fim is not None and fim < hoje:
             pendencias.append(
