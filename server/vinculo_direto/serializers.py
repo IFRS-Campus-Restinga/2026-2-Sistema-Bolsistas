@@ -91,8 +91,8 @@ class ConviteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Esta bolsa não pertence a um dos seus projetos.")
         if not bolsa_elegivel_para_convite(bolsa):
             raise serializers.ValidationError(
-                "Esta bolsa não está elegível para vínculo direto: ou ainda não encerrou o "
-                "período de recursos da homologação, ou não há vaga livre."
+                "Esta bolsa não está elegível para vínculo direto: ela precisa estar aprovada "
+                "e em andamento, com o período de recursos da homologação encerrado e vaga livre."
             )
         return bolsa
 

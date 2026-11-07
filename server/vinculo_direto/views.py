@@ -25,7 +25,7 @@ from bolsistas.services import (
 from inscricoes.models import Documento, TipoDocumento
 
 from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
-from .regras import bolsa_elegivel_para_convite, vagas_livres
+from .regras import STATUS_ACEITAM_CONVITE, bolsa_elegivel_para_convite, vagas_livres
 from .serializers import ConviteSerializer, DocumentoConviteSerializer, RejeitarConviteSerializer
 
 DOCUMENTOS_OBRIGATORIOS = {TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA}
@@ -135,6 +135,15 @@ class AprovarConviteView(APIView):
             )
         if tem_vinculo_ativo(convite.aluno):
             raise ValidationError({"detail": MOTIVO_ALUNO_JA_BOLSISTA})
+        if convite.bolsa.status not in STATUS_ACEITAM_CONVITE:
+            raise ValidationError(
+                {
+                    "detail": (
+                        f'A bolsa está "{convite.bolsa.get_status_display()}" e não aceita '
+                        "mais vínculo direto."
+                    )
+                }
+            )
 
         convite.status = StatusConvite.APROVADO
         convite.responsavel_decisao = request.user

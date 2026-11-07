@@ -74,6 +74,16 @@ class RegrasElegibilidadeTests(VinculoDiretoTestBase):
             self.bolsa.status = status
             self.assertFalse(bolsa_elegivel_para_convite(self.bolsa), status)
 
+    def test_bolsa_ainda_nao_aprovada_nao_e_elegivel(self):
+        self.bolsa.status = StatusBolsa.SOLICITADA
+
+        self.assertFalse(bolsa_elegivel_para_convite(self.bolsa))
+
+    def test_bolsa_aprovada_em_andamento_e_elegivel(self):
+        for status in [StatusBolsa.APROVADA, StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO]:
+            self.bolsa.status = status
+            self.assertTrue(bolsa_elegivel_para_convite(self.bolsa), status)
+
     def test_bolsa_com_inscricao_homologada_nao_e_elegivel(self):
         Inscricao.objects.create(
             aluno=self.aluno, bolsa=self.bolsa, status=StatusInscricao.HOMOLOGADA
@@ -313,6 +323,18 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.responsavel_decisao, self.coordenador)
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
 
+    def test_nao_aprova_convite_de_bolsa_cancelada(self):
+        self.bolsa.status = StatusBolsa.CANCELADA
+        self.bolsa.save(update_fields=["status"])
+
+        response = self.client.post(self.url("convite-aprovar"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Cancelada", response.data["detail"])
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
+        self.assertFalse(VinculoBolsista.objects.exists())
+
     def test_aprovar_registra_log_de_vinculo(self):
         self.client.post(self.url("convite-aprovar"))
 
@@ -399,6 +421,27 @@ class BolsasElegiveisEBuscaAlunoTests(VinculoDiretoTestBase):
         ids = [item["id"] for item in response.data]
         self.assertIn(self.bolsa.id, ids)
         self.assertNotIn(bolsa_nao_elegivel.id, ids)
+
+    def test_bolsa_solicitada_ou_cancelada_nao_aparece(self):
+        for status in [StatusBolsa.SOLICITADA, StatusBolsa.CANCELADA]:
+            self.bolsa.status = status
+            self.bolsa.save(update_fields=["status"])
+
+            response = self.client.get(reverse("vinculo_direto:bolsas-elegiveis"))
+
+            self.assertEqual(response.data, [], status)
+
+    def test_nao_cria_convite_em_bolsa_solicitada(self):
+        self.bolsa.status = StatusBolsa.SOLICITADA
+        self.bolsa.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("vinculo_direto:convites"), {"bolsa": self.bolsa.id, "aluno": self.aluno.id}
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("bolsa", response.data)
+        self.assertFalse(ConviteVinculoDireto.objects.exists())
 
     def test_busca_aluno_por_nome_ou_email(self):
         self.aluno.nome = "Maria Teste"

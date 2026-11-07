@@ -544,6 +544,12 @@ function ProjetoDetalhe({ projetoId, onVoltar }) {
             atuais.map((item) => (item.id === atualizada.id ? atualizada : item))
           )
           toast({ message: 'Bolsa cancelada com sucesso.', tone: 'success' })
+          // Bolsa cancelada não aceita mais convite.
+          setBolsasElegiveisIds((atuais) => {
+            const copia = new Set(atuais)
+            copia.delete(atualizada.id)
+            return copia
+          })
           // Cancelar uma bolsa vencida pode resolver uma pendência.
           const resPendencias = await bolsasFetch('/pendencias/')
           if (resPendencias.ok) setPendencias((await resPendencias.json()).pendencias)
