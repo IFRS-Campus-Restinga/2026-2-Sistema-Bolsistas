@@ -5,27 +5,39 @@ import {
   Button,
   PageHeader,
   IconHome,
-  IconCalendar,
-  IconBriefcase,
-  IconUsers,
-  IconClipboardList,
+  IconBolsa,
+  IconClipboardCheck,
+  IconEdital,
+  IconFolder,
+  IconHistory,
+  IconUserCog,
 } from '../components'
 import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
 import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
 
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
-  { id: 'bolsas', label: 'Bolsas', icon: <IconBriefcase /> },
-  { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardList /> },
-  { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
-  { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
+const secoes = [
+  { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
+  {
+    title: 'Gestão',
+    items: [
+      { id: 'editais', label: 'Editais', icon: <IconEdital /> },
+      { id: 'projetos', label: 'Projetos', icon: <IconFolder /> },
+      { id: 'bolsas', label: 'Bolsas', icon: <IconBolsa /> },
+      { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardCheck /> },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { id: 'usuarios', label: 'Usuários', icon: <IconUserCog /> },
+      { id: 'auditoria', label: 'Auditoria', icon: <IconHistory /> },
+    ],
+  },
 ]
 
-const ABAS = new Set(menuItems.map((item) => item.id))
+const ABAS = new Set(secoes.flatMap((secao) => secao.items.map((item) => item.id)))
 
 export default function AdministradorPage({ me, initials, onVoltarHub }) {
   const [parametros, setParametros] = useSearchParams()
@@ -42,7 +54,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
   return (
     <Layout
       role="Administrador"
-      menuItems={menuItems}
+      sections={secoes}
       active={active}
       onNav={navegar}
       onLogout={onVoltarHub}

@@ -7,10 +7,12 @@ import {
   IconBriefcase,
   IconUsers,
   IconCheck,
-  IconMail,
   IconScale,
-  IconGradCap,
-  IconCalendar,
+  IconCalendarCheck,
+  IconFlag,
+  IconFolder,
+  IconFunnel,
+  IconSend,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusCandidatosPage from './MeusCandidatosPage'
@@ -20,15 +22,30 @@ import MeusBolsistasPage from './MeusBolsistasPage'
 import FrequenciasPage from './FrequenciasPage'
 import FinalizacaoProjetoPage from './FinalizacaoProjetoPage'
 
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'projetos', label: 'Meus Projetos', icon: <IconBriefcase /> },
-  { id: 'candidatos', label: 'Meus Candidatos', icon: <IconUsers /> },
-  { id: 'selecao', label: 'Avaliação e Seleção', icon: <IconScale /> },
-  { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
-  { id: 'bolsistas', label: 'Meus Bolsistas', icon: <IconGradCap /> },
-  { id: 'frequencias', label: 'Frequências', icon: <IconCalendar /> },
-  { id: 'finalizacao', label: 'Finalização', icon: <IconCheck /> },
+const secoes = [
+  {
+    items: [
+      { id: 'dashboard', label: 'Início', icon: <IconHome /> },
+      { id: 'projetos', label: 'Meus projetos', icon: <IconFolder /> },
+    ],
+  },
+  {
+    title: 'Seleção',
+    // Meus candidatos e Avaliação e seleção viram uma tab só na US94.
+    items: [
+      { id: 'candidatos', label: 'Meus candidatos', icon: <IconFunnel /> },
+      { id: 'selecao', label: 'Avaliação e seleção', icon: <IconScale /> },
+      { id: 'convites', label: 'Convites', icon: <IconSend /> },
+    ],
+  },
+  {
+    title: 'Bolsistas',
+    items: [
+      { id: 'bolsistas', label: 'Meus bolsistas', icon: <IconUsers /> },
+      { id: 'frequencias', label: 'Frequências', icon: <IconCalendarCheck /> },
+      { id: 'finalizacao', label: 'Finalização', icon: <IconFlag /> },
+    ],
+  },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
@@ -37,7 +54,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
   return (
     <Layout
       role="Coordenador de Projeto"
-      menuItems={menuItems}
+      sections={secoes}
       active={active}
       onNav={setActive}
       onLogout={onVoltarHub}

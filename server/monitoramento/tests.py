@@ -1,7 +1,8 @@
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorProjeto, Usuario
+from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
@@ -335,3 +336,117 @@ class PainelAdministrativoTests(APITestCase):
             [atividade["descricao"] for atividade in atividades],
             [f"Alteração {numero}" for numero in range(6, 1, -1)],
         )
+
+
+class ContadoresMenuTests(APITestCase):
+    url = reverse("monitoramento:contadores-menu")
+
+    def setUp(self):
+        self.coordenador = Usuario.objects.create_user(
+            username="coord", email="coord@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        projeto = Projeto.objects.create(
+            titulo="Projeto",
+            coordenador_projeto=CoordenadorProjeto.objects.create(usuario=self.coordenador),
+        )
+        self.area = Usuario.objects.create_user(
+            username="area", email="area@example.com", role=Usuario.Role.COORDENADOR_AREA
+        )
+        CoordenadorArea.objects.create(usuario=self.area, tipo_area=TipoArea.PESQUISA)
+        edital = Edital.objects.create(
+            nome="Edital",
+            ano_codigo="2026-001",
+            link_documento_oficial="https://example.com/edital",
+            status=Edital.Status.EM_VIGOR,
+        )
+
+        def bolsa(tipo, status):
+            return Bolsa.objects.create(
+                projeto=projeto,
+                edital=edital,
+                tipo=tipo,
+                modalidade="BICT",
+                carga_horaria_semanal=12,
+                valor_mensal=700,
+                status=status,
+            )
+
+        self.bolsa = bolsa("PESQUISA", StatusBolsa.ABERTA)
+        bolsa("PESQUISA", StatusBolsa.SOLICITADA)
+        bolsa("INDISSOCIAVEL", StatusBolsa.SOLICITADA)
+        bolsa("ENSINO", StatusBolsa.SOLICITADA)
+        self.aluno = Usuario.objects.create_user(
+            username="aluno", email="aluno@example.com", role=Usuario.Role.ALUNO
+        )
+
+    def contadores(self, usuario):
+        self.client.force_authenticate(usuario)
+        resposta = self.client.get(self.url)
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.data
+
+    def test_aluno_ve_convites_aguardando_resposta(self):
+        ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.PENDENTE,
+        )
+
+        self.assertEqual(self.contadores(self.aluno), {"convites": 1})
+
+    def test_coordenador_de_projeto_ve_selecao_convites_e_finalizacao(self):
+        pendente = Inscricao.objects.create(
+            aluno=self.aluno, bolsa=self.bolsa, status=StatusInscricao.PENDENTE
+        )
+        indeferida = Inscricao.objects.create(
+            aluno=Usuario.objects.create_user(
+                username="bia", email="bia@example.com", role=Usuario.Role.ALUNO
+            ),
+            bolsa=self.bolsa,
+            status=StatusInscricao.INDEFERIDA,
+        )
+        Recurso.objects.create(
+            inscricao=indeferida, justificativa="Enviei.", status=StatusRecurso.PENDENTE
+        )
+        ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.ENVIADO,
+        )
+        self.assertEqual(pendente.status, StatusInscricao.PENDENTE)
+
+        self.assertEqual(
+            self.contadores(self.coordenador),
+            {"candidatos": 2, "convites": 1, "finalizacao": 0},
+        )
+
+    def test_coordenador_de_area_ve_solicitacoes_da_area(self):
+        dados = self.contadores(self.area)
+
+        # Pesquisa e Indissociável; a de Ensino é de outra área.
+        self.assertEqual(dados["solicitacoes"], 2)
+        self.assertEqual(dados["movimentacoes"], 0)
+        self.assertEqual(dados["finalizacao"], 0)
+
+    def test_area_ve_bolsa_finalizada_sem_ciencia(self):
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.finalizada_em = timezone.now()
+        self.bolsa.save(update_fields=["status", "finalizada_em"])
+
+        self.assertEqual(self.contadores(self.area)["finalizacao"], 1)
+
+        self.bolsa.ciencia_finalizacao_em = timezone.now()
+        self.bolsa.save(update_fields=["ciencia_finalizacao_em"])
+        self.assertEqual(self.contadores(self.area)["finalizacao"], 0)
+
+    def test_administrador_nao_tem_contadores(self):
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+
+        self.assertEqual(self.contadores(admin), {})
+
+    def test_visitante_nao_acessa(self):
+        self.assertIn(self.client.get(self.url).status_code, (401, 403))

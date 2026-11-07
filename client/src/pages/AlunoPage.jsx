@@ -10,10 +10,12 @@ import {
   IconHome,
   IconClipboardList,
   IconBank,
-  IconMessageCircle,
   IconMail,
-  IconGradCap,
-  IconCalendar,
+  IconAward,
+  IconCalendarCheck,
+  IconClipboardCheck,
+  IconCompass,
+  IconGavel,
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
@@ -24,15 +26,34 @@ import ConvitesPage from './ConvitesPage'
 import MinhaBolsaPage from './MinhaBolsaPage'
 import MinhaFrequenciaPage from './MinhaFrequenciaPage'
 
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'minha-bolsa', label: 'Minha Bolsa', icon: <IconGradCap /> },
-  { id: 'minha-frequencia', label: 'Minha Frequência', icon: <IconCalendar /> },
-  { id: 'bolsas', label: 'Bolsas Disponíveis', icon: <IconBriefcase /> },
-  { id: 'recursos', label: 'Meus Recursos', icon: <IconMessageCircle /> },
-  { id: 'inscricoes', label: 'Minhas Inscrições', icon: <IconClipboardList /> },
-  { id: 'convites', label: 'Convites', icon: <IconMail /> },
-  { id: 'dados-bancarios', label: 'Dados Bancários', icon: <IconBank /> },
+const secoes = [
+  { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
+  {
+    title: 'Oportunidades',
+    items: [
+      { id: 'bolsas', label: 'Bolsas disponíveis', icon: <IconCompass /> },
+      { id: 'convites', label: 'Convites', icon: <IconMail /> },
+    ],
+  },
+  {
+    title: 'Candidaturas',
+    items: [
+      { id: 'inscricoes', label: 'Minhas inscrições', icon: <IconClipboardCheck /> },
+      { id: 'recursos', label: 'Meus recursos', icon: <IconGavel /> },
+    ],
+  },
+  {
+    title: 'Minha bolsa',
+    items: [
+      { id: 'minha-bolsa', label: 'Minha bolsa', icon: <IconAward /> },
+      { id: 'minha-frequencia', label: 'Minha frequência', icon: <IconCalendarCheck /> },
+    ],
+  },
+  // Dados bancários sai do menu e vai para o menu do avatar na #464.
+  {
+    title: 'Conta',
+    items: [{ id: 'dados-bancarios', label: 'Dados bancários', icon: <IconBank /> }],
+  },
 ]
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
@@ -73,7 +94,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
   return (
     <Layout
       role="Aluno"
-      menuItems={menuItems}
+      sections={secoes}
       active={active}
       onNav={setActive}
       onLogout={onVoltarHub}

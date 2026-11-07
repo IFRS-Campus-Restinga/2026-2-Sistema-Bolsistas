@@ -16,6 +16,17 @@ from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista, ResultadoInscricao, SituacaoClassificacao
 from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
 
+from .contadores import contadores_do_menu
+
+
+class ContadoresMenuView(APIView):
+    """Pendências do usuário logado por tab da sidebar ({id_da_tab: quantidade})."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(contadores_do_menu(request.user))
+
 
 class MonitoramentoGlobalView(APIView):
     permission_classes = [IsAuthenticated, IsAdministrador]

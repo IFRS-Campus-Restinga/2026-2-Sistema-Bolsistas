@@ -7,10 +7,12 @@ import {
   IconCalendar,
   IconBriefcase,
   IconUsers,
-  IconCheck,
-  IconClipboardList,
-  IconBarChart,
   IconAlertTriangle,
+  IconArrowLeftRight,
+  IconCalendarCheck,
+  IconEdital,
+  IconFlag,
+  IconInbox,
 } from '../components'
 import EditaisPage from './EditaisPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
@@ -19,18 +21,24 @@ import MovimentacoesBolsistasPage from './MovimentacoesBolsistasPage'
 import SituacaoFrequenciasPage from './SituacaoFrequenciasPage'
 import PendenciasAreaPage from './PendenciasAreaPage'
 
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
-  { id: 'finalizacao', label: 'Finalização de Bolsas', icon: <IconCheck /> },
+const secoes = [
+  { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
   {
-    id: 'movimentacoes',
-    label: 'Desligamentos e Cancelamentos',
-    icon: <IconClipboardList />,
+    title: 'Gestão',
+    items: [
+      { id: 'editais', label: 'Editais', icon: <IconEdital /> },
+      { id: 'solicitacoes', label: 'Solicitações de bolsa', icon: <IconInbox /> },
+    ],
   },
-  { id: 'frequencias', label: 'Situação das Frequências', icon: <IconBarChart /> },
-  { id: 'pendencias', label: 'Relatório de Pendências', icon: <IconAlertTriangle /> },
+  {
+    title: 'Acompanhamento',
+    items: [
+      { id: 'frequencias', label: 'Frequências', icon: <IconCalendarCheck /> },
+      { id: 'pendencias', label: 'Pendências', icon: <IconAlertTriangle /> },
+      { id: 'movimentacoes', label: 'Movimentações', icon: <IconArrowLeftRight /> },
+      { id: 'finalizacao', label: 'Finalização', icon: <IconFlag /> },
+    ],
+  },
 ]
 
 const AREA_LABELS = {
@@ -45,8 +53,8 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
 
   return (
     <Layout
-      role={`Coordenador de ${areaLabel}`}
-      menuItems={menuItems}
+      role={`Coordenador de Área · ${areaLabel}`}
+      sections={secoes}
       active={active}
       onNav={setActive}
       onLogout={onVoltarHub}
