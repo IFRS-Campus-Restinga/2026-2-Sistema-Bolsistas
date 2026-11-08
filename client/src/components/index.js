@@ -14,7 +14,7 @@ export { IFLogo } from './IFLogo'
 
 // Layout (#177)
 export { Sidebar } from './Sidebar'
-export { TopHeader } from './TopHeader'
+export { TopHeader, Avatar } from './TopHeader'
 export { Layout } from './Layout'
 
 // Button (#178)
@@ -46,6 +46,8 @@ export { Hint } from './Hint'
 export { Drawer } from './Drawer'
 export { Timeline } from './Timeline'
 export { Stepper } from './Stepper'
+export { Tag } from './Tag'
+export { BolsaCard, BolsaPicker } from './BolsaCard'
 
 // Form / Input (#179)
 export { FormField, FormActions, TextInput, TextArea, Select, FileField } from './FormField'

@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from editais.models import Edital
+from inscricoes.models import Inscricao, StatusInscricao
 from projetos.models import Projeto
 
 from .models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
@@ -177,6 +178,38 @@ class SolicitarBolsaAPITests(APITestCase):
         self.client.force_authenticate(user=coordenador_area)
 
         self.assertEqual(self.client.get(reverse("bolsas:pendencias")).status_code, 403)
+
+    def test_lista_traz_codigo_do_edital_e_contagem_de_inscricoes(self):
+        bolsa = Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.ABERTA,
+        )
+        for indice, situacao in enumerate(
+            [
+                StatusInscricao.PENDENTE,
+                StatusInscricao.PENDENTE,
+                StatusInscricao.HOMOLOGADA,
+                StatusInscricao.RASCUNHO,
+                StatusInscricao.CANCELADA,
+            ]
+        ):
+            Inscricao.objects.create(
+                aluno=cria_usuario(f"aluno{indice}", f"a{indice}@test.com", Usuario.Role.ALUNO),
+                bolsa=bolsa,
+                status=situacao,
+            )
+        self.client.force_authenticate(user=self.coordenador)
+
+        [item] = self.client.get(self.url).data
+
+        self.assertEqual(item["edital_ano_codigo"], "2026-001")
+        self.assertEqual(item["total_inscritos"], 3)
+        self.assertEqual(item["inscricoes_pendentes"], 2)
 
     def test_coordenador_area_nao_pode_solicitar_bolsa(self):
         coordenador_area = cria_coordenador_area("ca", "ca@test.com", TipoArea.PESQUISA)

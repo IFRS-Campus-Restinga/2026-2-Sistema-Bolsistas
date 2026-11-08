@@ -17,16 +17,11 @@ import {
   useToast,
 } from '../components'
 import { formatarData, formatarDataHora } from '../utils/dataHora'
+import { MODALIDADE_LABEL } from '../utils/bolsa'
 import { formatarMoeda } from '../utils/formatarMoeda'
 import { formatarMesCurto } from '../utils/mesReferencia'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import MotivoModal from './MotivoModal'
-
-const MODALIDADE_LABEL = {
-  BICT: 'Iniciação Científica',
-  BIDTI: 'Desenv. Tecnológico e Inovação',
-  BAT: 'Apoio Técnico',
-}
 
 const UM_DIA = 24 * 60 * 60 * 1000
 

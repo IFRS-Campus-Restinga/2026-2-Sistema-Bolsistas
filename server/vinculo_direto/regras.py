@@ -7,7 +7,6 @@ from .models import STATUS_OCUPAM_VAGA
 # O convite só existe depois que a coordenação de área aprova a bolsa, e enquanto ela
 # está em andamento: solicitada, rejeitada, cancelada ou encerrada não aceita convite.
 STATUS_ACEITAM_CONVITE = [
-    StatusBolsa.APROVADA,
     StatusBolsa.ABERTA,
     StatusBolsa.EM_SELECAO,
     StatusBolsa.PREENCHIDA,

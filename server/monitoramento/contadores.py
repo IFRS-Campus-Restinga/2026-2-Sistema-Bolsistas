@@ -34,8 +34,7 @@ def _coordenador_projeto(usuario):
         inscricao__bolsa__projeto__coordenador_projeto__usuario=usuario,
     )
     return {
-        # Homologação e recursos ficam em Meus candidatos até a US94 unificar a seleção.
-        "candidatos": inscricoes.count() + recursos.count(),
+        "selecao": inscricoes.count() + recursos.count(),
         "convites": ConviteVinculoDireto.objects.filter(
             status=StatusConvite.ENVIADO, **do_coordenador
         ).count(),

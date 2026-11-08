@@ -12,7 +12,7 @@ export const STATUS = {
   DESLIGADO: ['Desligado', 'neutral'],
   // Bolsa
   SOLICITADA: ['Solicitada', 'warning'],
-  APROVADA: ['Aberta', 'success'],
+  APROVADA: ['Aberta', 'success'], // não existe mais no backend; mantido para registros antigos
   REJEITADA: ['Rejeitada', 'danger'],
   ABERTA: ['Aberta', 'success'],
   EM_SELECAO: ['Em seleção', 'info'],

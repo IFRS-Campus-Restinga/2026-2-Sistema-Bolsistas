@@ -18,6 +18,7 @@ from .serializers import (
     BolsaEdicaoSerializer,
     BolsaSerializer,
     EtapaAvaliacaoSerializer,
+    com_contagem_de_inscricoes,
 )
 
 STATUS_BLOQUEIAM_CANCELAMENTO = [
@@ -42,7 +43,9 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
+        queryset = com_contagem_de_inscricoes(
+            Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
+        )
 
         if user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(projeto__coordenador_projeto__usuario=user)

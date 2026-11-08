@@ -80,7 +80,7 @@ class RegrasElegibilidadeTests(VinculoDiretoTestBase):
         self.assertFalse(bolsa_elegivel_para_convite(self.bolsa))
 
     def test_bolsa_aprovada_em_andamento_e_elegivel(self):
-        for status in [StatusBolsa.APROVADA, StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO]:
+        for status in [StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO]:
             self.bolsa.status = status
             self.assertTrue(bolsa_elegivel_para_convite(self.bolsa), status)
 

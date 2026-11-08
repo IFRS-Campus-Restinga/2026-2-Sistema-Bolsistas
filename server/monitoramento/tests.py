@@ -419,7 +419,7 @@ class ContadoresMenuTests(APITestCase):
 
         self.assertEqual(
             self.contadores(self.coordenador),
-            {"candidatos": 2, "convites": 1, "finalizacao": 0},
+            {"selecao": 2, "convites": 1, "finalizacao": 0},
         )
 
     def test_coordenador_de_area_ve_solicitacoes_da_area(self):

@@ -154,7 +154,6 @@ class MonitoramentoGlobalView(APIView):
 
 
 STATUS_BOLSA_OFERTADA = [
-    StatusBolsa.APROVADA,
     StatusBolsa.ABERTA,
     StatusBolsa.EM_SELECAO,
     StatusBolsa.PREENCHIDA,

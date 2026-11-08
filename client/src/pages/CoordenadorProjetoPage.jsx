@@ -7,7 +7,6 @@ import {
   IconBriefcase,
   IconUsers,
   IconCheck,
-  IconScale,
   IconCalendarCheck,
   IconFlag,
   IconFolder,
@@ -15,9 +14,8 @@ import {
   IconSend,
 } from '../components'
 import MeusProjetosPage from './MeusProjetosPage'
-import MeusCandidatosPage from './MeusCandidatosPage'
 import MeusConvitesPage from './MeusConvitesPage'
-import SelecaoPage from './SelecaoPage'
+import SelecaoCandidatosPage from './SelecaoCandidatosPage'
 import MeusBolsistasPage from './MeusBolsistasPage'
 import FrequenciasPage from './FrequenciasPage'
 import FinalizacaoProjetoPage from './FinalizacaoProjetoPage'
@@ -31,10 +29,8 @@ const secoes = [
   },
   {
     title: 'Seleção',
-    // Meus candidatos e Avaliação e seleção viram uma tab só na US94.
     items: [
-      { id: 'candidatos', label: 'Meus candidatos', icon: <IconFunnel /> },
-      { id: 'selecao', label: 'Avaliação e seleção', icon: <IconScale /> },
+      { id: 'selecao', label: 'Seleção de candidatos', icon: <IconFunnel /> },
       { id: 'convites', label: 'Convites', icon: <IconSend /> },
     ],
   },
@@ -74,8 +70,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       )}
 
       {active === 'projetos' && <MeusProjetosPage />}
-      {active === 'candidatos' && <MeusCandidatosPage />}
-      {active === 'selecao' && <SelecaoPage />}
+      {active === 'selecao' && <SelecaoCandidatosPage />}
       {active === 'convites' && <MeusConvitesPage />}
       {active === 'bolsistas' && <MeusBolsistasPage />}
       {active === 'frequencias' && <FrequenciasPage />}

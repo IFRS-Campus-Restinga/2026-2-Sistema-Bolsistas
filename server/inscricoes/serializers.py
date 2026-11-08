@@ -167,6 +167,7 @@ class CandidatoSerializer(serializers.ModelSerializer):
     aluno_email = serializers.EmailField(source="aluno.email", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     documentacao_completa = serializers.SerializerMethodField()
+    aluno_curso = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -174,6 +175,7 @@ class CandidatoSerializer(serializers.ModelSerializer):
             "id",
             "aluno_nome",
             "aluno_email",
+            "aluno_curso",
             "status",
             "status_display",
             "data_envio",
@@ -183,6 +185,10 @@ class CandidatoSerializer(serializers.ModelSerializer):
 
     def get_aluno_nome(self, obj):
         return obj.aluno.nome or obj.aluno.get_full_name() or obj.aluno.username
+
+    def get_aluno_curso(self, obj):
+        perfil = getattr(obj.aluno, "perfil_aluno", None)
+        return perfil.curso if perfil else ""
 
     def get_documentacao_completa(self, obj):
         obrigatorios = {

@@ -229,7 +229,7 @@ class CandidatoListView(generics.ListAPIView):
                     StatusInscricao.CANCELADA,
                 ]
             )
-            .select_related("aluno")
+            .select_related("aluno__perfil_aluno")
             .prefetch_related("documentos")
             .order_by("data_envio", "id")
         )
@@ -548,15 +548,18 @@ class RecursosListView(APIView):
     permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
 
     def get(self, request):
-        recursos = (
-            Recurso.objects.filter(
-                inscricao__in=inscricoes_acessiveis(request.user), etapa=EtapaRecurso.HOMOLOGACAO
-            )
-            .select_related(
-                "inscricao__aluno", "inscricao__bolsa__projeto", "inscricao__bolsa__edital"
-            )
-            .prefetch_related("anexos")
+        recursos = Recurso.objects.filter(
+            inscricao__in=inscricoes_acessiveis(request.user), etapa=EtapaRecurso.HOMOLOGACAO
         )
+        # ?bolsa=<id> restringe à bolsa (etapa Recursos da Seleção de candidatos).
+        bolsa = request.query_params.get("bolsa")
+        if bolsa:
+            if not bolsa.isdigit():
+                raise ValidationError({"bolsa": "Informe o id numérico da bolsa."})
+            recursos = recursos.filter(inscricao__bolsa_id=bolsa)
+        recursos = recursos.select_related(
+            "inscricao__aluno", "inscricao__bolsa__projeto", "inscricao__bolsa__edital"
+        ).prefetch_related("anexos")
         return Response(RecursoSerializer(recursos, many=True, context={"request": request}).data)
 
 

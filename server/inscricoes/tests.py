@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorProjeto, Usuario
+from accounts.models import Aluno, CoordenadorProjeto, Usuario
 from auditoria.models import LogAuditoria
 from bolsas.models import Bolsa
 from editais.models import Edital
@@ -64,6 +64,18 @@ class CandidatoListTests(APITestCase):
         }
         dados.update(kwargs)
         return Inscricao.objects.create(aluno=self.usuario(nome), **dados)
+
+    def test_traz_o_curso_do_aluno(self):
+        inscricao = self.inscricao("com_curso")
+        Aluno.objects.create(usuario=inscricao.aluno, curso="Análise e Desenvolvimento de Sistemas")
+        self.inscricao("sem_perfil")
+
+        dados = {item["id"]: item for item in self.client.get(self.url).data}
+
+        self.assertEqual(
+            dados[inscricao.id]["aluno_curso"], "Análise e Desenvolvimento de Sistemas"
+        )
+        self.assertEqual(len(dados), 2)
 
     def test_lista_apenas_enviadas_da_bolsa_solicitada(self):
         enviada = self.inscricao("enviada")
@@ -772,6 +784,15 @@ class RecursosTests(APITestCase):
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, "HOMOLOGADA")
         self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "DEFERIDO")
+
+    def test_coordenador_filtra_recursos_por_bolsa(self):
+        self.enviar()
+        self.client.force_authenticate(self.coordenador)
+        url = reverse("inscricoes:recursos-lista")
+
+        self.assertEqual(len(self.client.get(url, {"bolsa": self.bolsa.pk}).data), 1)
+        self.assertEqual(self.client.get(url, {"bolsa": self.bolsa.pk + 100}).data, [])
+        self.assertEqual(self.client.get(url, {"bolsa": "abc"}).status_code, 400)
 
     def test_historico_privado_e_disponivel_fora_do_prazo(self):
         self.enviar()

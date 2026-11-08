@@ -26,7 +26,7 @@ import EtapasAvaliacaoModal from './EtapasAvaliacaoModal'
 import { formatarMoeda } from '../utils/formatarMoeda'
 import ConvidarBolsistaModal from './ConvidarBolsistaModal'
 
-const STATUS_COM_ETAPAS = ['APROVADA', 'ABERTA', 'EM_SELECAO', 'PREENCHIDA']
+const STATUS_COM_ETAPAS = ['ABERTA', 'EM_SELECAO', 'PREENCHIDA']
 
 const TIPO_OPTIONS = [
   { value: 'ENSINO', label: 'Ensino' },

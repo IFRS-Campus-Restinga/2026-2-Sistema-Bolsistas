@@ -40,6 +40,7 @@ function Cabecalho({ columns }) {
  *   emptyMessage — texto quando não há registros
  *   loading      — mostra linhas-esqueleto enquanto os dados carregam
  *   porPagina    — linhas por página (padrão 10); null desliga a paginação
+ *   onRowClick   — callback(índice da linha em `rows`) ao clicar numa linha
  */
 export function DataTable({
   columns,
@@ -47,6 +48,7 @@ export function DataTable({
   emptyMessage = 'Nenhum registro encontrado.',
   loading = false,
   porPagina = 10,
+  onRowClick,
 }) {
   const mostrarEsqueleto = useCarregamentoVisivel(loading)
 
@@ -98,7 +100,13 @@ export function DataTable({
           <Cabecalho columns={columns} />
           <tbody>
             {linhasVisiveis.map((row, i) => (
-              <tr key={i} className={LINHA}>
+              <tr
+                key={i}
+                className={`${LINHA} ${onRowClick ? 'cursor-pointer' : ''}`}
+                onClick={
+                  onRowClick ? () => onRowClick((pagina - 1) * (porPagina || 0) + i) : undefined
+                }
+              >
                 {row.map((cell, j) => (
                   <td key={j} className={CELULA}>
                     {cell}

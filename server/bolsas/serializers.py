@@ -1,9 +1,11 @@
 from decimal import Decimal
 
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import serializers
 
 from editais.models import Edital
+from inscricoes.models import StatusInscricao
 from projetos.models import StatusProjeto
 
 from .models import PESO_TOTAL, Bolsa, EditalValorBolsa, EtapaAvaliacao, StatusBolsa
@@ -22,11 +24,29 @@ def _decimal_str(valor):
     return None if valor is None else f"{valor:.2f}"
 
 
+# Rascunho ainda não foi enviado e cancelada saiu da seleção: não contam como inscritos.
+STATUS_FORA_DA_SELECAO = [StatusInscricao.RASCUNHO, StatusInscricao.CANCELADA]
+
+
+def com_contagem_de_inscricoes(queryset):
+    return queryset.annotate(
+        total_inscritos=Count(
+            "inscricoes", filter=~Q(inscricoes__status__in=STATUS_FORA_DA_SELECAO), distinct=True
+        ),
+        inscricoes_pendentes=Count(
+            "inscricoes", filter=Q(inscricoes__status=StatusInscricao.PENDENTE), distinct=True
+        ),
+    )
+
+
 class BolsaSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
     modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
+    total_inscritos = serializers.SerializerMethodField()
+    inscricoes_pendentes = serializers.SerializerMethodField()
     edital_link_documento_oficial = serializers.URLField(
         source="edital.link_documento_oficial", read_only=True
     )
@@ -50,7 +70,10 @@ class BolsaSerializer(serializers.ModelSerializer):
             "projeto_titulo",
             "edital",
             "edital_nome",
+            "edital_ano_codigo",
             "edital_link_documento_oficial",
+            "total_inscritos",
+            "inscricoes_pendentes",
             "minha_inscricao_status",
             "pode_editar",
             "pode_editar_etapas",
@@ -86,6 +109,19 @@ class BolsaSerializer(serializers.ModelSerializer):
             "justificativa_decisao",
             "coordenador_area",
         ]
+
+    # Na lista vêm anotados (com_contagem_de_inscricoes); fora dela, conta direto.
+    def get_total_inscritos(self, bolsa):
+        total = getattr(bolsa, "total_inscritos", None)
+        if total is None:
+            total = bolsa.inscricoes.exclude(status__in=STATUS_FORA_DA_SELECAO).count()
+        return total
+
+    def get_inscricoes_pendentes(self, bolsa):
+        total = getattr(bolsa, "inscricoes_pendentes", None)
+        if total is None:
+            total = bolsa.inscricoes.filter(status=StatusInscricao.PENDENTE).count()
+        return total
 
     def get_minha_inscricao_status(self, bolsa):
         request = self.context.get("request")

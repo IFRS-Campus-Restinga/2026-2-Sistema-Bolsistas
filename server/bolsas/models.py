@@ -23,8 +23,8 @@ class TipoBolsa(models.TextChoices):
 
 
 class StatusBolsa(models.TextChoices):
+    # Aprovada pela coordenação de área, a bolsa vai direto de SOLICITADA para ABERTA.
     SOLICITADA = "SOLICITADA", "Solicitada"
-    APROVADA = "APROVADA", "Aprovada"
     REJEITADA = "REJEITADA", "Rejeitada"
     ABERTA = "ABERTA", "Aberta"
     EM_SELECAO = "EM_SELECAO", "Em Seleção"
@@ -33,7 +33,7 @@ class StatusBolsa(models.TextChoices):
     CANCELADA = "CANCELADA", "Cancelada"
 
 
-STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.APROVADA, StatusBolsa.ABERTA]
+STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.ABERTA]
 STATUS_BOLSA_FINALIZADOS = [StatusBolsa.REJEITADA, StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA]
 
 
