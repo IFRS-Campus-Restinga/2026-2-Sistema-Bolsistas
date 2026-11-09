@@ -43,6 +43,9 @@ class BolsaSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
     modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
+    # Vigência efetiva: a da bolsa (exceção) ou a do edital.
+    inicio_vigencia = serializers.DateField(read_only=True)
+    fim_vigencia = serializers.DateField(read_only=True)
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
     edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
     total_inscritos = serializers.SerializerMethodField()
@@ -54,6 +57,12 @@ class BolsaSerializer(serializers.ModelSerializer):
     minha_inscricao_status = serializers.SerializerMethodField()
     pode_editar = serializers.SerializerMethodField()
     pode_editar_etapas = serializers.SerializerMethodField()
+    # Motivos de bloqueio (vazio quando pode), mostrados no painel da bolsa.
+    motivo_bloqueio_edicao = serializers.SerializerMethodField()
+    motivo_bloqueio_etapas = serializers.SerializerMethodField()
+    edital_fechamento_inscricoes = serializers.DateField(
+        source="edital.data_fechamento_inscricoes", read_only=True
+    )
 
     projeto_arquivo_ementa = serializers.FileField(source="projeto.arquivo_ementa", read_only=True)
     projeto_nome_arquivo = serializers.CharField(
@@ -77,6 +86,9 @@ class BolsaSerializer(serializers.ModelSerializer):
             "minha_inscricao_status",
             "pode_editar",
             "pode_editar_etapas",
+            "motivo_bloqueio_edicao",
+            "motivo_bloqueio_etapas",
+            "edital_fechamento_inscricoes",
             "tipo",
             "tipo_display",
             "modalidade",
@@ -93,6 +105,8 @@ class BolsaSerializer(serializers.ModelSerializer):
             "nota_minima",
             "data_inicio_vigencia",
             "data_fim_vigencia",
+            "inicio_vigencia",
+            "fim_vigencia",
             "status",
             "status_display",
             "data_solicitacao",
@@ -135,6 +149,12 @@ class BolsaSerializer(serializers.ModelSerializer):
 
     def get_pode_editar_etapas(self, bolsa):
         return not bolsa.motivo_bloqueio_etapas()
+
+    def get_motivo_bloqueio_edicao(self, bolsa):
+        return bolsa.motivo_bloqueio_edicao() or ""
+
+    def get_motivo_bloqueio_etapas(self, bolsa):
+        return bolsa.motivo_bloqueio_etapas() or ""
 
     def get_etapas(self, bolsa):
         efetivos = bolsa.pesos_efetivos_etapas()
@@ -221,6 +241,56 @@ class BolsaEdicaoSerializer(BolsaSerializer):
                 "O tipo não pode ser alterado depois que a bolsa foi aprovada."
             )
         return tipo
+
+
+# Fases do cronograma do edital mostradas ao aluno, como no protótipo: (rótulo, campo do fim).
+FASES_DO_EDITAL = [
+    ("Inscrições", "data_fechamento_inscricoes"),
+    ("Homologação", "data_homologacao"),
+    ("Recursos", "data_recurso_homologacao_fim"),
+    ("Resultado", "data_resultado"),
+    ("Vigência", "data_fim_vigencia"),
+]
+
+
+class BolsaDisponivelSerializer(BolsaSerializer):
+    """Bolsa vista pelo aluno em Bolsas disponíveis (US93): o card e o painel de detalhes.
+
+    Datas relativas (dias até o fim das inscrições, fase atual) vêm calculadas do servidor.
+    """
+
+    coordenador_projeto_nome = serializers.CharField(
+        source="projeto.coordenador_projeto.usuario.nome", read_only=True
+    )
+    projeto_ementa_html = serializers.CharField(source="projeto.ementa_html", read_only=True)
+    dias_para_encerrar_inscricoes = serializers.SerializerMethodField()
+    cronograma = serializers.SerializerMethodField()
+
+    class Meta(BolsaSerializer.Meta):
+        fields = [
+            *BolsaSerializer.Meta.fields,
+            "coordenador_projeto_nome",
+            "projeto_ementa_html",
+            "dias_para_encerrar_inscricoes",
+            "cronograma",
+        ]
+
+    def get_dias_para_encerrar_inscricoes(self, bolsa):
+        fechamento = bolsa.edital.data_fechamento_inscricoes
+        return (fechamento - timezone.localdate()).days if fechamento else None
+
+    def get_cronograma(self, bolsa):
+        hoje = timezone.localdate()
+        fases = [
+            {"rotulo": rotulo, "fim": getattr(bolsa.edital, campo)}
+            for rotulo, campo in FASES_DO_EDITAL
+        ]
+        # Fase atual: a primeira que ainda não terminou (sem data conta como não terminada).
+        atual = next(
+            (i for i, fase in enumerate(fases) if fase["fim"] is None or fase["fim"] >= hoje),
+            len(fases),
+        )
+        return {"fases": fases, "atual": atual}
 
 
 class EtapaAvaliacaoSerializer(serializers.ModelSerializer):

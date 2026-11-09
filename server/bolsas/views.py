@@ -15,6 +15,7 @@ from bolsistas.regras import motivo_bloqueio_finalizacao, pendencias_do_coordena
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
+    BolsaDisponivelSerializer,
     BolsaEdicaoSerializer,
     BolsaSerializer,
     EtapaAvaliacaoSerializer,
@@ -92,7 +93,7 @@ class PendenciasDoCoordenadorView(APIView):
 def _bolsas_disponiveis_qs():
     hoje = timezone.localdate()
     return (
-        Bolsa.objects.select_related("projeto", "edital")
+        Bolsa.objects.select_related("projeto__coordenador_projeto__usuario", "edital")
         .prefetch_related("etapas")
         .filter(
             status=StatusBolsa.ABERTA,
@@ -103,7 +104,7 @@ def _bolsas_disponiveis_qs():
 
 
 class BolsasDisponiveisView(generics.ListAPIView):
-    serializer_class = BolsaSerializer
+    serializer_class = BolsaDisponivelSerializer
     permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
@@ -111,7 +112,7 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
-    serializer_class = BolsaSerializer
+    serializer_class = BolsaDisponivelSerializer
     permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):

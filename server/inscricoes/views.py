@@ -1,5 +1,5 @@
 from django.db import IntegrityError, transaction
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics
@@ -15,6 +15,7 @@ from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
 
+from .comprovantes import pdf_do_comprovante, protocolo_da_inscricao
 from .models import (
     AnexoRecurso,
     Documento,
@@ -60,7 +61,9 @@ class InscricaoListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return (
-            Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            )
             .prefetch_related("documentos", "notificacoes")
             .filter(aluno=self.request.user)
         )
@@ -75,7 +78,9 @@ class InscricaoDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return (
-            Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            )
             .prefetch_related("documentos", "notificacoes")
             .filter(aluno=self.request.user)
         )
@@ -353,6 +358,26 @@ class DecidirDocumentoView(APIView):
         serializer.is_valid(raise_exception=True)
         documento.decidir(**serializer.validated_data, usuario=request.user)
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
+
+
+class ComprovanteInscricaoView(APIView):
+    """PDF do comprovante de inscrição (US91), só para o aluno dono e depois do envio."""
+
+    permission_classes = [IsAuthenticated, IsAluno]
+
+    def get(self, request, pk):
+        inscricao = get_object_or_404(
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            ).prefetch_related("documentos"),
+            pk=pk,
+            aluno=request.user,
+            data_envio__isnull=False,
+        )
+        resposta = HttpResponse(pdf_do_comprovante(inscricao), content_type="application/pdf")
+        nome = f"comprovante-{protocolo_da_inscricao(inscricao)}.pdf"
+        resposta["Content-Disposition"] = f'attachment; filename="{nome}"'
+        return resposta
 
 
 class LerNotificacaoView(APIView):

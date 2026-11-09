@@ -33,7 +33,8 @@ class StatusBolsa(models.TextChoices):
     CANCELADA = "CANCELADA", "Cancelada"
 
 
-STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.ABERTA]
+# Depois da aprovação da coordenação de área, a bolsa não muda mais; só as etapas.
+STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA]
 STATUS_BOLSA_FINALIZADOS = [StatusBolsa.REJEITADA, StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA]
 
 
@@ -173,24 +174,33 @@ class Bolsa(models.Model):
         """Fim da vigência: o da própria bolsa (exceção) ou o do edital."""
         return self.data_fim_vigencia or self.edital.data_fim_vigencia
 
-    def motivo_bloqueio_edicao(self):
-        if self.status not in STATUS_EDITAVEIS:
-            return f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada.'
-
+    def _motivo_inscricoes_encerradas(self, o_que):
         if self.edital.inscricoes_encerradas():
             return (
                 "O prazo de inscrições do edital terminou em "
                 f"{self.edital.data_fechamento_inscricoes:%d/%m/%Y}; "
-                "a bolsa não pode mais ser editada."
+                f"{o_que} não pode mais ser alterada."
             )
         return ""
 
+    def motivo_bloqueio_edicao(self):
+        """Só a bolsa solicitada (ainda não aprovada pela área) pode ser editada."""
+        if self.status not in STATUS_EDITAVEIS:
+            return (
+                f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada; '
+                "só a bolsa solicitada, antes da aprovação, pode ser alterada."
+            )
+        return self._motivo_inscricoes_encerradas("a bolsa")
+
     def motivo_bloqueio_etapas(self):
+        """Etapas só na bolsa aberta (aprovada) e até o fim das inscrições."""
         if self.status == StatusBolsa.SOLICITADA:
             return (
                 "As etapas de avaliação só podem ser cadastradas depois que a bolsa for aprovada."
             )
-        return self.motivo_bloqueio_edicao()
+        if self.status != StatusBolsa.ABERTA:
+            return f'As etapas de uma bolsa "{self.get_status_display()}" não podem mais ser alteradas.'
+        return self._motivo_inscricoes_encerradas("a etapa")
 
     def pesos_efetivos_etapas(self):
         etapas = list(self.etapas.all())

@@ -7,6 +7,7 @@ from bolsas.models import StatusBolsa
 from selecao.models import DesistenciaVaga, IndicacaoBolsista, PublicacaoResultado
 from server.validators import validar_upload
 
+from .comprovantes import dados_do_comprovante, protocolo_da_inscricao
 from .models import (
     EXTENSOES_DOCUMENTO,
     AnexoRecurso,
@@ -94,6 +95,8 @@ class InscricaoSerializer(serializers.ModelSerializer):
     notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
     resultado_selecao = serializers.SerializerMethodField()
+    protocolo = serializers.SerializerMethodField()
+    comprovante = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -116,6 +119,8 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "notificacoes",
             "prazo_inscricao_encerrado",
             "resultado_selecao",
+            "protocolo",
+            "comprovante",
         ]
         read_only_fields = [
             "id",
@@ -126,6 +131,13 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "justificativa_indeferimento",
             "data_decisao",
         ]
+
+    def get_protocolo(self, inscricao):
+        return protocolo_da_inscricao(inscricao)
+
+    def get_comprovante(self, inscricao):
+        """Dados do comprovante (US91), os mesmos do PDF; só depois do envio."""
+        return dados_do_comprovante(inscricao) if inscricao.data_envio else None
 
     def get_prazo_inscricao_encerrado(self, inscricao):
         return inscricao.bolsa.edital.inscricoes_encerradas()

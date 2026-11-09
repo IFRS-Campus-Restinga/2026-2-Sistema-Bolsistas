@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { IconUpload, IconPaperclip, IconX } from './Icons'
+import { IconEye, IconUpload, IconPaperclip, IconX } from './Icons'
 
 // Padrão do protótipo: altura fixa, borda neutra e anel cinza no foco.
 const INPUT =
@@ -57,7 +57,8 @@ export function Select(props) {
  *   accept   — tipos aceitos (ex: ".pdf,.doc")
  *   required
  */
-export function FileField({ value, onChange, accept, required, disabled }) {
+/** `onPreview` (opcional) mostra o botão de visualizar o arquivo já anexado. */
+export function FileField({ value, onChange, accept, required, disabled, onPreview }) {
   const inputRef = useRef(null)
 
   return (
@@ -78,18 +79,31 @@ export function FileField({ value, onChange, accept, required, disabled }) {
             <IconPaperclip size={15} className="shrink-0 text-gray-400" />
             <span className="truncate">{value}</span>
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              onChange(null)
-              if (inputRef.current) inputRef.current.value = ''
-            }}
-            aria-label="Remover arquivo"
-            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent leading-[normal] text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            disabled={disabled}
-          >
-            <IconX size={14} />
-          </button>
+          <span className="flex shrink-0 items-center">
+            {onPreview && (
+              <button
+                type="button"
+                onClick={onPreview}
+                aria-label="Visualizar arquivo"
+                title="Visualizar"
+                className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent leading-[normal] text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <IconEye size={14} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null)
+                if (inputRef.current) inputRef.current.value = ''
+              }}
+              aria-label="Remover arquivo"
+              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent leading-[normal] text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              disabled={disabled}
+            >
+              <IconX size={14} />
+            </button>
+          </span>
         </div>
       ) : (
         <button

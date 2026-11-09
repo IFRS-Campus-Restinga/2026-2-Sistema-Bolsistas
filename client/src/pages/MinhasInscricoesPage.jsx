@@ -6,13 +6,16 @@ import {
   Badge,
   Button,
   DataTable,
+  Comprovante,
   DocChips,
   FormActions,
+  IconDownload,
   Modal,
   PageHeader,
   useConfirm,
   useToast,
 } from '../components'
+import { baixarComprovanteInscricao } from '../utils/comprovante'
 import { documentosParaViewer } from '../utils/documentos'
 import InscricaoWizard from './InscricaoWizard'
 import RecursosModal from './RecursosModal'
@@ -314,42 +317,55 @@ export default function MinhasInscricoesPage({ onHistorico }) {
 }
 
 function ComprovanteModal({ inscricao, onFechar }) {
+  const [baixando, setBaixando] = useState(false)
+  const [erro, setErro] = useState('')
+  const decididos = inscricao.documentos.some((doc) => doc.decisao && doc.decisao !== 'PENDENTE')
+
+  async function baixar() {
+    setBaixando(true)
+    setErro('')
+    try {
+      await baixarComprovanteInscricao(inscricao.id, inscricao.protocolo)
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setBaixando(false)
+    }
+  }
+
   return (
-    <Modal title={`Comprovante: ${inscricao.projeto_titulo}`} onClose={onFechar} width={500}>
-      <p>
-        <strong>Edital:</strong> {inscricao.edital_nome}
-      </p>
-      <p>
-        <strong>Status:</strong> <Badge status={inscricao.status} />
-      </p>
-      <p>
-        <strong>Enviada em:</strong>{' '}
-        {inscricao.data_envio ? new Date(inscricao.data_envio).toLocaleString('pt-BR') : '—'}
-      </p>
-
+    <Modal
+      title="Comprovante de inscrição"
+      description={inscricao.projeto_titulo}
+      onClose={onFechar}
+      width={560}
+    >
+      {erro && <Alert tone="error">{erro}</Alert>}
+      {inscricao.comprovante ? (
+        <Comprovante dados={inscricao.comprovante} />
+      ) : (
+        <Alert tone="info">O comprovante fica disponível depois do envio da inscrição.</Alert>
+      )}
       {inscricao.justificativa_indeferimento && (
-        <Alert tone="error">Motivo do indeferimento: {inscricao.justificativa_indeferimento}</Alert>
+        <div className="mt-4">
+          <Alert tone="error" title="Motivo do indeferimento">
+            {inscricao.justificativa_indeferimento}
+          </Alert>
+        </div>
       )}
-      {inscricao.data_decisao && (
-        <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
+      {decididos && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-gray-500">Análise dos documentos</p>
+          <DocChips docs={documentosParaViewer(inscricao.documentos)} />
+        </div>
       )}
-      <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
-      <DocChips docs={documentosParaViewer(inscricao.documentos)} />
-
-      {inscricao.link_lattes && (
-        <p className="mt-2">
-          <strong>Lattes:</strong>{' '}
-          <a href={inscricao.link_lattes} target="_blank" rel="noopener noreferrer">
-            {inscricao.link_lattes}
-          </a>
-        </p>
+      {inscricao.comprovante && (
+        <FormActions>
+          <Button variant="primary" onClick={baixar} loading={baixando}>
+            <IconDownload size={14} /> Baixar PDF
+          </Button>
+        </FormActions>
       )}
-
-      <FormActions>
-        <Button variant="danger" onClick={onFechar}>
-          Fechar
-        </Button>
-      </FormActions>
     </Modal>
   )
 }

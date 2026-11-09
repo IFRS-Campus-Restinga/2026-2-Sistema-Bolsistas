@@ -1171,3 +1171,61 @@ class PrazoSemDataDefinidaTests(APITestCase):
             reverse("inscricoes:lista-criacao"), {"bolsa": self.bolsa.pk}, format="json"
         )
         self.assertEqual(resposta.status_code, 400)
+
+
+class ComprovanteInscricaoTests(APITestCase):
+    """Comprovante de inscrição (US91): protocolo, dados e PDF para download."""
+
+    setUp = UploadDocumentoTests.setUp
+
+    def enviar(self):
+        Aluno.objects.create(usuario=self.aluno, matricula="2023002")
+        for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
+            Documento.objects.create(
+                inscricao=self.inscricao, tipo=tipo, arquivo="h.pdf", nome_original=f"{tipo}.pdf"
+            )
+        self.inscricao.termos_aceitos = True
+        self.inscricao.save(update_fields=["termos_aceitos"])
+        url = reverse("inscricoes:enviar", kwargs={"pk": self.inscricao.pk})
+        return self.client.post(url)
+
+    def test_rascunho_nao_tem_protocolo_nem_comprovante(self):
+        dados = self.client.get(
+            reverse("inscricoes:detalhe", kwargs={"pk": self.inscricao.pk})
+        ).data
+        self.assertEqual(dados["protocolo"], "")
+        self.assertIsNone(dados["comprovante"])
+        url = reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_envio_gera_protocolo_e_comprovante(self):
+        dados = self.enviar().data
+        enviada = timezone.localtime(Inscricao.objects.get().data_envio)
+        protocolo = f"INS-{enviada:%Y%m%d}-{self.inscricao.pk:03d}"
+        self.assertEqual(dados["protocolo"], protocolo)
+        comprovante = dados["comprovante"]
+        self.assertEqual(comprovante["protocolo"], protocolo)
+        self.assertEqual(comprovante["situacao"]["rotulo"], "Aguardando homologação")
+        valores = {linha["rotulo"]: linha["valor"] for linha in comprovante["linhas"]}
+        self.assertEqual(valores["Matrícula"], "2023002")
+        self.assertEqual(valores["Bolsa"], "BICT · 12h")
+        self.assertEqual(len(comprovante["documentos"]), 2)
+
+    def test_baixa_o_pdf(self):
+        protocolo = self.enviar().data["protocolo"]
+        resposta = self.client.get(
+            reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta["Content-Type"], "application/pdf")
+        self.assertIn(protocolo, resposta["Content-Disposition"])
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+
+    def test_outro_aluno_nao_baixa(self):
+        self.enviar()
+        outro = Usuario.objects.create_user(
+            username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
+        )
+        self.client.force_authenticate(outro)
+        url = reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        self.assertEqual(self.client.get(url).status_code, 404)
