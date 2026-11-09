@@ -145,7 +145,7 @@ export default function SituacaoFrequenciasPage() {
         valor={contar(celulas, 'NAO_REGISTRADA')}
         tom="text-red-700"
       />,
-      <div key="nao-informadas" className="flex flex-col items-center gap-0.5">
+      <div key="nao-informadas" className="flex flex-col items-start gap-0.5">
         <Contagem valor={contar(celulas, 'NAO_INFORMADO')} tom="text-gray-700" />
         {atrasadas > 0 && (
           <span className="text-xs font-semibold text-red-600">
@@ -174,19 +174,19 @@ export default function SituacaoFrequenciasPage() {
 
       <div className="mb-6 grid grid-cols-[repeat(3,1fr)] gap-4">
         <StatCard
-          label="Registradas"
+          label="Cumpridas"
           value={totais.REGISTRADA ?? 0}
           icon={<IconCheck />}
           color="green"
         />
         <StatCard
-          label="Não Registradas"
+          label="Não cumpridas"
           value={totais.NAO_REGISTRADA ?? 0}
           icon={<IconX />}
           color="red"
         />
         <StatCard
-          label="Não Informadas"
+          label="Aguardando lançamento"
           value={totais.NAO_INFORMADO ?? 0}
           icon={<IconAlertTriangle />}
           color="orange"
@@ -229,9 +229,9 @@ export default function SituacaoFrequenciasPage() {
         columns={[
           'Bolsista',
           'Projeto',
-          'Registradas',
-          'Não Registradas',
-          'Não Informadas',
+          'Cumpridas',
+          'Não cumpridas',
+          'Aguardando lançamento',
           'Ações',
         ]}
         rows={linhas}

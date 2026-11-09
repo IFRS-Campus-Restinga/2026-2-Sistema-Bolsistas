@@ -1,11 +1,11 @@
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,7 +14,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa, fim_vigencia_efetivo
 
 from .models import (
     CancelamentoVaga,
@@ -29,11 +29,13 @@ from .models import (
 from .regras import (
     MOTIVO_BOLSA_ENCERRADA,
     bolsa_aceita_acompanhamento,
+    fora_do_prazo,
     motivo_bloqueio_envio,
     motivo_bloqueio_solicitacao,
     relatorio_do_vinculo,
 )
 from .serializers import (
+    BolsaDoCoordenadorProjetoSerializer,
     BolsaParaFinalizarSerializer,
     CancelamentoVagaSerializer,
     DecisaoDesligamentoSerializer,
@@ -43,6 +45,7 @@ from .serializers import (
     ParecerSerializer,
     RelatorioFinalSerializer,
     SolicitacaoDesligamentoSerializer,
+    SolicitacaoRelatorioSerializer,
     VinculoDoCoordenadorSerializer,
 )
 from .services import atualizar_status_preenchimento, efetivar_desligamento
@@ -319,9 +322,11 @@ class CienciaCancelamentoVagaView(APIView):
 
 
 class SolicitarRelatorioView(APIView):
-    """O coordenador do projeto solicita o relatório final a um bolsista."""
+    """O coordenador do projeto solicita o relatório final a um bolsista, podendo anexar
+    um modelo para o bolsista seguir."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @transaction.atomic
     def post(self, request, pk):
@@ -336,8 +341,15 @@ class SolicitarRelatorioView(APIView):
         if motivo:
             raise ValidationError({"detail": motivo})
 
+        serializer = SolicitacaoRelatorioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        modelo = serializer.validated_data.get("modelo")
+
         vinculo.relatorio_final = RelatorioFinal.objects.create(
-            vinculo=vinculo, solicitado_por=request.user
+            vinculo=vinculo,
+            solicitado_por=request.user,
+            modelo=modelo or "",
+            nome_original_modelo=modelo.name if modelo else "",
         )
         return Response(
             VinculoDoCoordenadorSerializer(vinculo, context={"request": request}).data,
@@ -372,6 +384,7 @@ class RelatorioFinalView(APIView):
         relatorio.arquivo = arquivo
         relatorio.nome_original = arquivo.name
         relatorio.enviado_em = timezone.now()
+        relatorio.fora_do_prazo = fora_do_prazo(vinculo.bolsa.edital)
         relatorio.situacao = SituacaoRelatorio.AGUARDANDO_AVALIACAO
         relatorio.justificativa = ""
         relatorio.avaliado_por = None
@@ -409,7 +422,8 @@ class BolsistasDoCoordenadorView(generics.ListAPIView):
 
 
 class BolsasParaFinalizarView(generics.ListAPIView):
-    """Bolsas da área do coordenador que têm bolsistas, com o andamento dos relatórios finais."""
+    """Bolsas da área do coordenador para acompanhar a finalização: as em andamento com
+    bolsista ativo e as encerradas, que pedem ciência."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     serializer_class = BolsaParaFinalizarSerializer
@@ -418,11 +432,21 @@ class BolsasParaFinalizarView(generics.ListAPIView):
     def get_queryset(self):
         area = self.request.user.perfil_coordenador_area.tipo_area
         return (
-            Bolsa.objects.filter(tipo__in=[area, TipoBolsa.INDISSOCIAVEL], vinculos__isnull=False)
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                tipo__in=[area, TipoBolsa.INDISSOCIAVEL],
+            )
             .exclude(
                 status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
             )
-            .select_related("projeto__coordenador_projeto__usuario", "edital")
+            .select_related("projeto__coordenador_projeto__usuario", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch(
+                    "vinculos",
+                    queryset=VinculoBolsista.objects.select_related("aluno", "relatorio_final"),
+                )
+            )
             .annotate(
                 total_bolsistas=Count(
                     "vinculos",
@@ -497,21 +521,74 @@ class ParecerRelatorioView(APIView):
         return Response(RelatorioFinalSerializer(relatorio, context={"request": request}).data)
 
 
+def _relatorio_visivel(usuario, pk):
+    """Relatório do vínculo, visível ao próprio bolsista e ao coordenador do projeto."""
+    if usuario.role == Usuario.Role.ALUNO:
+        relatorios = RelatorioFinal.objects.filter(vinculo__aluno=usuario)
+    else:
+        relatorios = relatorios_do_coordenador(usuario)
+    return get_object_or_404(relatorios, vinculo_id=pk)
+
+
+def _baixar(campo, nome):
+    try:
+        arquivo = campo.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404("Arquivo não encontrado.") from None
+    return FileResponse(arquivo, as_attachment=True, filename=nome)
+
+
 class RelatorioFinalArquivoView(APIView):
     permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
 
     def get(self, request, pk):
-        if request.user.role == Usuario.Role.ALUNO:
-            relatorios = RelatorioFinal.objects.filter(vinculo__aluno=request.user)
-        else:
-            relatorios = relatorios_do_coordenador(request.user)
-        relatorio = get_object_or_404(relatorios, vinculo_id=pk)
+        relatorio = _relatorio_visivel(request.user, pk)
         if not relatorio.arquivo:
             raise Http404("O relatório ainda não foi enviado.")
-        try:
-            arquivo = relatorio.arquivo.open("rb")
-        except (FileNotFoundError, OSError):
-            raise Http404("Arquivo não encontrado.") from None
-        return FileResponse(
-            arquivo, as_attachment=True, filename=relatorio.nome_original or "relatorio-final.pdf"
+        return _baixar(relatorio.arquivo, relatorio.nome_original or "relatorio-final.pdf")
+
+
+class ModeloRelatorioArquivoView(APIView):
+    permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
+
+    def get(self, request, pk):
+        relatorio = _relatorio_visivel(request.user, pk)
+        if not relatorio.modelo:
+            raise Http404("Nenhum modelo foi anexado a este relatório.")
+        return _baixar(relatorio.modelo, relatorio.nome_original_modelo or "modelo-relatorio")
+
+
+class BolsasDoCoordenadorProjetoView(generics.ListAPIView):
+    """Bolsas dos projetos do coordenador logado para a Finalização: as em andamento com
+    bolsista ativo e as já encerradas."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    serializer_class = BolsaDoCoordenadorProjetoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                projeto__coordenador_projeto__usuario=self.request.user,
+            )
+            .exclude(
+                status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
+            )
+            .distinct()
+            .select_related("projeto", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch(
+                    "vinculos",
+                    queryset=VinculoBolsista.objects.select_related(
+                        "aluno",
+                        "bolsa__edital",
+                        "bolsa__projeto",
+                        "relatorio_final",
+                        "cancelamento_vaga",
+                    ).order_by("aluno__nome"),
+                )
+            )
+            .order_by(fim_vigencia_efetivo(), "id")
         )

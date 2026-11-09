@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
@@ -6,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from accounts.permissions import IsAdministrador, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import EditalValorBolsa, StatusBolsa
@@ -28,13 +29,17 @@ STATUS_BOLSA_FINALIZADOS = {
 
 
 class EditalListCreateView(generics.ListCreateAPIView):
-    queryset = Edital.objects.order_by("-id")
+    queryset = Edital.objects.annotate(total_bolsas=Count("bolsas")).order_by("-id")
     serializer_class = EditalSerializer
 
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAuthenticated(), IsCoordenadorArea()]
-        return [IsAuthenticated(), (IsCoordenadorProjeto | IsCoordenadorArea)()]
+        # O administrador só consulta a lista (aba Editais do admin).
+        return [
+            IsAuthenticated(),
+            (IsCoordenadorProjeto | IsCoordenadorArea | IsAdministrador)(),
+        ]
 
     def perform_create(self, serializer):
         edital = serializer.save()

@@ -68,6 +68,11 @@ export async function apiFetch(path, options = {}) {
   return fetchWithRefresh(API_BASE, path, options)
 }
 
+/** Busca um arquivo protegido pela URL absoluta que a API devolve (ex.: `documento.arquivo`). */
+export function arquivoFetch(url, options = {}) {
+  return fetchWithRefresh('', url, options)
+}
+
 export function entrarComoPerfilDev(papel) {
   return apiFetch(`/dev/login/${papel}/`, { method: 'POST' })
 }

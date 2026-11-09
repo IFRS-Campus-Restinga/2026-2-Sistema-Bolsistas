@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from bolsas.models import STATUS_BOLSA_FINALIZADOS, StatusBolsa
 
@@ -10,8 +12,37 @@ from .models import (
     VinculoBolsista,
 )
 
+MOTIVO_ALUNO_JA_BOLSISTA = "Este aluno já é bolsista ativo de outra bolsa."
+MOTIVO_VOCE_JA_E_BOLSISTA = "Você já é bolsista ativo de outra bolsa."
+
+
+def vinculos_vigentes():
+    """Vínculos que ainda contam como bolsa em andamento. Finalizar a bolsa (ENCERRADA) não
+    muda o status dos vínculos, que seguem ATIVO para o histórico e os relatórios; por isso a
+    bolsa encerrada fica de fora aqui."""
+    return VinculoBolsista.objects.filter(status=StatusVinculo.ATIVO).exclude(
+        bolsa__status=StatusBolsa.ENCERRADA
+    )
+
+
+def tem_vinculo_ativo(aluno):
+    return vinculos_vigentes().filter(aluno=aluno).exists()
+
+
+def alunos_com_vinculo_ativo(alunos):
+    return set(vinculos_vigentes().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
+
+
+def _garantir_sem_vinculo_ativo(aluno):
+    """O aluno só pode ter um vínculo ativo. Trava o aluno para que duas
+    aprovações simultâneas não passem as duas pela checagem."""
+    get_user_model().objects.select_for_update().filter(pk=aluno.pk).first()
+    if tem_vinculo_ativo(aluno):
+        raise ValidationError({"detail": MOTIVO_ALUNO_JA_BOLSISTA})
+
 
 def vincular_por_indicacao(indicacao):
+    _garantir_sem_vinculo_ativo(indicacao.inscricao.aluno)
     return VinculoBolsista.objects.create(
         bolsa=indicacao.bolsa,
         aluno=indicacao.inscricao.aluno,
@@ -21,6 +52,7 @@ def vincular_por_indicacao(indicacao):
 
 
 def vincular_por_convite(convite):
+    _garantir_sem_vinculo_ativo(convite.aluno)
     return VinculoBolsista.objects.create(
         bolsa=convite.bolsa,
         aluno=convite.aluno,

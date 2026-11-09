@@ -57,6 +57,16 @@ class AtualizarStatusTests(TestCase):
         )
         self.assertEqual(resposta.status_code, 400)
 
+    def test_admin_nao_desativa_a_propria_conta(self):
+        resposta = self.client.patch(
+            f"/api/admin/usuarios/{self.admin.id}/status/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
     def test_usuario_inexistente_retorna_404(self):
         id_inexistente = uuid.uuid4()
         resposta = self.client.patch(

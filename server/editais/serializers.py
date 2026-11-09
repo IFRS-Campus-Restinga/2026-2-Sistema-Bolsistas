@@ -19,7 +19,14 @@ ETAPAS = [
     ("data_entrega_relatorios", "Entrega de relatórios"),
 ]
 
-CAMPOS_CRONOGRAMA = [campo for campo, _ in ETAPAS]
+# A vigência fica fora da sequência das etapas: pode terminar antes ou depois da entrega
+# dos relatórios, conforme o edital.
+VIGENCIA = [
+    ("data_inicio_vigencia", "Início da vigência"),
+    ("data_fim_vigencia", "Fim da vigência"),
+]
+
+CAMPOS_CRONOGRAMA = [campo for campo, _ in ETAPAS + VIGENCIA]
 
 
 def validar_cronograma(attrs, instance=None, obrigatorio=False):
@@ -41,12 +48,26 @@ def validar_cronograma(attrs, instance=None, obrigatorio=False):
         data_anterior = data
         nome_anterior = nome
 
+    def valor(campo):
+        return attrs.get(campo, getattr(instance, campo, None))
+
+    inicio, fim = valor("data_inicio_vigencia"), valor("data_fim_vigencia")
+    resultado = valor("data_resultado")
+    for campo, _ in VIGENCIA:
+        if valor(campo) is None and obrigatorio:
+            erros[campo] = "Esta data é obrigatória para um edital em vigor."
+    if inicio and resultado and inicio < resultado:
+        erros["data_inicio_vigencia"] = "O início da vigência não pode ser anterior ao resultado."
+    if inicio and fim and fim <= inicio:
+        erros["data_fim_vigencia"] = "O fim da vigência deve ser depois do início."
+
     if erros:
         raise serializers.ValidationError(erros)
 
 
 class EditalSerializer(serializers.ModelSerializer):
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
+    total_bolsas = serializers.SerializerMethodField()
 
     class Meta:
         model = Edital
@@ -57,6 +78,7 @@ class EditalSerializer(serializers.ModelSerializer):
             "link_documento_oficial",
             "status",
             "prazo_inscricao_encerrado",
+            "total_bolsas",
             *CAMPOS_CRONOGRAMA,
             "dia_limite_frequencia",
         ]
@@ -69,6 +91,11 @@ class EditalSerializer(serializers.ModelSerializer):
                 }
             }
         }
+
+    def get_total_bolsas(self, edital):
+        # Na lista vem anotado; no detalhe, conta direto.
+        total = getattr(edital, "total_bolsas", None)
+        return edital.bolsas.count() if total is None else total
 
     def get_prazo_inscricao_encerrado(self, edital):
         if edital.data_fechamento_inscricoes is None:

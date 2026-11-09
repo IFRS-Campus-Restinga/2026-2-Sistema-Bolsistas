@@ -67,6 +67,17 @@ class Edital(models.Model):
         blank=True,
         help_text="Data de entrega dos relatórios finais",
     )
+    # Vigência das bolsas do edital; uma bolsa pode ter datas próprias como exceção.
+    data_inicio_vigencia = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Início da vigência das bolsas do edital",
+    )
+    data_fim_vigencia = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fim da vigência das bolsas do edital",
+    )
     dia_limite_frequencia = models.PositiveSmallIntegerField(
         null=True,
         blank=True,

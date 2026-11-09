@@ -10,6 +10,8 @@ const campos = [
   ['data_recurso_homologacao_fim', 'Fim dos recursos'],
   ['data_resultado', 'Resultado'],
   ['data_entrega_relatorios', 'Entrega de relatórios'],
+  ['data_inicio_vigencia', 'Início da vigência das bolsas'],
+  ['data_fim_vigencia', 'Fim da vigência das bolsas'],
 ]
 
 export default function CronogramaForm({ edital, onSalvar, onCancelar }) {

@@ -1,33 +1,8 @@
 import { useEffect, useState } from 'react'
 import { bolsistasFetch } from '../api'
-import {
-  AcoesCell,
-  Alert,
-  Badge,
-  DataTable,
-  FormField,
-  PageHeader,
-  Select,
-  useConfirm,
-  useToast,
-} from '../components'
-import { formatarData } from '../utils/dataHora'
+import { AcoesCell, Alert, Badge, DataTable, PageHeader, useConfirm, useToast } from '../components'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
-import AvaliarRelatorioModal from './AvaliarRelatorioModal'
 import MotivoModal from './MotivoModal'
-
-const SITUACOES = [
-  { valor: '', rotulo: 'Todas' },
-  { valor: 'NAO_SOLICITADO', rotulo: 'Não solicitado' },
-  { valor: 'SOLICITADO', rotulo: 'Solicitado' },
-  { valor: 'AGUARDANDO_AVALIACAO', rotulo: 'Aguardando avaliação' },
-  { valor: 'REPROVADO', rotulo: 'Reprovado' },
-  { valor: 'APROVADO', rotulo: 'Aprovado' },
-]
-
-function situacaoDoRelatorio(vinculo) {
-  return vinculo.relatorio?.situacao ?? 'NAO_SOLICITADO'
-}
 
 export default function MeusBolsistasPage() {
   const confirmar = useConfirm()
@@ -35,8 +10,6 @@ export default function MeusBolsistasPage() {
   const [vinculos, setVinculos] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [filtro, setFiltro] = useState('')
-  const [avaliando, setAvaliando] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [desligando, setDesligando] = useState(null)
   const [cancelando, setCancelando] = useState(null)
@@ -80,52 +53,8 @@ export default function MeusBolsistasPage() {
     }
   }, [versao])
 
-  function solicitarRelatorio(vinculo) {
-    confirmar({
-      title: 'Solicitar relatório final?',
-      message: `${vinculo.aluno_nome} poderá enviar o relatório final até ${formatarData(vinculo.prazo_relatorio)}, prazo definido no edital.`,
-      confirmLabel: 'Solicitar',
-      tone: 'accent',
-      onConfirm: async () => {
-        const response = await bolsistasFetch(`/vinculos/${vinculo.id}/solicitar-relatorio/`, {
-          method: 'POST',
-        })
-        const dados = await response.json().catch(() => null)
-        if (!response.ok) {
-          throw new Error(mensagemDeErro(dados, 'Não foi possível solicitar o relatório.'))
-        }
-        toast({ message: 'Relatório final solicitado.', tone: 'success' })
-        setVersao((atual) => atual + 1)
-      },
-    })
-  }
-
   function acoesDoVinculo(vinculo) {
-    const situacao = situacaoDoRelatorio(vinculo)
     const acoes = []
-    if (situacao === 'NAO_SOLICITADO') {
-      if (vinculo.pode_solicitar_relatorio) {
-        acoes.push({
-          label: 'Solicitar relatório final',
-          variant: 'accent',
-          onClick: () => solicitarRelatorio(vinculo),
-        })
-      }
-    } else if (vinculo.relatorio.arquivo) {
-      if (situacao === 'AGUARDANDO_AVALIACAO') {
-        acoes.push({
-          label: 'Avaliar relatório',
-          variant: 'accent',
-          onClick: () => setAvaliando(vinculo),
-        })
-      }
-      acoes.push({
-        label: 'Baixar relatório',
-        variant: 'outline',
-        onClick: () => window.open(vinculo.relatorio.arquivo, '_blank', 'noopener'),
-      })
-    }
-
     if (vinculo.status === 'ATIVO') {
       acoes.push({
         label: 'Desligar bolsista',
@@ -190,12 +119,7 @@ export default function MeusBolsistasPage() {
     setVersao((atual) => atual + 1)
   }
 
-  const aprovados = vinculos.filter((vinculo) => situacaoDoRelatorio(vinculo) === 'APROVADO')
-  const visiveis = filtro
-    ? vinculos.filter((vinculo) => situacaoDoRelatorio(vinculo) === filtro)
-    : vinculos
-
-  const linhas = visiveis.map((vinculo) => [
+  const linhas = vinculos.map((vinculo) => [
     <div key="aluno" className="text-left">
       <p className="font-medium text-gray-900">{vinculo.aluno_nome}</p>
       <p className="text-xs text-gray-400">{vinculo.aluno_email}</p>
@@ -203,17 +127,9 @@ export default function MeusBolsistasPage() {
     vinculo.projeto_titulo,
     `${vinculo.edital_ano_codigo} · ${vinculo.bolsa_tipo_display}`,
     vinculo.origem_display,
-    <div key="vinculo" className="flex flex-col items-center gap-1">
+    <div key="vinculo" className="flex flex-col items-start gap-1">
       <Badge status={vinculo.status} />
       {vinculo.vaga_cancelada && <Badge status="CANCELADA" label="Vaga cancelada" />}
-    </div>,
-    <div key="relatorio" className="flex flex-col items-center gap-1">
-      <Badge status={situacaoDoRelatorio(vinculo)} />
-      {vinculo.prazo_relatorio && !vinculo.relatorio?.arquivo && (
-        <span className="text-xs text-gray-400">
-          Prazo: {formatarData(vinculo.prazo_relatorio)}
-        </span>
-      )}
     </div>,
     <AcoesCell key="acoes" acoes={acoesDoVinculo(vinculo)} />,
   ])
@@ -249,53 +165,16 @@ export default function MeusBolsistasPage() {
         </section>
       )}
 
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <FormField label="Situação do relatório final" className="mb-0 min-w-[240px]">
-          <Select value={filtro} onChange={(event) => setFiltro(event.target.value)}>
-            {SITUACOES.map((situacao) => (
-              <option key={situacao.valor} value={situacao.valor}>
-                {situacao.rotulo}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        {!carregando && vinculos.length > 0 && (
-          <span className="pb-2.5 text-sm text-gray-500">
-            {aprovados.length} de {vinculos.length}{' '}
-            {vinculos.length === 1 ? 'relatório aprovado' : 'relatórios aprovados'}
-          </span>
-        )}
-      </div>
+      <p className="mb-4 text-sm text-gray-500">
+        O relatório final de cada bolsista é solicitado e avaliado na aba Finalização.
+      </p>
 
       <DataTable
-        columns={[
-          'Bolsista',
-          'Projeto',
-          'Edital e tipo',
-          'Ingresso',
-          'Vínculo',
-          'Relatório final',
-          'Ações',
-        ]}
+        columns={['Bolsista', 'Projeto', 'Edital e tipo', 'Ingresso', 'Vínculo', 'Ações']}
         rows={linhas}
         loading={carregando}
-        emptyMessage={
-          filtro
-            ? 'Nenhum bolsista com essa situação de relatório.'
-            : 'Seus projetos ainda não têm bolsistas.'
-        }
+        emptyMessage="Seus projetos ainda não têm bolsistas."
       />
-
-      {avaliando && (
-        <AvaliarRelatorioModal
-          vinculo={avaliando}
-          onFechar={() => setAvaliando(null)}
-          onAvaliado={() => {
-            setAvaliando(null)
-            setVersao((atual) => atual + 1)
-          }}
-        />
-      )}
 
       {desligando && (
         <MotivoModal

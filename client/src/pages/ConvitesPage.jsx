@@ -6,12 +6,14 @@ import {
   Badge,
   Button,
   DataTable,
+  DocChips,
   FormActions,
   Modal,
   PageHeader,
   useConfirm,
   useToast,
 } from '../components'
+import { documentosParaViewer } from '../utils/documentos'
 import PreencherConviteModal from './PreencherConviteModal'
 
 export default function ConvitesPage() {
@@ -203,24 +205,13 @@ function ComprovanteConviteModal({ convite, onFechar }) {
       {convite.status === 'REJEITADO' && convite.justificativa_rejeicao && (
         <Alert tone="error">Motivo da rejeição: {convite.justificativa_rejeicao}</Alert>
       )}
-      {convite.status === 'APROVADO' && (
-        <Alert tone="success">Vínculo direto aprovado, bolsa efetivada.</Alert>
-      )}
       {convite.data_decisao && (
         <p>Decisão registrada em {new Date(convite.data_decisao).toLocaleString('pt-BR')}.</p>
       )}
 
       <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
       {convite.documentos.length ? (
-        <ul className="pl-5">
-          {convite.documentos.map((doc) => (
-            <li key={doc.id}>
-              <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
-                {doc.tipo_display}: {doc.nome_original}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <DocChips docs={documentosParaViewer(convite.documentos)} />
       ) : (
         <p>Nenhum documento enviado.</p>
       )}

@@ -11,13 +11,15 @@ from accounts.models import Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsistas.regras import motivo_bloqueio_finalizacao
+from bolsistas.regras import motivo_bloqueio_finalizacao, pendencias_do_coordenador
 
 from .models import Bolsa, EtapaAvaliacao, StatusBolsa, TipoBolsa
 from .serializers import (
+    BolsaDisponivelSerializer,
     BolsaEdicaoSerializer,
     BolsaSerializer,
     EtapaAvaliacaoSerializer,
+    com_contagem_de_inscricoes,
 )
 
 STATUS_BLOQUEIAM_CANCELAMENTO = [
@@ -42,7 +44,9 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
+        queryset = com_contagem_de_inscricoes(
+            Bolsa.objects.select_related("projeto", "edital").prefetch_related("etapas")
+        )
 
         if user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(projeto__coordenador_projeto__usuario=user)
@@ -54,6 +58,18 @@ class BolsaListCreateView(generics.ListCreateAPIView):
         return queryset.none()
 
     def perform_create(self, serializer):
+        pendencias = pendencias_do_coordenador(self.request.user)
+        if pendencias:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Resolva as pendências dos seus projetos antes de solicitar uma nova "
+                        "bolsa: " + " ".join(pendencias)
+                    ),
+                    "pendencias": pendencias,
+                }
+            )
+
         bolsa = serializer.save()
 
         registrar_log(
@@ -65,10 +81,19 @@ class BolsaListCreateView(generics.ListCreateAPIView):
         )
 
 
+class PendenciasDoCoordenadorView(APIView):
+    """O que impede o coordenador de projeto logado de solicitar uma nova bolsa."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get(self, request):
+        return Response({"pendencias": pendencias_do_coordenador(request.user)})
+
+
 def _bolsas_disponiveis_qs():
     hoje = timezone.localdate()
-    return (
-        Bolsa.objects.select_related("projeto", "edital")
+    return com_contagem_de_inscricoes(
+        Bolsa.objects.select_related("projeto__coordenador_projeto__usuario", "edital")
         .prefetch_related("etapas")
         .filter(
             status=StatusBolsa.ABERTA,
@@ -79,7 +104,7 @@ def _bolsas_disponiveis_qs():
 
 
 class BolsasDisponiveisView(generics.ListAPIView):
-    serializer_class = BolsaSerializer
+    serializer_class = BolsaDisponivelSerializer
     permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
@@ -87,7 +112,7 @@ class BolsasDisponiveisView(generics.ListAPIView):
 
 
 class BolsaDisponivelDetailView(generics.RetrieveAPIView):
-    serializer_class = BolsaSerializer
+    serializer_class = BolsaDisponivelSerializer
     permission_classes = [IsAuthenticated, IsAluno]
 
     def get_queryset(self):
@@ -173,23 +198,28 @@ class AprovarBolsaView(APIView):
 
 
 class FinalizarBolsaView(APIView):
-    """Encerra a bolsa quando todos os bolsistas tiverem o relatório final aprovado."""
+    """O coordenador do projeto encerra a bolsa quando todos os bolsistas tiverem o
+    relatório final aprovado e não houver processos em aberto."""
 
-    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
 
     @transaction.atomic
     def post(self, request, pk):
-        bolsa = get_object_or_404(Bolsa.objects.select_for_update(), pk=pk)
-
-        if not _area_permitida(bolsa, request.user):
-            raise PermissionDenied("Esta bolsa pertence a outra área e não pode ser finalizada.")
+        bolsa = get_object_or_404(
+            Bolsa.objects.select_for_update().filter(
+                projeto__coordenador_projeto__usuario=request.user
+            ),
+            pk=pk,
+        )
 
         motivo = motivo_bloqueio_finalizacao(bolsa)
         if motivo:
             raise ValidationError({"detail": motivo})
 
         bolsa.status = StatusBolsa.ENCERRADA
-        bolsa.save(update_fields=["status"])
+        bolsa.finalizada_em = timezone.now()
+        bolsa.finalizada_por = request.user
+        bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
 
         registrar_log(
             usuario=request.user,
@@ -198,6 +228,30 @@ class FinalizarBolsaView(APIView):
             entidade_id=bolsa.pk,
             descricao=f'Bolsa do projeto "{bolsa.projeto.titulo}" finalizada.',
         )
+
+        return Response(BolsaSerializer(bolsa, context={"request": request}).data)
+
+
+class CienciaFinalizacaoView(APIView):
+    """A coordenação de área toma ciência de uma bolsa finalizada pelo coordenador do projeto."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        bolsa = get_object_or_404(
+            Bolsa.objects.select_for_update(),
+            pk=pk,
+            status=StatusBolsa.ENCERRADA,
+            finalizada_em__isnull=False,
+        )
+        if not _area_permitida(bolsa, request.user):
+            raise PermissionDenied("Esta bolsa pertence a outra área.")
+
+        if bolsa.ciencia_finalizacao_em is None:
+            bolsa.ciencia_finalizacao_em = timezone.now()
+            bolsa.ciencia_finalizacao_por = request.user
+            bolsa.save(update_fields=["ciencia_finalizacao_em", "ciencia_finalizacao_por"])
 
         return Response(BolsaSerializer(bolsa, context={"request": request}).data)
 

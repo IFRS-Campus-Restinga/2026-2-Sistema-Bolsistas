@@ -22,7 +22,7 @@ function HistoricoDaBolsa({ item }) {
   const { relatorio } = item
   const linhas = item.meses.map((mes) => [
     formatarMes(mes.mes_referencia),
-    <div key="frequencia" className="flex flex-col items-center gap-1">
+    <div key="frequencia" className="flex flex-col items-start gap-1">
       <Badge status={mes.status} />
       {mes.fora_do_prazo && <span className="text-xs text-amber-600">Lançada fora do prazo</span>}
     </div>,

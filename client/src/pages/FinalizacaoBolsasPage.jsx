@@ -8,34 +8,77 @@ import {
   FormField,
   PageHeader,
   Select,
-  useConfirm,
   useToast,
 } from '../components'
+import { formatarData, formatarDataHora } from '../utils/dataHora'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 
-const FILTROS = {
-  andamento: { rotulo: 'Em andamento', aceita: (bolsa) => bolsa.status !== 'ENCERRADA' },
-  encerradas: { rotulo: 'Encerradas', aceita: (bolsa) => bolsa.status === 'ENCERRADA' },
-  todas: { rotulo: 'Todas', aceita: () => true },
+function plural(quantidade, singular, pluralizado) {
+  return quantidade === 1 ? singular : pluralizado
+}
+
+function Bolsa({ bolsa }) {
+  return (
+    <div className="text-left">
+      <p className="font-medium text-gray-900">
+        {bolsa.modalidade_display} · {bolsa.carga_horaria_semanal}h
+      </p>
+      <p className="text-xs text-gray-400">
+        {bolsa.projeto_titulo} · {bolsa.edital_ano_codigo}
+      </p>
+    </div>
+  )
+}
+
+// Relatórios entregues depois do prazo do edital ficam visíveis para a ciência da área.
+function ForaDoPrazo({ bolsa }) {
+  const nomes = bolsa.relatorios_fora_do_prazo
+  if (nomes.length === 0) return null
+  return <Badge status="PENDENTE" label={`Relatório fora do prazo: ${nomes.join(', ')}`} />
+}
+
+function Bolsistas({ bolsa }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span>{bolsa.bolsistas_nomes.join(', ') || '—'}</span>
+      <ForaDoPrazo bolsa={bolsa} />
+    </div>
+  )
+}
+
+function Vigencia({ bolsa }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span className="whitespace-nowrap">
+        {bolsa.data_fim_vigencia ? `até ${formatarData(bolsa.data_fim_vigencia)}` : 'Não definida'}
+      </span>
+      {bolsa.prazo_relatorio_encerrado && (
+        <Badge status="REPROVADO" label="Prazo do relatório encerrado" />
+      )}
+    </div>
+  )
 }
 
 function Situacao({ bolsa }) {
-  if (bolsa.status === 'ENCERRADA') {
-    return <span className="text-sm text-gray-400">Bolsa encerrada</span>
-  }
   if (bolsa.pode_finalizar) {
-    return <span className="text-sm font-medium text-green-700">Pronta para finalizar</span>
+    return <Badge status="APROVADO" label="Pronta para finalizar" />
   }
-  return <p className="max-w-[320px] text-left text-xs text-gray-500">{bolsa.motivo_bloqueio}</p>
+  return (
+    <ul className="max-w-[340px] list-none text-left text-xs text-gray-500">
+      {bolsa.motivos_bloqueio.map((motivo) => (
+        <li key={motivo}>{motivo}</li>
+      ))}
+    </ul>
+  )
 }
 
 export default function FinalizacaoBolsasPage() {
-  const confirmar = useConfirm()
   const toast = useToast()
   const [bolsas, setBolsas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [filtro, setFiltro] = useState('andamento')
+  const [filtro, setFiltro] = useState('finalizadas')
+  const [registrando, setRegistrando] = useState(null)
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
@@ -65,50 +108,66 @@ export default function FinalizacaoBolsasPage() {
     }
   }, [versao])
 
-  function finalizar(bolsa) {
-    confirmar({
-      title: 'Finalizar bolsa?',
-      message: `A bolsa do projeto "${bolsa.projeto_titulo}" será encerrada e não aceitará mais ações de acompanhamento. Esta ação não pode ser desfeita.`,
-      confirmLabel: 'Finalizar',
-      tone: 'accent',
-      onConfirm: async () => {
-        const response = await bolsasFetch(`/${bolsa.id}/finalizar/`, { method: 'POST' })
-        const dados = await response.json().catch(() => null)
-        if (!response.ok) {
-          throw new Error(mensagemDeErro(dados, 'Não foi possível finalizar a bolsa.'))
-        }
-        toast({ message: 'Bolsa finalizada.', tone: 'success' })
-        setVersao((atual) => atual + 1)
-      },
-    })
+  async function tomarCiencia(bolsa) {
+    setRegistrando(bolsa.id)
+    try {
+      const response = await bolsasFetch(`/${bolsa.id}/ciencia-finalizacao/`, { method: 'POST' })
+      const dados = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(mensagemDeErro(dados, 'Não foi possível registrar a ciência.'))
+      }
+      toast({ message: 'Ciência registrada.', tone: 'success' })
+      setVersao((atual) => atual + 1)
+    } catch (error) {
+      toast({ message: error.message, tone: 'error' })
+    } finally {
+      setRegistrando(null)
+    }
   }
 
-  const visiveis = bolsas.filter(FILTROS[filtro].aceita)
+  const finalizadas = bolsas
+    .filter((bolsa) => bolsa.status === 'ENCERRADA')
+    .sort((a, b) => (b.finalizada_em ?? '').localeCompare(a.finalizada_em ?? ''))
+  const andamento = bolsas.filter((bolsa) => bolsa.status !== 'ENCERRADA')
+  const semCiencia = finalizadas.filter(
+    (bolsa) => bolsa.finalizada_em && !bolsa.ciencia_finalizacao_em
+  ).length
 
-  const linhas = visiveis.map((bolsa) => [
-    <div key="projeto" className="text-left">
-      <p className="font-medium text-gray-900">{bolsa.projeto_titulo}</p>
-      <p className="text-xs text-gray-400">{bolsa.coordenador_projeto_nome}</p>
+  const linhasFinalizadas = finalizadas.map((bolsa) => [
+    <Bolsa key="bolsa" bolsa={bolsa} />,
+    <Bolsistas key="bolsistas" bolsa={bolsa} />,
+    bolsa.finalizada_em ? bolsa.finalizada_por_nome : '—',
+    bolsa.finalizada_em ? formatarDataHora(bolsa.finalizada_em) : '—',
+    // Encerradas antes da finalização pelo projeto foram encerradas pela própria área.
+    !bolsa.finalizada_em ? (
+      <span key="ciencia" className="text-xs text-gray-400">
+        Encerrada pela coordenação de área
+      </span>
+    ) : bolsa.ciencia_finalizacao_em ? (
+      <span key="ciencia" className="text-xs text-gray-400">
+        Ciente em {formatarDataHora(bolsa.ciencia_finalizacao_em)}
+      </span>
+    ) : (
+      <AcoesCell
+        key="ciencia"
+        ocupado={registrando === bolsa.id}
+        acoes={[{ label: 'Tomar ciência', variant: 'accent', onClick: () => tomarCiencia(bolsa) }]}
+      />
+    ),
+  ])
+
+  const linhasAndamento = andamento.map((bolsa) => [
+    <Bolsa key="bolsa" bolsa={bolsa} />,
+    bolsa.coordenador_projeto_nome,
+    <Vigencia key="vigencia" bolsa={bolsa} />,
+    <div key="relatorios" className="flex flex-col items-start gap-1">
+      <span className="whitespace-nowrap">
+        <strong className="text-gray-900">{bolsa.relatorios_aprovados}</strong> de{' '}
+        {bolsa.total_bolsistas} {plural(bolsa.total_bolsistas, 'aprovado', 'aprovados')}
+      </span>
+      <ForaDoPrazo bolsa={bolsa} />
     </div>,
-    `${bolsa.edital_ano_codigo} · ${bolsa.tipo_display}`,
-    <span key="relatorios" className="whitespace-nowrap">
-      <strong className="text-gray-900">{bolsa.relatorios_aprovados}</strong> de{' '}
-      {bolsa.total_bolsistas} {bolsa.total_bolsistas === 1 ? 'aprovado' : 'aprovados'}
-    </span>,
-    <Badge key="status" status={bolsa.status} />,
     <Situacao key="situacao" bolsa={bolsa} />,
-    <AcoesCell
-      key="acoes"
-      mostrar={bolsa.status !== 'ENCERRADA'}
-      acoes={[
-        {
-          label: 'Finalizar bolsa',
-          variant: 'accent',
-          disabled: !bolsa.pode_finalizar,
-          onClick: () => finalizar(bolsa),
-        },
-      ]}
-    />,
   ])
 
   return (
@@ -118,31 +177,36 @@ export default function FinalizacaoBolsasPage() {
       {erro && <Alert tone="error">{erro}</Alert>}
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <FormField label="Bolsas" className="mb-0 min-w-[220px]">
+        <FormField label="Bolsas" className="mb-0 min-w-[260px]">
           <Select value={filtro} onChange={(event) => setFiltro(event.target.value)}>
-            {Object.entries(FILTROS).map(([valor, { rotulo }]) => (
-              <option key={valor} value={valor}>
-                {rotulo}
-              </option>
-            ))}
+            <option value="finalizadas">
+              Finalizadas{semCiencia > 0 ? ` (${semCiencia} aguardando ciência)` : ''}
+            </option>
+            <option value="andamento">Em andamento ({andamento.length})</option>
           </Select>
         </FormField>
-        <p className="pb-2.5 text-sm text-gray-500">
-          Uma bolsa é finalizada quando todos os bolsistas têm o relatório final aprovado e não há
-          processos em aberto.
+        <p className="max-w-[560px] pb-2.5 text-sm text-gray-500">
+          {filtro === 'finalizadas'
+            ? 'Os coordenadores de projeto finalizam as bolsas. Tome ciência de cada finalização.'
+            : 'Somente leitura: a finalização é feita pelo coordenador do projeto quando não há pendências.'}
         </p>
       </div>
 
-      <DataTable
-        columns={['Projeto', 'Edital e tipo', 'Relatórios finais', 'Status', 'Situação', 'Ações']}
-        rows={linhas}
-        loading={carregando}
-        emptyMessage={
-          filtro === 'encerradas'
-            ? 'Nenhuma bolsa encerrada ainda.'
-            : 'Nenhuma bolsa com bolsistas na sua área.'
-        }
-      />
+      {filtro === 'finalizadas' ? (
+        <DataTable
+          columns={['Bolsa', 'Bolsistas', 'Finalizada por', 'Em', 'Ciência']}
+          rows={linhasFinalizadas}
+          loading={carregando}
+          emptyMessage="Nenhuma bolsa da sua área foi finalizada ainda."
+        />
+      ) : (
+        <DataTable
+          columns={['Bolsa', 'Coordenador do projeto', 'Vigência', 'Relatórios finais', 'Situação']}
+          rows={linhasAndamento}
+          loading={carregando}
+          emptyMessage="Nenhuma bolsa com bolsistas em andamento na sua área."
+        />
+      )}
     </>
   )
 }
