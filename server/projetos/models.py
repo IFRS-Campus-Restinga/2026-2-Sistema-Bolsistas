@@ -37,6 +37,8 @@ class Projeto(models.Model):
         help_text="Matriz curricular / ementa do projeto.",
     )
     nome_original_arquivo = models.CharField(max_length=255, blank=True, default="")
+    # Ementa escrita no editor da tela (US90), já limpa: só as tags do editor, sem atributos.
+    ementa_html = models.TextField(blank=True, default="")
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

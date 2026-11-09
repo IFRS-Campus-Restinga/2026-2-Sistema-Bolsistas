@@ -8,7 +8,7 @@ const INTERVALO_ATUALIZACAO = 60_000
 
 const COR_POR_TOM = {
   INFO: 'bg-blue-500',
-  SUCESSO: 'bg-green-500',
+  SUCESSO: 'bg-brand',
   AVISO: 'bg-amber-500',
   ERRO: 'bg-red-500',
 }
@@ -17,8 +17,6 @@ const FILTROS = [
   { id: 'todas', label: 'Todas' },
   { id: 'nao_lidas', label: 'Não lidas' },
 ]
-
-const ABA = 'cursor-pointer rounded-lg border-0 px-3 py-1.5 text-sm font-semibold transition-colors'
 
 async function buscarNotificacoes(filtro) {
   const sufixo = filtro === 'nao_lidas' ? '?nao_lidas=1' : ''
@@ -34,7 +32,7 @@ async function buscarNotificacoes(filtro) {
  * Sino da central de notificações, com contador de não lidas e painel.
  *
  * Props:
- *   onAbrirDestino — callback(destino) ao clicar numa notificação; `destino` é o id da aba
+ *   onAbrirDestino — callback(destino) ao clicar numa notificação; `destino` é o id da tab
  */
 export function SinoNotificacoes({ onAbrirDestino }) {
   const [aberto, setAberto] = useState(false)
@@ -148,92 +146,117 @@ export function SinoNotificacoes({ onAbrirDestino }) {
         type="button"
         onClick={abrirPainel}
         aria-label={naoLidas ? `Notificações: ${naoLidas} não lidas` : 'Notificações'}
+        aria-haspopup="dialog"
         aria-expanded={aberto}
-        className="relative flex size-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        className={`relative flex size-9 cursor-pointer items-center justify-center rounded-controle border-0 leading-[normal] transition-colors ${aberto ? 'bg-gray-100 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
       >
-        <IconBell size={20} />
+        <IconBell size={18} />
         {naoLidas > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] leading-none font-bold text-white">
+          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] leading-none font-semibold text-white tabular-nums ring-2 ring-white">
             {naoLidas > 99 ? '99+' : naoLidas}
           </span>
         )}
       </button>
 
       {aberto && (
-        <div className="absolute top-11 right-0 z-40 flex max-h-[70vh] w-96 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-modal">
-          <div className="flex items-center justify-between border-b border-[#f4f4f4] px-4 py-3">
-            <h3 className="text-base font-bold text-gray-900">Notificações</h3>
+        <div
+          role="dialog"
+          aria-label="Notificações"
+          className="absolute top-11 right-0 z-40 flex max-h-[70vh] w-96 animate-aparecer flex-col overflow-hidden rounded-card border border-gray-200 bg-white shadow-pop"
+        >
+          <div className="flex items-center justify-between px-4 pt-3">
+            <h3 className="text-sm font-semibold text-gray-900">Notificações</h3>
             <button
               type="button"
               onClick={marcarTodasComoLidas}
               disabled={naoLidas === 0}
-              className="cursor-pointer border-0 bg-transparent text-xs font-semibold text-green-700 hover:underline disabled:cursor-default disabled:text-gray-300 disabled:no-underline"
+              className="cursor-pointer border-0 bg-transparent p-0 text-xs leading-[normal] font-medium text-gray-500 hover:text-gray-900 disabled:cursor-default disabled:text-gray-300"
             >
               Marcar todas como lidas
             </button>
           </div>
 
-          <div className="flex gap-1 border-b border-[#f4f4f4] px-3 py-2">
-            {FILTROS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => trocarFiltro(item.id)}
-                className={`${ABA} ${
-                  filtro === item.id
-                    ? 'bg-green-50 text-green-800'
-                    : 'bg-transparent text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                {item.label}
-                {item.id === 'nao_lidas' && naoLidas > 0 && ` (${naoLidas})`}
-              </button>
-            ))}
+          <div className="mt-2 flex gap-4 border-b border-gray-200 px-4" role="tablist">
+            {FILTROS.map((item) => {
+              const ativo = filtro === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={ativo}
+                  onClick={() => trocarFiltro(item.id)}
+                  className={`-mb-px flex cursor-pointer items-center gap-1.5 border-0 border-b-2 border-solid bg-transparent px-0 pb-2 text-sm leading-[normal] font-medium transition-colors ${
+                    ativo
+                      ? 'border-gray-900 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  {item.label}
+                  {item.id === 'nao_lidas' && naoLidas > 0 && (
+                    <span
+                      className={`rounded-full px-1.5 text-2xs tabular-nums ${ativo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+                    >
+                      {naoLidas}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {carregando ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-10">
                 <Spinner />
               </div>
             ) : erro ? (
-              <p className="px-4 py-6 text-center text-sm text-red-600">{erro}</p>
+              <p className="px-4 py-8 text-center text-sm text-red-600">{erro}</p>
             ) : notificacoes.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-gray-400">
-                {filtro === 'nao_lidas'
-                  ? 'Nenhuma notificação não lida.'
-                  : 'Você ainda não tem notificações.'}
-              </p>
+              <div className="flex flex-col items-center px-6 py-10 text-center">
+                <div className="mb-3 flex size-10 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-400">
+                  <IconBell size={18} />
+                </div>
+                <p className="text-sm font-medium text-gray-900">
+                  {filtro === 'nao_lidas' ? 'Tudo em dia' : 'Nenhuma notificação'}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {filtro === 'nao_lidas'
+                    ? 'Você não tem notificações não lidas.'
+                    : 'Os avisos do sistema aparecem aqui.'}
+                </p>
+              </div>
             ) : (
-              <ul className="list-none">
-                {notificacoes.map((notificacao) => (
-                  <li key={notificacao.id} className="border-b border-[#f8f8f8] last:border-b-0">
-                    <button
-                      type="button"
-                      onClick={() => abrirNotificacao(notificacao)}
-                      className={`flex w-full cursor-pointer gap-3 border-0 px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
-                        notificacao.lida_em ? 'bg-white' : 'bg-green-50/40'
-                      }`}
-                    >
-                      <span
-                        className={`mt-1.5 size-2 shrink-0 rounded-full ${
-                          notificacao.lida_em ? 'bg-gray-200' : COR_POR_TOM[notificacao.tom]
-                        }`}
-                      />
-                      <span className="flex min-w-0 flex-col gap-0.5">
+              <ul className="m-0 list-none p-0">
+                {notificacoes.map((notificacao) => {
+                  const lida = Boolean(notificacao.lida_em)
+                  return (
+                    <li key={notificacao.id} className="border-b border-gray-100 last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => abrirNotificacao(notificacao)}
+                        className={`flex w-full cursor-pointer gap-3 border-0 px-4 py-3 text-left leading-[normal] transition-colors hover:bg-gray-50 ${lida ? 'bg-white' : 'bg-gray-50/60'}`}
+                      >
                         <span
-                          className={`text-sm text-gray-900 ${notificacao.lida_em ? 'font-medium' : 'font-bold'}`}
-                        >
-                          {notificacao.titulo}
+                          className={`mt-1.5 size-2 shrink-0 rounded-full ${lida ? 'bg-gray-200' : COR_POR_TOM[notificacao.tom]}`}
+                        />
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span
+                            className={`text-sm ${lida ? 'text-gray-600' : 'font-medium text-gray-900'}`}
+                          >
+                            {notificacao.titulo}
+                          </span>
+                          <span className="text-xs leading-normal text-gray-500">
+                            {notificacao.mensagem}
+                          </span>
+                          <span className="mt-0.5 text-2xs text-gray-400 tabular-nums">
+                            {formatarDataHora(notificacao.criada_em)}
+                          </span>
                         </span>
-                        <span className="text-sm text-gray-600">{notificacao.mensagem}</span>
-                        <span className="text-xs text-gray-400">
-                          {formatarDataHora(notificacao.criada_em)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

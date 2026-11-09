@@ -11,7 +11,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsCoordenadorProjeto
 
 from .models import Projeto, StatusProjeto
-from .serializers import ArquivoEmentaSerializer, ProjetoSerializer
+from .serializers import ArquivoEmentaSerializer, EmentaProjetoSerializer, ProjetoSerializer
 
 BOLSA_STATUS_BLOQUEIAM_DESLIGAMENTO = ["ABERTA", "EM_SELECAO", "PREENCHIDA"]
 
@@ -25,7 +25,9 @@ class ProjetoListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = Projeto.objects.select_related("coordenador_projeto__usuario")
+        queryset = Projeto.objects.select_related("coordenador_projeto__usuario").prefetch_related(
+            "bolsas__vinculos"
+        )
         if self.request.user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(coordenador_projeto__usuario=self.request.user)
         return queryset
@@ -38,7 +40,9 @@ class ProjetoDetailView(generics.RetrieveAPIView):
     serializer_class = ProjetoSerializer
 
     def get_queryset(self):
-        queryset = Projeto.objects.select_related("coordenador_projeto__usuario")
+        queryset = Projeto.objects.select_related("coordenador_projeto__usuario").prefetch_related(
+            "bolsas__vinculos"
+        )
         if self.request.user.role == Usuario.Role.COORDENADOR_PROJETO:
             return queryset.filter(coordenador_projeto__usuario=self.request.user)
         return queryset
@@ -74,23 +78,40 @@ class DesligarProjetoView(APIView):
         return Response(ProjetoSerializer(projeto, context={"request": request}).data)
 
 
+def _projeto_editavel(request, pk):
+    """Projeto do coordenador logado, travado para alteração; desligado não pode ser alterado."""
+    projeto = get_object_or_404(
+        Projeto.objects.select_for_update(),
+        pk=pk,
+        coordenador_projeto__usuario=request.user,
+    )
+    if projeto.status != StatusProjeto.ATIVO:
+        raise ValidationError({"detail": "Um projeto desligado não pode ser alterado."})
+    return projeto
+
+
+class EmentaProjetoView(APIView):
+    """Texto da ementa escrito no editor da tela (US90)."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        projeto = _projeto_editavel(request, pk)
+        serializer = EmentaProjetoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        projeto.ementa_html = serializer.validated_data["ementa_html"]
+        projeto.save(update_fields=["ementa_html"])
+        return Response(ProjetoSerializer(projeto, context={"request": request}).data)
+
+
 class ArquivoEmentaProjetoView(APIView):
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
     parser_classes = [MultiPartParser, FormParser]
 
-    def _projeto_editavel(self, request, pk):
-        projeto = get_object_or_404(
-            Projeto.objects.select_for_update(),
-            pk=pk,
-            coordenador_projeto__usuario=request.user,
-        )
-        if projeto.status != StatusProjeto.ATIVO:
-            raise ValidationError({"detail": "Um projeto desligado não pode ser alterado."})
-        return projeto
-
     @transaction.atomic
     def post(self, request, pk):
-        projeto = self._projeto_editavel(request, pk)
+        projeto = _projeto_editavel(request, pk)
 
         serializer = ArquivoEmentaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -106,7 +127,7 @@ class ArquivoEmentaProjetoView(APIView):
 
     @transaction.atomic
     def delete(self, request, pk):
-        projeto = self._projeto_editavel(request, pk)
+        projeto = _projeto_editavel(request, pk)
 
         if projeto.arquivo_ementa:
             projeto.arquivo_ementa.delete(save=False)

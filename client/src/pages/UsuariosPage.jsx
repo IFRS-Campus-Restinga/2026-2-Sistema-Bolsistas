@@ -14,6 +14,7 @@ import {
 } from '../components'
 import { useConfirm } from '../components/useConfirm'
 import { useToast } from '../components/useToast'
+import { useAuth } from '../contexts/useAuth'
 import {
   deleteEmailCoordenador,
   getEmailsCoordenadores,
@@ -50,6 +51,7 @@ function StatusBadge({ ativo }) {
 export default function UsuariosPage({ filtroStatus = null }) {
   const confirm = useConfirm()
   const toast = useToast()
+  const { me } = useAuth()
   // usuários
   const [usuarios, setUsuarios] = useState([])
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(true)
@@ -134,7 +136,8 @@ export default function UsuariosPage({ filtroStatus = null }) {
             tone: 'success',
           })
         } else {
-          toast({ message: 'Erro ao alterar status do usuário.', tone: 'error' })
+          const body = await res.json().catch(() => null)
+          toast({ message: body?.detail || 'Erro ao alterar status do usuário.', tone: 'error' })
         }
       },
     })
@@ -266,11 +269,15 @@ export default function UsuariosPage({ filtroStatus = null }) {
         ...(usuario.role === 'COORDENADOR_AREA'
           ? [{ label: 'Editar', onClick: () => abrirModalUsuario(usuario) }]
           : []),
-        {
-          label: usuario.is_active ? 'Desativar' : 'Ativar',
-          variant: usuario.is_active ? 'danger' : 'accent',
-          onClick: () => alternarStatus(usuario),
-        },
+        ...(usuario.id !== me?.id
+          ? [
+              {
+                label: usuario.is_active ? 'Desativar' : 'Ativar',
+                variant: usuario.is_active ? 'danger' : 'accent',
+                onClick: () => alternarStatus(usuario),
+              },
+            ]
+          : []),
       ]}
     />,
   ])

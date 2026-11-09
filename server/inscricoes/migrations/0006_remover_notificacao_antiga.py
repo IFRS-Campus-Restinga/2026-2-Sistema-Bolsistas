@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
     dependencies = [
         # Os dados são copiados para a central antes da remoção.
         ("notificacoes", "0002_migrar_notificacoes_antigas"),
-        ("inscricoes", "0004_documento_convite_alter_documento_inscricao_and_more"),
+        ("inscricoes", "0005_decisao_por_documento"),
     ]
 
     operations = [

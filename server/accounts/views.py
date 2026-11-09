@@ -65,6 +65,11 @@ def atualizar_status(request, usuario_id):
             {"is_active": ["Este campo é obrigatório e deve ser verdadeiro ou falso."]},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if usuario.pk == request.user.pk and not is_active:
+        return Response(
+            {"detail": "Você não pode desativar a própria conta."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     usuario.is_active = is_active
     usuario.save(update_fields=["is_active"])
 

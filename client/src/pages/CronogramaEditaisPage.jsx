@@ -1,40 +1,68 @@
 import { useEffect, useState } from 'react'
 import { editaisFetch } from '../api'
 import {
-  AcoesCell,
   Alert,
-  Badge,
   Button,
-  DataTable,
-  FormField,
+  Card,
+  Carregando,
+  Cronograma,
+  EmptyState,
+  IconCalendar,
+  IconHistory,
   PageHeader,
-  Select,
+  Prazo,
+  StatusPill,
+  Tabs,
+  Tag,
 } from '../components'
-import { formatarData } from '../utils/dataHora'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
-import HistoricoCronogramaModal from './HistoricoCronogramaModal'
+import HistoricoCronogramaDrawer from './HistoricoCronogramaDrawer'
 
-const STATUS_OPCOES = [
-  { valor: '', rotulo: 'Todos' },
-  { valor: 'EM_VIGOR', rotulo: 'Em vigor' },
-  { valor: 'RASCUNHO', rotulo: 'Rascunho' },
-  { valor: 'ENCERRADO', rotulo: 'Encerrado' },
-  { valor: 'ARQUIVADO', rotulo: 'Arquivado' },
-]
-
-function dataDaEtapa(edital, campo) {
-  return edital.etapas.find((etapa) => etapa.campo === campo)?.data
+// Arquivado entra junto com Encerrado, como na tela de editais.
+const ABAS = {
+  todos: () => true,
+  EM_VIGOR: (edital) => edital.status === 'EM_VIGOR',
+  RASCUNHO: (edital) => edital.status === 'RASCUNHO',
+  ENCERRADO: (edital) => ['ENCERRADO', 'ARQUIVADO'].includes(edital.status),
 }
 
-function periodo(edital, campoInicio, campoFim) {
-  const inicio = formatarData(dataDaEtapa(edital, campoInicio))
-  const fim = formatarData(dataDaEtapa(edital, campoFim))
-  if (!inicio && !fim) return '—'
-  return `${inicio || '?'} a ${fim || '?'}`
-}
+function EditalCronogramaCard({ edital, podeVerHistorico, onDetalhes }) {
+  const { proxima_etapa: proxima, total_alteracoes: alteracoes } = edital
 
-function data(edital, campo) {
-  return formatarData(dataDaEtapa(edital, campo)) || '—'
+  return (
+    <Card padded={false}>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h3 className="truncate text-[15px] font-semibold text-gray-900">{edital.nome}</h3>
+            <StatusPill status={edital.status} size="sm" />
+          </div>
+          <span className="font-mono text-xs text-gray-500">{edital.ano_codigo}</span>
+        </div>
+        {proxima && <Prazo dias={proxima.dias} prefixo={proxima.etapa} />}
+      </div>
+
+      <div className="px-5 pt-4 pb-4">
+        <Cronograma fases={edital.fases.fases} atual={edital.fases.atual} />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-5 py-3">
+        <div className="flex flex-wrap gap-1.5">
+          <Tag>
+            {edital.total_bolsas} {edital.total_bolsas === 1 ? 'bolsa' : 'bolsas'}
+          </Tag>
+          {podeVerHistorico && alteracoes > 0 && (
+            <Tag icon={<IconHistory />}>
+              {alteracoes} {alteracoes === 1 ? 'prazo alterado' : 'prazos alterados'}
+            </Tag>
+          )}
+        </div>
+        <Button size="sm" variant="ghost" onClick={onDetalhes}>
+          Detalhes
+        </Button>
+      </div>
+    </Card>
+  )
 }
 
 /**
@@ -42,15 +70,15 @@ function data(edital, campo) {
  *
  * Props:
  *   podeVerHistorico — Admin e Coord. de Área consultam o histórico de prazos (US20)
- *   filtrarStatus    — mostra o filtro de status (o Coord. de Projeto só vê editais em vigor)
+ *   filtrarStatus    — mostra as abas de status (o Coord. de Projeto só vê editais em vigor)
  */
 export default function CronogramaEditaisPage({ podeVerHistorico = false, filtrarStatus = true }) {
   const [editais, setEditais] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [status, setStatus] = useState('')
-  // undefined: fechado; null: histórico de todos os editais; objeto: histórico do edital
-  const [historico, setHistorico] = useState(undefined)
+  const [aba, setAba] = useState('todos')
+  // undefined: fechado; null: histórico de todos os editais; objeto: detalhes do edital
+  const [detalhe, setDetalhe] = useState(undefined)
 
   useEffect(() => {
     let ativo = true
@@ -78,95 +106,71 @@ export default function CronogramaEditaisPage({ podeVerHistorico = false, filtra
     }
   }, [])
 
-  const visiveis = status ? editais.filter((edital) => edital.status === status) : editais
-
-  const linhas = visiveis.map((edital) => [
-    <div key="edital" className="flex flex-col">
-      <span className="font-semibold text-gray-800">{edital.nome}</span>
-      <span className="text-xs text-gray-400">{edital.ano_codigo}</span>
-    </div>,
-    <Badge key="status" status={edital.status} />,
-    periodo(edital, 'data_abertura_inscricoes', 'data_fechamento_inscricoes'),
-    data(edital, 'data_homologacao'),
-    periodo(edital, 'data_recurso_homologacao_inicio', 'data_recurso_homologacao_fim'),
-    data(edital, 'data_resultado'),
-    data(edital, 'data_entrega_relatorios'),
-    edital.proxima_etapa ? (
-      <div key="proxima" className="flex flex-col">
-        <span className="font-medium text-gray-800">{edital.proxima_etapa.etapa}</span>
-        <span className="text-xs text-gray-400">{formatarData(edital.proxima_etapa.data)}</span>
-      </div>
-    ) : (
-      '—'
-    ),
-    edital.total_bolsas,
-    ...(podeVerHistorico
-      ? [
-          <AcoesCell
-            key="historico"
-            mostrar={edital.total_alteracoes > 0}
-            acoes={[
-              {
-                label: `Histórico (${edital.total_alteracoes})`,
-                onClick: () => setHistorico(edital),
-              },
-            ]}
-          />,
-        ]
-      : []),
-  ])
+  const visiveis = editais.filter(ABAS[aba])
+  const contar = (filtro) => editais.filter(filtro).length
 
   return (
     <>
       <PageHeader
-        title="Cronograma dos Editais"
+        title="Cronograma"
+        description="Datas-chave de todos os editais, da inscrição ao fim da vigência."
         action={
           podeVerHistorico && (
-            <Button variant="outline" size="sm" onClick={() => setHistorico(null)}>
-              Histórico de prazos
+            <Button size="sm" onClick={() => setDetalhe(null)}>
+              <IconHistory /> Histórico de prazos
             </Button>
           )
         }
       />
 
+      {erro && <Alert tone="error">{erro}</Alert>}
+
       {filtrarStatus && (
-        <div className="mb-4 max-w-60">
-          <FormField label="Status" className="mb-0">
-            <Select value={status} onChange={(evento) => setStatus(evento.target.value)}>
-              {STATUS_OPCOES.map((opcao) => (
-                <option key={opcao.valor} value={opcao.valor}>
-                  {opcao.rotulo}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+        <Tabs
+          value={aba}
+          onChange={setAba}
+          tabs={[
+            { id: 'todos', label: 'Todos' },
+            { id: 'EM_VIGOR', label: 'Em vigor', count: contar(ABAS.EM_VIGOR) },
+            { id: 'RASCUNHO', label: 'Rascunhos', count: contar(ABAS.RASCUNHO) },
+            { id: 'ENCERRADO', label: 'Encerrados' },
+          ]}
+        />
+      )}
+
+      {carregando ? (
+        <Carregando texto="Carregando cronograma..." />
+      ) : visiveis.length === 0 ? (
+        !erro && (
+          <EmptyState
+            icon={<IconCalendar />}
+            title="Nenhum edital encontrado"
+            description={
+              editais.length
+                ? 'Não há editais nesta aba.'
+                : 'Os editais aparecem aqui assim que forem cadastrados.'
+            }
+          />
+        )
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {visiveis.map((edital) => (
+            <EditalCronogramaCard
+              key={edital.id}
+              edital={edital}
+              podeVerHistorico={podeVerHistorico}
+              onDetalhes={() => setDetalhe(edital)}
+            />
+          ))}
         </div>
       )}
 
-      {erro && <Alert tone="error">{erro}</Alert>}
-
-      <DataTable
-        columns={[
-          'Edital',
-          'Status',
-          'Inscrições',
-          'Homologação',
-          'Recursos',
-          'Resultado',
-          'Relatórios',
-          'Próxima etapa',
-          'Bolsas',
-          ...(podeVerHistorico ? ['Alterações'] : []),
-        ]}
-        rows={linhas}
-        loading={carregando}
-        emptyMessage={
-          erro ? 'Cronograma indisponível.' : 'Nenhum edital encontrado para este filtro.'
-        }
-      />
-
-      {historico !== undefined && (
-        <HistoricoCronogramaModal edital={historico} onFechar={() => setHistorico(undefined)} />
+      {detalhe !== undefined && (
+        <HistoricoCronogramaDrawer
+          edital={detalhe}
+          podeVerHistorico={podeVerHistorico}
+          onFechar={() => setDetalhe(undefined)}
+        />
       )}
     </>
   )

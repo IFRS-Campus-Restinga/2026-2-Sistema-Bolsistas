@@ -7,9 +7,9 @@ from rest_framework.test import APITestCase
 from accounts.models import CoordenadorArea, CoordenadorProjeto, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
-from bolsistas.models import OrigemVinculo, VinculoBolsista
+from bolsistas.models import OrigemVinculo, StatusVinculo, VinculoBolsista
 from editais.models import Edital
-from inscricoes.models import Inscricao, StatusInscricao, TipoDocumento
+from inscricoes.models import DecisaoDocumento, Inscricao, StatusInscricao, TipoDocumento
 from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
@@ -74,6 +74,16 @@ class RegrasElegibilidadeTests(VinculoDiretoTestBase):
         for status in [StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA, StatusBolsa.REJEITADA]:
             self.bolsa.status = status
             self.assertFalse(bolsa_elegivel_para_convite(self.bolsa), status)
+
+    def test_bolsa_ainda_nao_aprovada_nao_e_elegivel(self):
+        self.bolsa.status = StatusBolsa.SOLICITADA
+
+        self.assertFalse(bolsa_elegivel_para_convite(self.bolsa))
+
+    def test_bolsa_aprovada_em_andamento_e_elegivel(self):
+        for status in [StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO]:
+            self.bolsa.status = status
+            self.assertTrue(bolsa_elegivel_para_convite(self.bolsa), status)
 
     def test_bolsa_com_inscricao_homologada_nao_e_elegivel(self):
         Inscricao.objects.create(
@@ -235,6 +245,28 @@ class FluxoAlunoTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
         self.assertIsNotNone(self.convite.data_envio_documentos)
 
+    def test_reenvio_exige_substituir_documento_recusado(self):
+        self.convite.status = StatusConvite.EM_PREENCHIMENTO
+        self.convite.termos_aceitos = True
+        self.convite.save(update_fields=["status", "termos_aceitos"])
+        historico = self.convite.documentos.create(
+            tipo=TipoDocumento.HISTORICO_ESCOLAR, arquivo="teste.pdf"
+        )
+        recusado = self.convite.documentos.create(
+            tipo=TipoDocumento.COMPROVANTE_MATRICULA, arquivo="teste.pdf"
+        )
+        recusado.decidir(DecisaoDocumento.REJEITADO, "Vencido.", self.coordenador)
+
+        response = self.client.post(self.url("convite-enviar"))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Comprovante de Matrícula", response.data["detail"])
+
+        recusado.delete()
+        self.convite.documentos.create(tipo=TipoDocumento.COMPROVANTE_MATRICULA, arquivo="novo.pdf")
+        response = self.client.post(self.url("convite-enviar"))
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(historico.decisao, DecisaoDocumento.PENDENTE)
+
     def test_nao_edita_convite_pendente(self):
         response = self.client.patch(
             self.url("convite-detalhe"), {"termos_aceitos": True}, format="json"
@@ -299,11 +331,28 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
             termos_aceitos=True,
         )
         for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
-            self.convite.documentos.create(tipo=tipo, arquivo="teste.pdf")
+            self.convite.documentos.create(
+                tipo=tipo,
+                arquivo="teste.pdf",
+                decisao=DecisaoDocumento.APROVADO,
+                decidido_em=timezone.now(),
+            )
         self.client.force_authenticate(self.coordenador)
 
     def url(self, acao):
         return reverse(f"vinculo_direto:{acao}", kwargs={"pk": self.convite.pk})
+
+    def test_nao_aprova_com_documento_nao_aprovado(self):
+        documento = self.convite.documentos.first()
+        documento.decidir(DecisaoDocumento.REJEITADO, "Comprovante vencido.", self.coordenador)
+
+        response = self.client.post(self.url("convite-aprovar"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("1 recusado", response.data["detail"])
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
+        self.assertFalse(VinculoBolsista.objects.exists())
 
     def test_aprovar_efetiva_vinculo_e_preenche_bolsa(self):
         response = self.client.post(self.url("convite-aprovar"))
@@ -313,6 +362,18 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.status, StatusConvite.APROVADO)
         self.assertEqual(self.convite.responsavel_decisao, self.coordenador)
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
+
+    def test_nao_aprova_convite_de_bolsa_cancelada(self):
+        self.bolsa.status = StatusBolsa.CANCELADA
+        self.bolsa.save(update_fields=["status"])
+
+        response = self.client.post(self.url("convite-aprovar"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Cancelada", response.data["detail"])
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
+        self.assertFalse(VinculoBolsista.objects.exists())
 
     def test_aprovar_registra_log_de_vinculo(self):
         self.client.post(self.url("convite-aprovar"))
@@ -377,6 +438,62 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(self.client.post(self.url("convite-aprovar")).status_code, 404)
 
 
+class DecidirDocumentoConviteTests(VinculoDiretoTestBase):
+    """Os documentos do convite passam pelo mesmo fluxo de decisão da inscrição."""
+
+    def setUp(self):
+        super().setUp()
+        self.convite = ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.ENVIADO,
+            termos_aceitos=True,
+        )
+        self.convite.documentos.create(tipo=TipoDocumento.HISTORICO_ESCOLAR, arquivo="teste.pdf")
+        self.client.force_authenticate(self.coordenador)
+
+    def decidir(self, **dados):
+        url = reverse("vinculo_direto:documento-decisao", kwargs={"pk": self.documento().pk})
+        return self.client.post(url, dados)
+
+    def documento(self):
+        return self.convite.documentos.get(tipo=TipoDocumento.HISTORICO_ESCOLAR)
+
+    def test_aprova_e_devolve_o_convite(self):
+        resposta = self.decidir(decisao="APROVADO")
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        documento = self.documento()
+        self.assertEqual(documento.decisao, DecisaoDocumento.APROVADO)
+        self.assertEqual(documento.decidido_por, self.coordenador)
+        decisoes = {d["id"]: d["decisao"] for d in resposta.data["documentos"]}
+        self.assertEqual(decisoes[documento.pk], "APROVADO")
+
+    def test_recusa_exige_motivo(self):
+        self.assertEqual(self.decidir(decisao="REJEITADO").status_code, 400)
+        resposta = self.decidir(decisao="REJEITADO", motivo_recusa="Comprovante vencido.")
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(self.documento().motivo_recusa, "Comprovante vencido.")
+
+    def test_so_decide_com_o_convite_enviado(self):
+        self.convite.status = StatusConvite.EM_PREENCHIMENTO
+        self.convite.save(update_fields=["status"])
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 400)
+        self.assertEqual(self.documento().decisao, DecisaoDocumento.PENDENTE)
+
+    def test_coordenador_de_outro_projeto_nao_decide(self):
+        outro = Usuario.objects.create_user(
+            username="outro", email="outro@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.client.force_authenticate(outro)
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 404)
+
+    def test_aluno_nao_decide(self):
+        self.client.force_authenticate(self.aluno)
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 403)
+
+
 class BolsasElegiveisEBuscaAlunoTests(VinculoDiretoTestBase):
     def setUp(self):
         super().setUp()
@@ -400,6 +517,27 @@ class BolsasElegiveisEBuscaAlunoTests(VinculoDiretoTestBase):
         self.assertIn(self.bolsa.id, ids)
         self.assertNotIn(bolsa_nao_elegivel.id, ids)
 
+    def test_bolsa_solicitada_ou_cancelada_nao_aparece(self):
+        for status in [StatusBolsa.SOLICITADA, StatusBolsa.CANCELADA]:
+            self.bolsa.status = status
+            self.bolsa.save(update_fields=["status"])
+
+            response = self.client.get(reverse("vinculo_direto:bolsas-elegiveis"))
+
+            self.assertEqual(response.data, [], status)
+
+    def test_nao_cria_convite_em_bolsa_solicitada(self):
+        self.bolsa.status = StatusBolsa.SOLICITADA
+        self.bolsa.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("vinculo_direto:convites"), {"bolsa": self.bolsa.id, "aluno": self.aluno.id}
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("bolsa", response.data)
+        self.assertFalse(ConviteVinculoDireto.objects.exists())
+
     def test_busca_aluno_por_nome_ou_email(self):
         self.aluno.nome = "Maria Teste"
         self.aluno.save()
@@ -416,3 +554,98 @@ class BolsasElegiveisEBuscaAlunoTests(VinculoDiretoTestBase):
         self.assertEqual(
             self.client.get(reverse("vinculo_direto:bolsas-elegiveis")).status_code, 403
         )
+
+
+class VinculoUnicoTests(VinculoDiretoTestBase):
+    """O aluno só pode ter um vínculo de bolsista ativo por vez."""
+
+    def setUp(self):
+        super().setUp()
+        outra = Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo="ENSINO",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=StatusBolsa.PREENCHIDA,
+        )
+        convite_antigo = ConviteVinculoDireto.objects.create(
+            bolsa=outra,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.APROVADO,
+        )
+        self.vinculo_atual = VinculoBolsista.objects.create(
+            bolsa=outra,
+            aluno=self.aluno,
+            origem=OrigemVinculo.VINCULO_DIRETO,
+            convite=convite_antigo,
+        )
+
+    def convite(self, status, **kwargs):
+        convite = ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=status,
+            **kwargs,
+        )
+        for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
+            convite.documentos.create(tipo=tipo, arquivo="teste.pdf")
+        return convite
+
+    def post(self, acao, convite):
+        return self.client.post(reverse(f"vinculo_direto:{acao}", kwargs={"pk": convite.pk}))
+
+    def test_nao_convida_aluno_que_ja_e_bolsista(self):
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("vinculo_direto:convites"), {"bolsa": self.bolsa.id, "aluno": self.aluno.id}
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("aluno", response.data)
+
+    def test_convida_aluno_desligado_da_bolsa_anterior(self):
+        self.vinculo_atual.status = StatusVinculo.DESLIGADO
+        self.vinculo_atual.save(update_fields=["status"])
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(
+            reverse("vinculo_direto:convites"), {"bolsa": self.bolsa.id, "aluno": self.aluno.id}
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_aluno_bolsista_nao_aceita_convite(self):
+        convite = self.convite(StatusConvite.PENDENTE)
+        self.client.force_authenticate(self.aluno)
+
+        response = self.post("convite-aceitar", convite)
+
+        self.assertEqual(response.status_code, 400)
+        convite.refresh_from_db()
+        self.assertEqual(convite.status, StatusConvite.PENDENTE)
+
+    def test_aluno_bolsista_nao_envia_documentacao(self):
+        convite = self.convite(StatusConvite.EM_PREENCHIMENTO, termos_aceitos=True)
+        self.client.force_authenticate(self.aluno)
+
+        response = self.post("convite-enviar", convite)
+
+        self.assertEqual(response.status_code, 400)
+        convite.refresh_from_db()
+        self.assertEqual(convite.status, StatusConvite.EM_PREENCHIMENTO)
+
+    def test_coordenador_nao_aprova_convite_de_aluno_que_ja_e_bolsista(self):
+        convite = self.convite(StatusConvite.ENVIADO, termos_aceitos=True)
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.post("convite-aprovar", convite)
+
+        self.assertEqual(response.status_code, 400)
+        convite.refresh_from_db()
+        self.assertEqual(convite.status, StatusConvite.ENVIADO)
+        self.assertEqual(VinculoBolsista.objects.filter(aluno=self.aluno).count(), 1)

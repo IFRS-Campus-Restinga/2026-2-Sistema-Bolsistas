@@ -8,11 +8,12 @@ from rest_framework.test import APITestCase
 from accounts.models import Aluno, CoordenadorProjeto, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EtapaAvaliacao, StatusBolsa
-from bolsistas.models import OrigemVinculo, VinculoBolsista
+from bolsistas.models import OrigemVinculo, StatusVinculo, VinculoBolsista
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao
 from notificacoes.models import Notificacao
 from projetos.models import Projeto
+from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
 
 from .models import (
     DesistenciaVaga,
@@ -350,6 +351,58 @@ class PublicacaoEIndicacaoTests(SelecaoBaseTests):
         self.assertEqual(vinculo.aluno, self.ana.aluno)
         self.assertEqual(vinculo.origem, OrigemVinculo.SELECAO)
         self.assertEqual(vinculo.indicacao, self.ana.indicacao_bolsista)
+
+    def vinculo_em_outra_bolsa(self, aluno, status=StatusVinculo.ATIVO):
+        outra = Bolsa.objects.create(
+            projeto=self.bolsa.projeto,
+            edital=self.edital,
+            tipo="PESQUISA",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=525,
+            status=StatusBolsa.PREENCHIDA,
+        )
+        convite = ConviteVinculoDireto.objects.create(
+            bolsa=outra,
+            aluno=aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.APROVADO,
+        )
+        return VinculoBolsista.objects.create(
+            bolsa=outra,
+            aluno=aluno,
+            origem=OrigemVinculo.VINCULO_DIRETO,
+            convite=convite,
+            status=status,
+        )
+
+    def test_bolsista_ativo_de_outra_bolsa_nao_pode_ser_indicado(self):
+        self.publicar()
+        self.vinculo_em_outra_bolsa(self.ana.aluno)
+
+        candidatos, _ = self.classificacao()
+        self.assertFalse(candidatos[self.ana.id]["pode_indicar"])
+        self.assertTrue(candidatos[self.ana.id]["bolsista_em_outra_bolsa"])
+        self.assertFalse(candidatos[self.bia.id]["bolsista_em_outra_bolsa"])
+
+        resposta = self.indicar(self.ana)
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("já é bolsista ativo", resposta.data["detail"])
+        self.assertFalse(IndicacaoBolsista.objects.filter(inscricao=self.ana).exists())
+
+    def test_bolsista_ativo_de_outra_bolsa_pode_ser_marcado_como_nao_assume(self):
+        self.publicar()
+        self.vinculo_em_outra_bolsa(self.ana.aluno)
+
+        self.assertEqual(self.nao_assumiu(self.ana).status_code, 200)
+        self.assertEqual(self.indicar(self.bia).status_code, 200)
+
+    def test_bolsista_desligado_de_outra_bolsa_pode_ser_indicado(self):
+        self.publicar()
+        self.vinculo_em_outra_bolsa(self.ana.aluno, status=StatusVinculo.DESLIGADO)
+
+        self.assertEqual(self.indicar(self.ana).status_code, 200)
 
     def test_nao_publica_duas_vezes(self):
         self.publicar()

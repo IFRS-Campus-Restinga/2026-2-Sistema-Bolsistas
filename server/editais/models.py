@@ -3,6 +3,15 @@ from django.core.validators import MaxValueValidator, MinLengthValidator, MinVal
 from django.db import models
 from django.utils import timezone
 
+# Fases do cronograma do edital, como no protótipo: (rótulo, campo do fim).
+FASES_DO_EDITAL = [
+    ("Inscrições", "data_fechamento_inscricoes"),
+    ("Homologação", "data_homologacao"),
+    ("Recursos", "data_recurso_homologacao_fim"),
+    ("Resultado", "data_resultado"),
+    ("Vigência", "data_fim_vigencia"),
+]
+
 
 class Edital(models.Model):
     class Status(models.TextChoices):
@@ -67,6 +76,17 @@ class Edital(models.Model):
         blank=True,
         help_text="Data de entrega dos relatórios finais",
     )
+    # Vigência das bolsas do edital; uma bolsa pode ter datas próprias como exceção.
+    data_inicio_vigencia = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Início da vigência das bolsas do edital",
+    )
+    data_fim_vigencia = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fim da vigência das bolsas do edital",
+    )
     dia_limite_frequencia = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
@@ -101,6 +121,22 @@ class Edital(models.Model):
         if not inicio or not fim:
             return False
         return inicio <= timezone.localdate() <= fim
+
+    def fases_do_cronograma(self, fim_vigencia=None):
+        """Fases com a data de fim e a atual. `fim_vigencia` substitui a do edital (exceção
+        da bolsa)."""
+        hoje = timezone.localdate()
+        fases = [
+            {"rotulo": rotulo, "fim": getattr(self, campo)} for rotulo, campo in FASES_DO_EDITAL
+        ]
+        if fim_vigencia is not None:
+            fases[-1]["fim"] = fim_vigencia
+        # Fase atual: a primeira que ainda não terminou (sem data conta como não terminada).
+        atual = next(
+            (i for i, fase in enumerate(fases) if fase["fim"] is None or fase["fim"] >= hoje),
+            len(fases),
+        )
+        return {"fases": fases, "atual": atual}
 
 
 class AlteracaoCronograma(models.Model):

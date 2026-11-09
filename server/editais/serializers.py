@@ -19,7 +19,14 @@ ETAPAS = [
     ("data_entrega_relatorios", "Entrega de relatórios"),
 ]
 
-CAMPOS_CRONOGRAMA = [campo for campo, _ in ETAPAS]
+# A vigência fica fora da sequência das etapas: pode terminar antes ou depois da entrega
+# dos relatórios, conforme o edital.
+VIGENCIA = [
+    ("data_inicio_vigencia", "Início da vigência"),
+    ("data_fim_vigencia", "Fim da vigência"),
+]
+
+CAMPOS_CRONOGRAMA = [campo for campo, _ in ETAPAS + VIGENCIA]
 
 
 def validar_cronograma(attrs, instance=None, obrigatorio=False):
@@ -41,12 +48,26 @@ def validar_cronograma(attrs, instance=None, obrigatorio=False):
         data_anterior = data
         nome_anterior = nome
 
+    def valor(campo):
+        return attrs.get(campo, getattr(instance, campo, None))
+
+    inicio, fim = valor("data_inicio_vigencia"), valor("data_fim_vigencia")
+    resultado = valor("data_resultado")
+    for campo, _ in VIGENCIA:
+        if valor(campo) is None and obrigatorio:
+            erros[campo] = "Esta data é obrigatória para um edital em vigor."
+    if inicio and resultado and inicio < resultado:
+        erros["data_inicio_vigencia"] = "O início da vigência não pode ser anterior ao resultado."
+    if inicio and fim and fim <= inicio:
+        erros["data_fim_vigencia"] = "O fim da vigência deve ser depois do início."
+
     if erros:
         raise serializers.ValidationError(erros)
 
 
 class EditalSerializer(serializers.ModelSerializer):
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
+    total_bolsas = serializers.SerializerMethodField()
 
     class Meta:
         model = Edital
@@ -57,6 +78,7 @@ class EditalSerializer(serializers.ModelSerializer):
             "link_documento_oficial",
             "status",
             "prazo_inscricao_encerrado",
+            "total_bolsas",
             *CAMPOS_CRONOGRAMA,
             "dia_limite_frequencia",
         ]
@@ -69,6 +91,11 @@ class EditalSerializer(serializers.ModelSerializer):
                 }
             }
         }
+
+    def get_total_bolsas(self, edital):
+        # Na lista vem anotado; no detalhe, conta direto.
+        total = getattr(edital, "total_bolsas", None)
+        return edital.bolsas.count() if total is None else total
 
     def get_prazo_inscricao_encerrado(self, edital):
         if edital.data_fechamento_inscricoes is None:
@@ -160,7 +187,7 @@ class AlteracaoCronogramaSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_etapa(self, alteracao):
-        return dict(ETAPAS).get(alteracao.campo, alteracao.campo)
+        return dict(ETAPAS + VIGENCIA).get(alteracao.campo, alteracao.campo)
 
     def get_responsavel_nome(self, alteracao):
         return str(alteracao.responsavel)
@@ -171,17 +198,22 @@ def _etapa(campo, nome, data):
 
 
 def _proxima_etapa(edital, hoje):
-    for campo, nome in ETAPAS:
-        data = getattr(edital, campo)
-        if data is not None and data >= hoje:
-            return _etapa(campo, nome, data)
-    return None
+    futuras = [
+        (data, campo, nome)
+        for campo, nome in ETAPAS + VIGENCIA
+        if (data := getattr(edital, campo)) is not None and data >= hoje
+    ]
+    if not futuras:
+        return None
+    data, campo, nome = min(futuras, key=lambda futura: futura[0])
+    return {**_etapa(campo, nome, data), "dias": (data - hoje).days}
 
 
 class CronogramaConsolidadoSerializer(serializers.ModelSerializer):
     """Edital com as datas-chave do cronograma, para a visão consolidada (US19)."""
 
     etapas = serializers.SerializerMethodField()
+    fases = serializers.SerializerMethodField()
     proxima_etapa = serializers.SerializerMethodField()
     total_bolsas = serializers.IntegerField(read_only=True)
     total_alteracoes = serializers.IntegerField(read_only=True)
@@ -194,6 +226,7 @@ class CronogramaConsolidadoSerializer(serializers.ModelSerializer):
             "ano_codigo",
             "status",
             "etapas",
+            "fases",
             "proxima_etapa",
             "total_bolsas",
             "total_alteracoes",
@@ -201,7 +234,10 @@ class CronogramaConsolidadoSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_etapas(self, edital):
-        return [_etapa(campo, nome, getattr(edital, campo)) for campo, nome in ETAPAS]
+        return [_etapa(campo, nome, getattr(edital, campo)) for campo, nome in ETAPAS + VIGENCIA]
+
+    def get_fases(self, edital):
+        return edital.fases_do_cronograma()
 
     def get_proxima_etapa(self, edital):
         if edital.status != Edital.Status.EM_VIGOR:

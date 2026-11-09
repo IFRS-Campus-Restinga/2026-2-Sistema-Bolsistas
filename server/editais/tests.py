@@ -41,6 +41,43 @@ class EditalAPITests(APITestCase):
         self.assertEqual(edital.status, Edital.Status.RASCUNHO)
         self.assertEqual(response.data["id"], edital.id)
 
+    def test_administrador_consulta_a_lista_com_o_total_de_bolsas(self):
+        edital = Edital.objects.create(**self.dados)
+        coordenador_projeto = Usuario.objects.create_user(
+            username="cp", email="cp@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        projeto = Projeto.objects.create(
+            titulo="Projeto",
+            coordenador_projeto=CoordenadorProjeto.objects.create(usuario=coordenador_projeto),
+        )
+        Bolsa.objects.create(
+            projeto=projeto,
+            edital=edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+        )
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["total_bolsas"], 1)
+
+    def test_administrador_nao_cadastra_edital(self):
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_cadastro_nao_permite_escolher_status(self):
         self.client.force_authenticate(user=self.coordenador)
         dados = {**self.dados, "status": Edital.Status.EM_VIGOR}
@@ -120,8 +157,8 @@ class EditalAPITests(APITestCase):
 
         self.assertFalse(Edital.objects.exists())
 
-    def test_aluno_e_administrador_nao_podem_listar(self):
-        for perfil in [Usuario.Role.ALUNO, Usuario.Role.ADMINISTRADOR]:
+    def test_aluno_nao_pode_listar(self):
+        for perfil in [Usuario.Role.ALUNO]:
             with self.subTest(perfil=perfil):
                 usuario = Usuario.objects.create_user(
                     username=f"teste_{perfil}",
@@ -372,6 +409,8 @@ class EdicaoEditalAPITests(APITestCase):
             data_recurso_homologacao_fim="2026-09-18",
             data_resultado="2026-09-20",
             data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-07-31",
         )
         self.url = reverse(
             "editais:detalhe",
@@ -403,6 +442,40 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(historico.data_nova.isoformat(), "2026-09-12")
         self.assertEqual(historico.responsavel, self.coordenador)
         self.assertIsNotNone(historico.alterado_em)
+
+    def test_vigencia_obrigatoria_em_edital_em_vigor(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": None}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fim_vigencia", response.data)
+
+    def test_vigencia_nao_comeca_antes_do_resultado(self):
+        response = self.client.patch(
+            self.url, {"data_inicio_vigencia": "2026-09-19"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_inicio_vigencia", response.data)
+
+    def test_fim_da_vigencia_depois_do_inicio(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": "2026-10-01"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fim_vigencia", response.data)
+
+    def test_vigencia_pode_terminar_antes_da_entrega_dos_relatorios(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": "2026-11-30"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_alterar_vigencia_entra_no_historico(self):
+        self.client.patch(self.url, {"data_fim_vigencia": "2027-08-31"}, format="json")
+
+        self.assertTrue(
+            AlteracaoCronograma.objects.filter(
+                edital=self.edital, campo="data_fim_vigencia"
+            ).exists()
+        )
 
     def test_nao_registra_historico_para_data_igual(self):
         response = self.client.patch(
@@ -664,6 +737,8 @@ class ValoresBolsaEditalAPITests(APITestCase):
             data_recurso_homologacao_fim="2026-09-18",
             data_resultado="2026-09-20",
             data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-07-31",
         )
         publicar = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
 
@@ -722,7 +797,10 @@ class CronogramaConsolidadoAPITests(APITestCase):
         self.encerrado = self._cria_edital("2025-010", Edital.Status.ENCERRADO, inicio=-200)
 
     def _cria_edital(self, ano_codigo, status_edital, inicio):
-        datas = [self.hoje + timedelta(days=inicio + passo * 3) for passo in range(7)]
+        datas = [
+            self.hoje + timedelta(days=inicio + passo * 3)
+            for passo in range(len(CAMPOS_CRONOGRAMA))
+        ]
         return Edital.objects.create(
             nome=f"Edital {ano_codigo}",
             ano_codigo=ano_codigo,
@@ -800,7 +878,9 @@ class CronogramaConsolidadoAPITests(APITestCase):
 
         por_id = {edital["id"]: edital for edital in response.data}
         # Abertura em hoje-5, fechamento em hoje-2, homologação em hoje+1.
-        self.assertEqual(por_id[self.em_vigor.id]["proxima_etapa"]["campo"], "data_homologacao")
+        proxima = por_id[self.em_vigor.id]["proxima_etapa"]
+        self.assertEqual(proxima["campo"], "data_homologacao")
+        self.assertEqual(proxima["dias"], 1)
         self.assertIsNone(por_id[self.encerrado.id]["proxima_etapa"])
         self.assertIsNone(por_id[self.rascunho.id]["proxima_etapa"])
 
@@ -822,6 +902,21 @@ class CronogramaConsolidadoAPITests(APITestCase):
                 response = self.client.get(self.url)
                 edital = next(item for item in response.data if item["id"] == self.em_vigor.id)
                 self.assertEqual(edital["total_bolsas"], total)
+
+    def test_fases_marcam_a_atual_para_a_barra_do_cronograma(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        response = self.client.get(self.url)
+
+        por_id = {edital["id"]: edital for edital in response.data}
+        fases = por_id[self.em_vigor.id]["fases"]
+        self.assertEqual(
+            [fase["rotulo"] for fase in fases["fases"]],
+            ["Inscrições", "Homologação", "Recursos", "Resultado", "Vigência"],
+        )
+        # As inscrições fecharam em hoje-2; a homologação (hoje+1) é a fase em andamento.
+        self.assertEqual(fases["atual"], 1)
+        self.assertEqual(por_id[self.encerrado.id]["fases"]["atual"], 5)
 
     def test_filtra_por_status(self):
         self.client.force_authenticate(user=self.coord_area)
@@ -854,6 +949,8 @@ class HistoricoCronogramaAPITests(APITestCase):
             data_recurso_homologacao_fim="2026-09-18",
             data_resultado="2026-09-20",
             data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-06-30",
         )
         self.outro_edital = Edital.objects.create(
             nome="Outro edital",
@@ -913,6 +1010,19 @@ class HistoricoCronogramaAPITests(APITestCase):
 
         response = self.client.get(self.url, {"campo": "nome"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_alteracao_da_vigencia_tem_rotulo_proprio(self):
+        self.client.force_authenticate(user=self.coord_area)
+        response = self.client.patch(
+            reverse("editais:detalhe", kwargs={"pk": self.edital.pk}),
+            {"data_fim_vigencia": "2027-07-31"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.get(self.url, {"edital": self.edital.pk})
+
+        self.assertEqual(response.data[0]["etapa"], "Fim da vigência")
 
     def test_rejeita_edital_invalido(self):
         self.client.force_authenticate(user=self.coord_area)

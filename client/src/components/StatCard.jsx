@@ -1,20 +1,23 @@
+import { IconChevronRight } from './Icons'
+
 /**
- * Card de estatística para dashboards.
+ * Card de indicador para os painéis iniciais.
  *
  * Props:
- *   label     — rótulo superior ("EDITAIS ATIVOS")
+ *   label     — rótulo do indicador ("Bolsas ofertadas")
  *   value     — valor numérico ou texto
  *   detail    — linha de contexto abaixo do valor ("de 10 vagas"), opcional
  *   icon      — ReactNode do ícone
- *   color     — "green" | "purple" | "blue" | "orange" | "red"
- *   clickable — se mostra indicação de clicável no hover
+ *   color     — "green" | "purple" | "blue" | "orange" | "red" | "gray" (cor do ícone)
+ *   clickable — mostra a seta de navegação; implícito quando há onClick
  */
-const CORES = {
-  green: { borda: 'border-t-if-green', icone: 'bg-green-100 text-green-600' },
-  purple: { borda: 'border-t-purple-600', icone: 'bg-purple-100 text-purple-600' },
-  blue: { borda: 'border-t-blue-600', icone: 'bg-blue-100 text-blue-600' },
-  orange: { borda: 'border-t-orange-600', icone: 'bg-orange-100 text-orange-600' },
-  red: { borda: 'border-t-red-600', icone: 'bg-red-100 text-red-600' },
+const CORES_DO_ICONE = {
+  green: 'bg-brand-soft text-brand',
+  purple: 'bg-violet-50 text-violet-600',
+  blue: 'bg-blue-50 text-blue-600',
+  orange: 'bg-amber-50 text-amber-600',
+  red: 'bg-red-50 text-red-600',
+  gray: 'bg-gray-100 text-gray-600',
 }
 
 export function StatCard({
@@ -27,42 +30,34 @@ export function StatCard({
   onClick,
 }) {
   const clicavel = clickable || !!onClick
-  const cores = CORES[color] ?? CORES.green
+  const Elemento = onClick ? 'button' : 'div'
 
   return (
-    <div
-      className={`relative flex items-center justify-between gap-3 rounded-2xl border border-t-2 border-gray-100 bg-white p-5 shadow-card transition-all duration-200 ease-[ease] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] ${cores.borda} ${clicavel ? 'group cursor-pointer hover:-translate-y-0.5' : ''}`}
+    <Elemento
+      type={onClick ? 'button' : undefined}
       onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={
-        onClick
-          ? (evento) => {
-              if (evento.key === 'Enter' || evento.key === ' ') {
-                evento.preventDefault()
-                onClick()
-              }
-            }
-          : undefined
-      }
+      className={`group relative flex h-full w-full flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 text-left leading-[inherit] shadow-card transition-all duration-150 ease-[ease] ${clicavel ? 'cursor-pointer hover:border-gray-300 hover:shadow-card-hover' : ''}`}
     >
-      <div className="min-w-0">
-        <p className="mb-2 truncate text-2xs font-semibold tracking-wider text-gray-400 uppercase">
-          {label}
-        </p>
-        <p className="text-4xl leading-none font-extrabold tracking-tight text-gray-900">{value}</p>
-        {detail && <p className="mt-1.5 text-sm text-gray-500">{detail}</p>}
-      </div>
-      <div
-        className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${cores.icone}`}
-      >
-        {icon}
-      </div>
-      {clicavel && (
-        <span className="absolute bottom-2.5 left-5 text-2xs font-semibold text-if-green opacity-0 transition-opacity duration-200 ease-[ease] select-none group-hover:opacity-100">
-          Ir para →
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm text-gray-500">{label}</span>
+        <span
+          className={`flex size-7 shrink-0 items-center justify-center rounded-md [&_svg]:size-4 ${CORES_DO_ICONE[color] ?? CORES_DO_ICONE.green}`}
+        >
+          {icon}
         </span>
-      )}
-    </div>
+      </div>
+      <div className="flex items-end justify-between gap-2">
+        <span className="text-[28px] leading-none font-semibold tracking-tight text-gray-900 tabular-nums">
+          {value}
+        </span>
+        {clicavel && (
+          <IconChevronRight
+            size={16}
+            className="text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500"
+          />
+        )}
+      </div>
+      {detail && <span className="text-xs text-gray-500">{detail}</span>}
+    </Elemento>
   )
 }

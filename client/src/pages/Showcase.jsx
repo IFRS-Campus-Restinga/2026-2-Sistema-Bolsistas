@@ -27,7 +27,38 @@ import {
   IconCheck,
   IconPlus,
   IconSearch,
+  Card,
+  SectionTitle,
+  KeyValue,
+  Tabs,
+  EmptyState,
+  Hint,
+  Drawer,
+  Timeline,
+  Stepper,
 } from '../components'
+
+const HISTORICO_EXEMPLO = [
+  {
+    id: '1',
+    title: 'Fechamento das inscrições: 06/11/2026 → 10/11/2026',
+    meta: 'Carlos Lima · 01/11/2026 às 14:12',
+    tone: 'info',
+  },
+  {
+    id: '2',
+    title: 'Bolsa reaberta pelo administrador',
+    meta: 'Administrador · 28/10/2026 às 09:40',
+    tone: 'warning',
+    body: 'A coordenação de área rejeitou por engano; reanálise solicitada.',
+  },
+  {
+    id: '3',
+    title: 'Bolsa aprovada',
+    meta: 'Carlos Lima · 20/10/2026 às 16:05',
+    tone: 'success',
+  },
+]
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -45,6 +76,10 @@ function ShowcaseContent() {
   const [tabelaCarregando, setTabelaCarregando] = useState(false)
   const [linhaOcupada, setLinhaOcupada] = useState(false)
   const [mostrarCarregando, setMostrarCarregando] = useState(false)
+  const [aba, setAba] = useState('andamento')
+  const [cardSelecionado, setCardSelecionado] = useState(1)
+  const [drawerAberto, setDrawerAberto] = useState(false)
+  const [etapa, setEtapa] = useState(1)
   const confirm = useConfirm()
 
   async function simularBotao(nome, ms) {
@@ -79,6 +114,134 @@ function ShowcaseContent() {
       <p className="mb-12 text-[15px] text-gray-500">
         Biblioteca de componentes React reutilizáveis com CSS puro
       </p>
+
+      {/* ── DESIGN SYSTEM DO PROTÓTIPO (#456) ──────────────── */}
+      <section className="mb-14">
+        <h2 className="mb-1 inline text-sm font-bold tracking-widest text-if-green-dark uppercase">
+          Card, Tabs e estados
+        </h2>
+        <span className="ml-2 text-2xs font-semibold text-gray-400">#456</span>
+
+        <p className="mt-6 mb-2.5 text-2xs font-semibold tracking-[0.08em] text-gray-400 uppercase">
+          Tabs
+        </p>
+        <Tabs
+          value={aba}
+          onChange={setAba}
+          tabs={[
+            { id: 'andamento', label: 'Em andamento', count: 3 },
+            { id: 'finalizadas', label: 'Finalizadas', count: 12 },
+            { id: 'todas', label: 'Todas' },
+          ]}
+        />
+
+        <SectionTitle
+          title="Bolsas do projeto"
+          description="Clique em uma bolsa para ver detalhes, etapas e bolsistas."
+          action={
+            <Button variant="primary" size="sm">
+              <IconPlus /> Solicitar bolsa
+            </Button>
+          }
+        />
+        <Hint>Card clicável com seleção; o card sem clique é só superfície.</Hint>
+        <div className="grid grid-cols-[repeat(3,1fr)] gap-3">
+          {[1, 2].map((id) => (
+            <Card key={id} onClick={() => setCardSelecionado(id)} selected={cardSelecionado === id}>
+              <p className="text-xs text-gray-500">Monitoramento de Qualidade · 2026-014</p>
+              <p className="text-[15px] font-semibold text-gray-900">
+                BICT · {id === 1 ? 12 : 16}h
+              </p>
+              <dl className="mt-3 grid grid-cols-2 gap-3">
+                <KeyValue label="Vagas">{id} de 2</KeyValue>
+                <KeyValue label="Valor">R$ 700,00</KeyValue>
+              </dl>
+            </Card>
+          ))}
+          <Card>
+            <dl className="grid grid-cols-1 gap-3">
+              <KeyValue label="Vigência">01/09/2026 a 01/07/2027</KeyValue>
+              <KeyValue label="Coordenador">João Ferreira</KeyValue>
+            </dl>
+          </Card>
+        </div>
+
+        <p className="mt-6 mb-2.5 text-2xs font-semibold tracking-[0.08em] text-gray-400 uppercase">
+          Estado vazio
+        </p>
+        <div className="grid grid-cols-[repeat(2,1fr)] gap-3">
+          <EmptyState
+            title="Nenhuma bolsa finalizada ainda"
+            description="As bolsas aparecem aqui depois que o coordenador do projeto as finaliza."
+          />
+          <EmptyState
+            compact
+            icon={<IconUsers />}
+            title="Nenhum bolsista nesta bolsa"
+            action={<Button size="sm">Convidar bolsista</Button>}
+          />
+        </div>
+      </section>
+
+      {/* ── DRAWER, TIMELINE E STEPPER (#457) ────────────── */}
+      <section className="mb-14">
+        <h2 className="mb-1 inline text-sm font-bold tracking-widest text-if-green-dark uppercase">
+          Drawer, Timeline e Stepper
+        </h2>
+        <span className="ml-2 text-2xs font-semibold text-gray-400">#457</span>
+
+        <p className="mt-6 mb-2.5 text-2xs font-semibold tracking-[0.08em] text-gray-400 uppercase">
+          Stepper
+        </p>
+        <Stepper steps={['Homologação', 'Recursos', 'Notas', 'Resultado']} current={etapa} />
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" onClick={() => setEtapa((atual) => Math.max(atual - 1, 0))}>
+            Voltar etapa
+          </Button>
+          <Button size="sm" onClick={() => setEtapa((atual) => Math.min(atual + 1, 4))}>
+            Avançar etapa
+          </Button>
+        </div>
+
+        <p className="mt-6 mb-2.5 text-2xs font-semibold tracking-[0.08em] text-gray-400 uppercase">
+          Timeline
+        </p>
+        <Card className="max-w-[480px]">
+          <Timeline items={HISTORICO_EXEMPLO} />
+        </Card>
+
+        <p className="mt-6 mb-2.5 text-2xs font-semibold tracking-[0.08em] text-gray-400 uppercase">
+          Drawer
+        </p>
+        <Button variant="primary" onClick={() => setDrawerAberto(true)}>
+          Abrir drawer
+        </Button>
+        {drawerAberto && (
+          <Drawer
+            title="Beatriz Nunes"
+            subtitle="Análise e Desenvolvimento de Sistemas · 4º período"
+            onClose={() => setDrawerAberto(false)}
+            footer={
+              <>
+                <Button variant="danger" onClick={() => setDrawerAberto(false)}>
+                  Indeferir
+                </Button>
+                <Button variant="accent" onClick={() => setDrawerAberto(false)}>
+                  Homologar
+                </Button>
+              </>
+            }
+          >
+            <div className="flex flex-col gap-5 p-5">
+              <dl className="grid grid-cols-2 gap-4">
+                <KeyValue label="Matrícula">2023002</KeyValue>
+                <KeyValue label="Situação">Pendente</KeyValue>
+              </dl>
+              <Timeline items={HISTORICO_EXEMPLO.slice(0, 2)} />
+            </div>
+          </Drawer>
+        )}
+      </section>
 
       {/* ── BOTÕES (#178) ──────────────────────────────────── */}
       <section className="mb-14">

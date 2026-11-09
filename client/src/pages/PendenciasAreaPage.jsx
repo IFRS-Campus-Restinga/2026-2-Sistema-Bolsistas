@@ -17,7 +17,7 @@ import { mensagemDeErro } from '../utils/mensagemDeErro'
 function SituacaoSolicitacao({ pendencia }) {
   if (!pendencia.solicitada_em) return <span className="text-sm text-gray-400">Não solicitada</span>
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge status="SOLICITADO" label="Solicitada" />
       <span className="text-xs text-gray-400">{formatarDataHora(pendencia.solicitada_em)}</span>
       {pendencia.lida_em && <span className="text-xs text-gray-400">Lida pelo coordenador</span>}
@@ -68,7 +68,9 @@ function GrupoDaBolsa({ grupo, onSolicitar }) {
 
       {grupo.frequencias.length > 0 && (
         <div className="mb-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">Frequências não informadas</h3>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">
+            Frequências aguardando lançamento
+          </h3>
           <DataTable
             columns={['Bolsista', 'Mês', 'Prazo', 'Solicitação', 'Ações']}
             rows={linhasFrequencias}

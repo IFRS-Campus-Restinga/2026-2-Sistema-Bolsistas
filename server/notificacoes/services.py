@@ -28,10 +28,11 @@ class Destino:
     ALUNO_FREQUENCIA = "minha-frequencia"
 
     PROJETO_PROJETOS = "projetos"
-    PROJETO_CANDIDATOS = "candidatos"
+    PROJETO_SELECAO = "selecao"
     PROJETO_CONVITES = "convites"
     PROJETO_BOLSISTAS = "bolsistas"
     PROJETO_FREQUENCIAS = "frequencias"
+    PROJETO_FINALIZACAO = "finalizacao"
 
     AREA_SOLICITACOES = "solicitacoes"
     AREA_FINALIZACAO = "finalizacao"
