@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Layout,
-  Button,
-  PageHeader,
   IconHome,
   IconBolsa,
   IconClipboardCheck,
@@ -63,24 +61,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      {active === 'dashboard' && (
-        <>
-          <PageHeader
-            title="Painel Administrativo"
-            action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => (window.location.href = '/showcase')}
-              >
-                Ver Showcase
-              </Button>
-            }
-          />
-
-          <PainelAdministrativo onNavigate={navegar} />
-        </>
-      )}
+      {active === 'dashboard' && <PainelAdministrativo onNavigate={navegar} />}
       {active === 'editais' && <AdminEditaisPage />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}

@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Usuario
-from accounts.permissions import IsAdministrador
+from accounts.permissions import IsAdministrador, IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import LogAuditoria
 from auditoria.serializers import LogAuditoriaSerializer
 from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
@@ -17,6 +17,12 @@ from selecao.models import IndicacaoBolsista, ResultadoInscricao, SituacaoClassi
 from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
 
 from .contadores import contadores_do_menu
+from .paineis import (
+    painel_da_area,
+    painel_do_admin,
+    painel_do_aluno,
+    painel_do_coordenador_projeto,
+)
 
 
 class ContadoresMenuView(APIView):
@@ -26,6 +32,33 @@ class ContadoresMenuView(APIView):
 
     def get(self, request):
         return Response(contadores_do_menu(request.user))
+
+
+class PainelAreaView(APIView):
+    """Início do coordenador de área: indicadores, pendências e próximos prazos (US92)."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorArea]
+
+    def get(self, request):
+        return Response(painel_da_area(request.user))
+
+
+class PainelCoordenadorProjetoView(APIView):
+    """Início do coordenador de projeto: indicadores, pendências e agenda (US92)."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    def get(self, request):
+        return Response(painel_do_coordenador_projeto(request.user))
+
+
+class PainelAlunoView(APIView):
+    """Início do aluno: indicadores, minha bolsa e próximos passos (US92)."""
+
+    permission_classes = [IsAuthenticated, IsAluno]
+
+    def get(self, request):
+        return Response(painel_do_aluno(request.user))
 
 
 class MonitoramentoGlobalView(APIView):
@@ -262,5 +295,6 @@ class PainelAdministrativoView(APIView):
                     ).count(),
                 },
                 "atividade_recente": LogAuditoriaSerializer(logs, many=True).data,
+                "visao_geral": painel_do_admin(),
             }
         )

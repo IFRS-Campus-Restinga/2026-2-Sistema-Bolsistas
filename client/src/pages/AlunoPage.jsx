@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react'
-import { bolsasFetch, bolsistasFetch, dadosBancariosFetch, inscricoesFetch } from '../api'
+import { bolsistasFetch, dadosBancariosFetch } from '../api'
 import {
   Badge,
-  Banner,
-  Button,
   Layout,
-  PageHeader,
-  StatCard,
-  IconBriefcase,
   IconHome,
-  IconClipboardList,
   IconBank,
   IconMail,
   IconAward,
@@ -20,6 +14,7 @@ import {
 } from '../components'
 
 import BolsasDisponiveisPage from './BolsasDisponiveisPage'
+import InicioAlunoPage from './InicioAlunoPage'
 import MinhasInscricoesPage from './MinhasInscricoesPage'
 import MeusRecursosPage from './MeusRecursosPage'
 import DadosBancariosPage from './DadosBancariosPage'
@@ -83,39 +78,7 @@ function useDadosBancarios(active) {
 
 export default function AlunoPage({ me, initials, onVoltarHub }) {
   const [active, setActive] = useState('dashboard')
-  const [totalBolsas, setTotalBolsas] = useState(null)
-  const [totalInscricoes, setTotalInscricoes] = useState(null)
   const banco = useDadosBancarios(active)
-
-  useEffect(() => {
-    if (active !== 'dashboard') return undefined
-    let ativo = true
-
-    bolsasFetch('/disponiveis/')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((dados) => {
-        if (ativo) setTotalBolsas(Array.isArray(dados) ? dados.length : 0)
-      })
-      .catch(() => {
-        if (ativo) setTotalBolsas(0)
-      })
-
-    inscricoesFetch('/')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((dados) => {
-        const pendentes = Array.isArray(dados)
-          ? dados.filter((inscricao) => inscricao.status === 'PENDENTE').length
-          : 0
-        if (ativo) setTotalInscricoes(pendentes)
-      })
-      .catch(() => {
-        if (ativo) setTotalInscricoes(0)
-      })
-
-    return () => {
-      ativo = false
-    }
-  }, [active])
 
   return (
     <Layout
@@ -137,53 +100,7 @@ export default function AlunoPage({ me, initials, onVoltarHub }) {
         },
       ]}
     >
-      {active === 'dashboard' && (
-        <div>
-          <PageHeader title="Painel do Aluno" />
-
-          {banco.pendente && banco.temBolsa && (
-            <Banner
-              tone="warning"
-              title="Cadastre seus dados bancários"
-              description="Sem eles o pagamento da sua bolsa não pode ser processado."
-              action={
-                <Button variant="primary" onClick={() => setActive('dados-bancarios')}>
-                  Cadastrar agora
-                </Button>
-              }
-            />
-          )}
-
-          <Banner
-            title="Editais de Iniciação Científica e Extensão Abertos!"
-            description="Confira as vagas disponíveis e inscreva-se dentro do prazo do edital."
-            action={
-              <Button variant="primary" onClick={() => setActive('bolsas')}>
-                Ver Projetos Disponíveis
-              </Button>
-            }
-          />
-
-          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
-            <StatCard
-              label="Bolsas Abertas"
-              value={totalBolsas ?? '0'}
-              icon={<IconBriefcase />}
-              color="green"
-              clickable
-              onClick={() => setActive('bolsas')}
-            />
-            <StatCard
-              label="Minhas Inscrições"
-              value={totalInscricoes ?? '0'}
-              icon={<IconClipboardList />}
-              color="blue"
-              clickable
-              onClick={() => setActive('inscricoes')}
-            />
-          </div>
-        </div>
-      )}
+      {active === 'dashboard' && <InicioAlunoPage nome={me.nome} onNav={setActive} />}
 
       {active === 'bolsas' && <BolsasDisponiveisPage />}
 

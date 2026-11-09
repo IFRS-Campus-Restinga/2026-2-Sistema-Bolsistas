@@ -1,18 +1,15 @@
 import { useState } from 'react'
 import {
   Layout,
-  PageHeader,
-  StatCard,
   IconHome,
-  IconBriefcase,
   IconUsers,
-  IconCheck,
   IconCalendarCheck,
   IconFlag,
   IconFolder,
   IconFunnel,
   IconSend,
 } from '../components'
+import InicioProjetoPage from './InicioProjetoPage'
 import MeusProjetosPage from './MeusProjetosPage'
 import MeusConvitesPage from './MeusConvitesPage'
 import SelecaoCandidatosPage from './SelecaoCandidatosPage'
@@ -58,16 +55,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      {active === 'dashboard' && (
-        <>
-          <PageHeader title="Painel do Coordenador de Projeto" />
-          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
-            <StatCard label="Meus Projetos" value={0} icon={<IconBriefcase />} color="green" />
-            <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="blue" />
-            <StatCard label="Vagas Abertas" value={0} icon={<IconCheck />} color="orange" />
-          </div>
-        </>
-      )}
+      {active === 'dashboard' && <InicioProjetoPage nome={me.nome} onNav={setActive} />}
 
       {active === 'projetos' && <MeusProjetosPage />}
       {active === 'selecao' && <SelecaoCandidatosPage />}

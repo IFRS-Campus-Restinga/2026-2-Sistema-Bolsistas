@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import {
   Layout,
-  PageHeader,
-  StatCard,
   IconHome,
-  IconCalendar,
-  IconBriefcase,
-  IconUsers,
   IconAlertTriangle,
   IconArrowLeftRight,
   IconCalendarCheck,
@@ -15,6 +10,7 @@ import {
   IconInbox,
 } from '../components'
 import EditaisPage from './EditaisPage'
+import InicioAreaPage from './InicioAreaPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
 import MovimentacoesBolsistasPage from './MovimentacoesBolsistasPage'
@@ -64,16 +60,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
     >
       {active === 'editais' && <EditaisPage />}
 
-      {active === 'dashboard' && (
-        <>
-          <PageHeader title={`Painel Coordenação de ${areaLabel}`} />
-          <div className="grid grid-cols-[repeat(3,1fr)] gap-4">
-            <StatCard label="Editais Ativos" value={0} icon={<IconCalendar />} color="green" />
-            <StatCard label="Projetos da Área" value={0} icon={<IconBriefcase />} color="blue" />
-            <StatCard label="Bolsistas Ativos" value={0} icon={<IconUsers />} color="orange" />
-          </div>
-        </>
-      )}
+      {active === 'dashboard' && <InicioAreaPage areaLabel={areaLabel} onNav={setActive} />}
 
       {active === 'solicitacoes' && <SolicitacoesBolsaPage />}
       {active === 'finalizacao' && <FinalizacaoBolsasPage />}

@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -7,6 +9,9 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from editais.models import Edital
+from frequencias.models import Frequencia, StatusPagamento
+from frequencias.services import pendencias_da_area
+from frequencias.tests import CenarioFrequencia, meses_atras
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 from projetos.models import Projeto
 from selecao.models import (
@@ -459,3 +464,266 @@ class ContadoresMenuTests(APITestCase):
 
     def test_visitante_nao_acessa(self):
         self.assertIn(self.client.get(self.url).status_code, (401, 403))
+
+
+class PainelAreaTests(CenarioFrequencia):
+    """Início do coordenador de área (US92), no escopo da área (Ensino + Indissociável)."""
+
+    url = reverse("monitoramento:painel-area")
+
+    def painel(self):
+        self.client.force_authenticate(self.area)
+        resposta = self.client.get(self.url)
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.data
+
+    def nova_bolsa(self, tipo, status):
+        return Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo=tipo,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=status,
+        )
+
+    def test_indicadores_ficam_no_escopo_da_area(self):
+        self.nova_bolsa("ENSINO", StatusBolsa.SOLICITADA)
+        self.nova_bolsa("INDISSOCIAVEL", StatusBolsa.ABERTA)
+        self.nova_bolsa("PESQUISA", StatusBolsa.ABERTA)
+        Frequencia.objects.create(
+            vinculo=self.vinculo,
+            mes_referencia=meses_atras(1),
+            registrada=True,
+            lancada_por=self.coordenador,
+            status_pagamento=StatusPagamento.PENDENTE,
+        )
+
+        dados = self.painel()
+
+        self.assertEqual(dados["editais_em_vigor"], 1)
+        self.assertEqual(dados["bolsas_da_area"], 2)  # a preenchida e a indissociável
+        self.assertEqual(dados["bolsas_aguardando_analise"], 1)
+        self.assertEqual(dados["bolsistas_ativos"], 1)
+        self.assertEqual(dados["pagamentos_a_autorizar"], 1)
+        self.assertEqual(dados["atencao"]["solicitacoes"], 1)
+        self.assertEqual(
+            dados["atencao"]["frequencias_em_atraso"],
+            sum(len(g["frequencias"]) for g in pendencias_da_area(self.area)),
+        )
+        self.assertEqual(
+            {item["status"]: item["total"] for item in dados["bolsas_por_situacao"]},
+            {"SOLICITADA": 1, "ABERTA": 1, "EM_SELECAO": 0, "PREENCHIDA": 1},
+        )
+        self.assertEqual(dados["total_bolsas"], 3)
+
+    def test_vigencia_encerrada_sem_finalizacao_requer_atencao(self):
+        self.bolsa.data_fim_vigencia = timezone.localdate() - timedelta(days=1)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+
+        self.assertEqual(self.painel()["atencao"]["vigencias_encerradas"], 1)
+
+    def test_proximos_prazos_ignoram_datas_passadas_e_vem_em_ordem(self):
+        hoje = timezone.localdate()
+        self.edital.data_fechamento_inscricoes = hoje - timedelta(days=1)
+        self.edital.data_homologacao = hoje + timedelta(days=10)
+        self.edital.data_resultado = hoje + timedelta(days=3)
+        self.edital.save()
+
+        prazos = self.painel()["proximos_prazos"]
+
+        self.assertEqual([p["rotulo"] for p in prazos], ["Resultado final", "Homologação"])
+        self.assertEqual([p["dias"] for p in prazos], [3, 10])
+        self.assertEqual(prazos[0]["edital"], "2026-001")
+
+    def test_so_o_coordenador_de_area_acessa(self):
+        self.client.force_authenticate(self.coordenador)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+
+class PainelCoordenadorProjetoTests(CenarioFrequencia):
+    """Início do coordenador de projeto (US92), só com o que é dos projetos dele."""
+
+    url = reverse("monitoramento:painel-projeto")
+
+    def painel(self):
+        self.client.force_authenticate(self.coordenador)
+        resposta = self.client.get(self.url)
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.data
+
+    def bolsa_aberta(self):
+        return Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo="ENSINO",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=StatusBolsa.ABERTA,
+        )
+
+    def test_indicadores_e_pendencias_de_selecao(self):
+        aberta = self.bolsa_aberta()
+        aluno = Usuario.objects.create_user(
+            username="bia", email="bia@example.com", nome="Bia", role=Usuario.Role.ALUNO
+        )
+        Inscricao.objects.create(aluno=aluno, bolsa=aberta, status=StatusInscricao.PENDENTE)
+        indeferida = Inscricao.objects.create(
+            aluno=Usuario.objects.create_user(
+                username="caio", email="caio@example.com", role=Usuario.Role.ALUNO
+            ),
+            bolsa=aberta,
+            status=StatusInscricao.INDEFERIDA,
+        )
+        Recurso.objects.create(
+            inscricao=indeferida, justificativa="Enviei.", status=StatusRecurso.PENDENTE
+        )
+
+        dados = self.painel()
+
+        self.assertEqual(dados["projetos"], 1)
+        self.assertEqual(dados["bolsas_abertas"], 1)
+        self.assertEqual(dados["inscricoes_a_analisar"], 1)
+        self.assertEqual(dados["bolsistas_ativos"], 1)
+        self.assertEqual(dados["atencao"]["inscricoes"], 1)
+        self.assertEqual(dados["atencao"]["recursos"], 1)
+
+    def test_bolsistas_sem_frequencia_do_mes_anterior(self):
+        lancado = self.criar_vinculo("bruno")
+        Frequencia.objects.create(
+            vinculo=lancado,
+            mes_referencia=meses_atras(1),
+            registrada=True,
+            lancada_por=self.coordenador,
+        )
+
+        frequencias = self.painel()["frequencias_a_lancar"]
+
+        self.assertEqual(frequencias["mes_referencia"], meses_atras(1))
+        self.assertEqual([b["aluno_nome"] for b in frequencias["bolsistas"]], ["ana"])
+
+    def test_agenda_traz_so_etapas_futuras(self):
+        aberta = self.bolsa_aberta()
+        agora = timezone.now()
+        aberta.etapas.create(nome="Entrevista", peso=50, data_hora=agora + timedelta(days=2))
+        aberta.etapas.create(nome="Prova", peso=50, data_hora=agora - timedelta(days=2))
+
+        agenda = self.painel()["agenda"]
+
+        self.assertEqual([etapa["nome"] for etapa in agenda], ["Entrevista"])
+
+    def test_vigencia_encerrada_requer_atencao(self):
+        self.bolsa.data_fim_vigencia = timezone.localdate() - timedelta(days=1)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+
+        self.assertEqual(self.painel()["atencao"]["vigencias_encerradas"], 1)
+
+    def test_so_o_coordenador_de_projeto_acessa(self):
+        self.client.force_authenticate(self.area)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+
+class VisaoGeralAdminTests(CenarioFrequencia):
+    """Números do início do administrador (protótipo), somados ao painel existente."""
+
+    def visao_geral(self):
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.force_authenticate(admin)
+        resposta = self.client.get(reverse("monitoramento:painel"))
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.data["visao_geral"]
+
+    def test_indicadores_do_sistema_todo(self):
+        Edital.objects.create(
+            nome="Rascunho",
+            ano_codigo="2026-099",
+            link_documento_oficial="https://example.com/r",
+            status=Edital.Status.RASCUNHO,
+        )
+        Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo="PESQUISA",
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=StatusBolsa.SOLICITADA,
+        )
+        Usuario.objects.create_user(
+            username="inativo", email="inativo@example.com", is_active=False
+        )
+
+        dados = self.visao_geral()
+
+        self.assertEqual(dados["editais_rascunho"], 1)
+        self.assertEqual(dados["bolsas_ativas"], 1)
+        self.assertEqual(dados["bolsas_aguardando_aprovacao"], 1)
+        self.assertEqual(dados["bolsistas_ativos"], 1)
+        self.assertEqual(dados["bolsistas_vinculo_direto"], 0)
+        self.assertEqual(dados["usuarios_inativos"], 1)
+        # coordenador, área, aluna do vínculo e o próprio admin
+        self.assertEqual(dados["usuarios_ativos"], 4)
+        self.assertEqual(dados["frequencias_sem_lancamento"], 1)
+        self.assertEqual(dados["desligamentos_pendentes"], 0)
+
+
+class PainelAlunoTests(CenarioFrequencia):
+    """Início do aluno (US92): só o que é do aluno logado."""
+
+    url = reverse("monitoramento:painel-aluno")
+
+    def painel(self, aluno):
+        self.client.force_authenticate(aluno)
+        resposta = self.client.get(self.url)
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.data
+
+    def test_bolsista_ve_a_bolsa_ativa_com_a_vigencia(self):
+        hoje = timezone.localdate()
+        self.bolsa.data_inicio_vigencia = hoje - timedelta(days=10)
+        self.bolsa.data_fim_vigencia = hoje + timedelta(days=30)
+        self.bolsa.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+        Frequencia.objects.create(
+            vinculo=self.vinculo,
+            mes_referencia=meses_atras(1),
+            registrada=True,
+            lancada_por=self.coordenador,
+        )
+
+        dados = self.painel(self.vinculo.aluno)
+
+        bolsa = dados["minha_bolsa"]
+        self.assertEqual(bolsa["projeto_titulo"], "Projeto")
+        self.assertEqual(bolsa["vigencia"]["dias_restantes"], 30)
+        self.assertEqual(bolsa["vigencia"]["dias_decorridos"], 10)
+        self.assertEqual(bolsa["vigencia"]["dias_total"], 40)
+        self.assertEqual(dados["frequencias_cumpridas"], 1)
+        self.assertFalse(dados["dados_bancarios_completos"])
+        self.assertEqual(dados["inscricoes"], 1)  # a homologada do cenário
+
+    def test_aluno_sem_bolsa_e_com_rascunho(self):
+        aluno = Usuario.objects.create_user(
+            username="novo", email="novo@example.com", role=Usuario.Role.ALUNO
+        )
+        Inscricao.objects.create(aluno=aluno, bolsa=self.bolsa, status=StatusInscricao.RASCUNHO)
+        ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.PENDENTE,
+        )
+
+        dados = self.painel(aluno)
+
+        self.assertIsNone(dados["minha_bolsa"])
+        self.assertTrue(dados["inscricao_em_rascunho"])
+        self.assertEqual(dados["convites_pendentes"], 1)
+        self.assertEqual(dados["frequencias_cumpridas"], 0)
+
+    def test_so_o_aluno_acessa(self):
+        self.client.force_authenticate(self.coordenador)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
