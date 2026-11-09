@@ -322,6 +322,17 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
         return getattr(vinculo, "cancelamento_vaga", None) is not None
 
 
+def _motivos_em_cache(serializer, bolsa):
+    """Motivos de bloqueio da finalização, calculados uma vez por bolsa e serializer:
+    `motivos_bloqueio` e `pode_finalizar` usam o mesmo resultado."""
+    cache = serializer.__dict__.setdefault("_motivos_por_bolsa", {})
+    if bolsa.pk not in cache:
+        cache[bolsa.pk] = (
+            [] if bolsa.status == StatusBolsa.ENCERRADA else motivos_bloqueio_finalizacao(bolsa)
+        )
+    return cache[bolsa.pk]
+
+
 class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
     """Bolsa vista pela coordenação de área, só para acompanhar: quem finaliza é o
     coordenador do projeto, e a área toma ciência das finalizadas."""
@@ -395,9 +406,7 @@ class BolsaParaFinalizarSerializer(serializers.ModelSerializer):
         ]
 
     def get_motivos_bloqueio(self, bolsa):
-        if bolsa.status == StatusBolsa.ENCERRADA:
-            return []
-        return motivos_bloqueio_finalizacao(bolsa)
+        return _motivos_em_cache(self, bolsa)
 
     def get_pode_finalizar(self, bolsa):
         """Pronta para o coordenador do projeto finalizar; a área só acompanha."""
@@ -459,9 +468,7 @@ class BolsaDoCoordenadorProjetoSerializer(serializers.ModelSerializer):
         return VinculoDoCoordenadorSerializer(ativos, many=True, context=self.context).data
 
     def get_motivos_bloqueio(self, bolsa):
-        if bolsa.status == StatusBolsa.ENCERRADA:
-            return []
-        return motivos_bloqueio_finalizacao(bolsa)
+        return _motivos_em_cache(self, bolsa)
 
     def get_pode_finalizar(self, bolsa):
         return bolsa.status != StatusBolsa.ENCERRADA and not self.get_motivos_bloqueio(bolsa)

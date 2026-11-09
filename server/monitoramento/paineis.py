@@ -16,10 +16,9 @@ from bolsistas.models import (
     OrigemVinculo,
     SolicitacaoDesligamento,
     StatusSolicitacaoDesligamento,
-    StatusVinculo,
-    VinculoBolsista,
 )
 from bolsistas.regras import motivos_bloqueio_finalizacao
+from bolsistas.services import vinculos_vigentes
 from dados_bancarios.models import DadosBancarios
 from dados_bancarios.serializers import DadosBancariosSerializer
 from editais.models import Edital
@@ -64,9 +63,7 @@ def painel_da_area(usuario, hoje=None):
     por_status = dict(
         bolsas.values_list("status").annotate(total=Count("id")).values_list("status", "total")
     )
-    vinculos_ativos = VinculoBolsista.objects.filter(
-        bolsa__tipo__in=tipos, status=StatusVinculo.ATIVO
-    )
+    vinculos_ativos = vinculos_vigentes().filter(bolsa__tipo__in=tipos)
     editais_em_vigor = Edital.objects.filter(status=Edital.Status.EM_VIGOR)
     contadores = contadores_do_menu(usuario)
 
@@ -151,8 +148,8 @@ def painel_do_coordenador_projeto(usuario, hoje=None):
     hoje = hoje or timezone.localdate()
     do_coordenador = {"projeto__coordenador_projeto__usuario": usuario}
     bolsas = Bolsa.objects.filter(**do_coordenador)
-    vinculos_ativos = VinculoBolsista.objects.filter(
-        bolsa__projeto__coordenador_projeto__usuario=usuario, status=StatusVinculo.ATIVO
+    vinculos_ativos = vinculos_vigentes().filter(
+        bolsa__projeto__coordenador_projeto__usuario=usuario
     )
     inscricoes_pendentes = Inscricao.objects.filter(
         status=StatusInscricao.PENDENTE,
@@ -162,7 +159,7 @@ def painel_do_coordenador_projeto(usuario, hoje=None):
     contadores = contadores_do_menu(usuario)
     prontas = [
         bolsa
-        for bolsa in bolsas.filter(status=StatusBolsa.PREENCHIDA)
+        for bolsa in bolsas.filter(status__in=STATUS_BOLSA_EM_ANDAMENTO)
         if not motivos_bloqueio_finalizacao(bolsa)
     ]
 
@@ -200,7 +197,7 @@ def painel_do_admin(hoje=None):
         .annotate(total=Count("id"))
         .values_list("status", "total")
     )
-    vinculos_ativos = VinculoBolsista.objects.filter(status=StatusVinculo.ATIVO)
+    vinculos_ativos = vinculos_vigentes()
     usuarios = Usuario.objects.exclude(is_superuser=True)
 
     return {
@@ -250,7 +247,8 @@ def painel_do_aluno(usuario, hoje=None):
     hoje = hoje or timezone.localdate()
     inscricoes = Inscricao.objects.filter(aluno=usuario).exclude(status=StatusInscricao.CANCELADA)
     vinculo = (
-        VinculoBolsista.objects.filter(aluno=usuario, status=StatusVinculo.ATIVO)
+        vinculos_vigentes()
+        .filter(aluno=usuario)
         .select_related("bolsa__projeto", "bolsa__edital")
         .first()
     )

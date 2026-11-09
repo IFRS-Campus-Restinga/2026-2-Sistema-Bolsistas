@@ -16,16 +16,21 @@ MOTIVO_ALUNO_JA_BOLSISTA = "Este aluno já é bolsista ativo de outra bolsa."
 MOTIVO_VOCE_JA_E_BOLSISTA = "Você já é bolsista ativo de outra bolsa."
 
 
+def vinculos_vigentes():
+    """Vínculos que ainda contam como bolsa em andamento. Finalizar a bolsa (ENCERRADA) não
+    muda o status dos vínculos, que seguem ATIVO para o histórico e os relatórios; por isso a
+    bolsa encerrada fica de fora aqui."""
+    return VinculoBolsista.objects.filter(status=StatusVinculo.ATIVO).exclude(
+        bolsa__status=StatusBolsa.ENCERRADA
+    )
+
+
 def tem_vinculo_ativo(aluno):
-    return VinculoBolsista.objects.filter(aluno=aluno, status=StatusVinculo.ATIVO).exists()
+    return vinculos_vigentes().filter(aluno=aluno).exists()
 
 
 def alunos_com_vinculo_ativo(alunos):
-    return set(
-        VinculoBolsista.objects.filter(aluno__in=alunos, status=StatusVinculo.ATIVO).values_list(
-            "aluno_id", flat=True
-        )
-    )
+    return set(vinculos_vigentes().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
 
 
 def _garantir_sem_vinculo_ativo(aluno):

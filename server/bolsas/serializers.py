@@ -285,6 +285,8 @@ class BolsaDisponivelSerializer(BolsaSerializer):
             {"rotulo": rotulo, "fim": getattr(bolsa.edital, campo)}
             for rotulo, campo in FASES_DO_EDITAL
         ]
+        # A vigência pode ser própria da bolsa (exceção à do edital).
+        fases[-1]["fim"] = bolsa.fim_vigencia
         # Fase atual: a primeira que ainda não terminou (sem data conta como não terminada).
         atual = next(
             (i for i, fase in enumerate(fases) if fase["fim"] is None or fase["fim"] >= hoje),

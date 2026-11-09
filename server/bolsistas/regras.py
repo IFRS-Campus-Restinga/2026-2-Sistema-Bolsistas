@@ -1,3 +1,4 @@
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from bolsas.models import Bolsa, StatusBolsa, fim_vigencia_efetivo
@@ -5,7 +6,7 @@ from inscricoes.models import Recurso, StatusInscricao, StatusRecurso
 from selecao.models import PublicacaoResultado
 from vinculo_direto.models import STATUS_ATIVOS as STATUS_CONVITE_ATIVOS
 
-from .models import RelatorioFinal, SituacaoRelatorio, StatusVinculo
+from .models import RelatorioFinal, SituacaoRelatorio, StatusVinculo, VinculoBolsista
 
 STATUS_NAO_FINALIZAVEIS = [
     StatusBolsa.SOLICITADA,
@@ -147,32 +148,9 @@ def prazo_relatorio_encerrado(bolsa):
 
 
 def motivo_bloqueio_finalizacao(bolsa):
-    """Por que a bolsa ainda não pode ser finalizada; vazio quando pode."""
-    if bolsa.status in STATUS_NAO_FINALIZAVEIS:
-        return (
-            f'Esta bolsa está com status "{bolsa.get_status_display()}" e não pode ser finalizada.'
-        )
-
-    if not bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists():
-        return "A bolsa não tem bolsistas vinculados."
-
-    abertos = processos_em_aberto(bolsa)
-    if abertos:
-        return (
-            "A bolsa ainda tem processos em aberto: "
-            + ", ".join(abertos)
-            + ". Conclua-os antes de finalizar."
-        )
-
-    pendentes = pendencias_para_finalizar(bolsa)
-    if pendentes:
-        return (
-            "Todos os relatórios finais precisam estar aprovados. Pendentes: "
-            + ", ".join(pendentes)
-            + "."
-        )
-
-    return ""
+    """Por que a bolsa ainda não pode ser finalizada, em uma frase (para o endpoint); vazio
+    quando pode. Usa a mesma regra da lista de `motivos_bloqueio_finalizacao`."""
+    return " ".join(motivos_bloqueio_finalizacao(bolsa))
 
 
 STATUS_BOLSA_EM_ANDAMENTO = [StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO, StatusBolsa.PREENCHIDA]
@@ -194,6 +172,11 @@ def pendencias_do_coordenador(usuario):
             status__in=STATUS_BOLSA_EM_ANDAMENTO,
         )
         .select_related("projeto", "edital")
+        .annotate(
+            tem_bolsista_ativo=Exists(
+                VinculoBolsista.objects.filter(bolsa=OuterRef("pk"), status=StatusVinculo.ATIVO)
+            )
+        )
         .order_by(fim_vigencia_efetivo(), "id")
     )
     for bolsa in bolsas:
@@ -203,11 +186,7 @@ def pendencias_do_coordenador(usuario):
             pendencias.append(
                 f"A bolsa {_rotulo_bolsa(bolsa)} venceu em {fim:%d/%m/%Y} e não foi finalizada."
             )
-        elif (
-            prazo is not None
-            and prazo < hoje
-            and bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists()
-        ):
+        elif prazo is not None and prazo < hoje and bolsa.tem_bolsista_ativo:
             # Combinado: passou o prazo do relatório, a bolsa fica vencida até ser finalizada.
             pendencias.append(
                 f"O prazo dos relatórios finais da bolsa {_rotulo_bolsa(bolsa)} terminou em "

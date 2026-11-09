@@ -92,7 +92,7 @@ class PendenciasDoCoordenadorView(APIView):
 
 def _bolsas_disponiveis_qs():
     hoje = timezone.localdate()
-    return (
+    return com_contagem_de_inscricoes(
         Bolsa.objects.select_related("projeto__coordenador_projeto__usuario", "edital")
         .prefetch_related("etapas")
         .filter(

@@ -9,5 +9,6 @@ export async function baixarComprovanteInscricao(inscricaoId, protocolo) {
   link.href = url
   link.download = `comprovante-${protocolo || inscricaoId}.pdf`
   link.click()
-  URL.revokeObjectURL(url)
+  // Libera o blob só depois que o navegador começou o download (Firefox e Safari).
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

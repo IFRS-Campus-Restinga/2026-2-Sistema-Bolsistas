@@ -15,7 +15,9 @@ from rest_framework.test import APITestCase
 from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
+from bolsistas.services import alunos_com_vinculo_ativo, tem_vinculo_ativo
 from editais.models import Edital
+from frequencias.tests import CenarioFrequencia
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista, PublicacaoResultado
@@ -726,7 +728,7 @@ class FinalizarBolsaTests(CenarioBolsista):
     def assert_bloqueado_por(self, trecho):
         response = self.finalizar()
         self.assertEqual(response.status_code, 400)
-        self.assertIn("processos em aberto", response.data["detail"])
+        self.assertIn("Processo em aberto", response.data["detail"])
         self.assertIn(trecho, response.data["detail"])
         self.bolsa.refresh_from_db()
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
@@ -1515,3 +1517,20 @@ class VigenciaEfetivaTests(CenarioBolsista):
         item = self.client.get(reverse("bolsistas:meus-vinculos")).data[0]
 
         self.assertEqual(item["data_fim_vigencia"], self.edital.data_fim_vigencia.isoformat())
+
+
+class VinculoDeBolsaFinalizadaTests(CenarioFrequencia):
+    """Finalizar a bolsa mantém o vínculo ATIVO (histórico e relatórios), mas ele não conta
+    mais como bolsa em andamento: o aluno pode receber outra bolsa."""
+
+    def test_bolsa_encerrada_libera_o_aluno(self):
+        aluno = self.vinculo.aluno
+        self.assertTrue(tem_vinculo_ativo(aluno))
+
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.save(update_fields=["status"])
+
+        self.assertFalse(tem_vinculo_ativo(aluno))
+        self.assertEqual(alunos_com_vinculo_ativo([aluno.id]), set())
+        self.vinculo.refresh_from_db()
+        self.assertEqual(self.vinculo.status, StatusVinculo.ATIVO)
