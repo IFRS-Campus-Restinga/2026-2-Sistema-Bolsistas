@@ -12,11 +12,30 @@ from .regras import bolsa_elegivel_para_convite
 
 class DocumentoConviteSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    decisao_display = serializers.CharField(source="get_decisao_display", read_only=True)
 
     class Meta:
         model = Documento
-        fields = ["id", "tipo", "tipo_display", "nome_original", "arquivo", "enviado_em"]
-        read_only_fields = ["id", "nome_original", "enviado_em"]
+        fields = [
+            "id",
+            "tipo",
+            "tipo_display",
+            "nome_original",
+            "arquivo",
+            "enviado_em",
+            "decisao",
+            "decisao_display",
+            "motivo_recusa",
+            "decidido_em",
+        ]
+        read_only_fields = [
+            "id",
+            "nome_original",
+            "enviado_em",
+            "decisao",
+            "motivo_recusa",
+            "decidido_em",
+        ]
 
     def validate_arquivo(self, arquivo):
         return validar_upload(arquivo, EXTENSOES_DOCUMENTO)

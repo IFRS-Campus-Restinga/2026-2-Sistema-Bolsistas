@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react'
 import { vinculoDiretoFetch } from '../api'
-import { AcoesCell, Alert, Badge, DataTable, PageHeader, useConfirm, useToast } from '../components'
+import {
+  AcoesCell,
+  Alert,
+  DataTable,
+  PageHeader,
+  StatusPill,
+  useConfirm,
+  useToast,
+} from '../components'
 import ConvidarBolsistaModal from './ConvidarBolsistaModal'
-import RevisarConviteModal from './RevisarConviteModal'
+import RevisarConviteDrawer from './RevisarConviteDrawer'
+
+// Antes do aceite (ou depois da recusa do aluno) o convite não tem documentos para revisar.
+const SEM_DOCUMENTOS = ['PENDENTE', 'RECUSADO']
 
 export default function MeusConvitesPage() {
   const confirmar = useConfirm()
@@ -55,8 +66,12 @@ export default function MeusConvitesPage() {
     toast({ message: 'Convite enviado ao aluno.', tone: 'success' })
   }
 
-  function aoDecidirConvite(convite) {
+  function substituirConvite(convite) {
     setConvites((atuais) => atuais.map((item) => (item.id === convite.id ? convite : item)))
+  }
+
+  function aoDecidirConvite(convite) {
+    substituirConvite(convite)
     setConviteRevisar(null)
     toast({
       message: convite.status === 'APROVADO' ? 'Vínculo direto aprovado.' : 'Decisão registrada.',
@@ -103,7 +118,13 @@ export default function MeusConvitesPage() {
     convite.aluno_nome,
     convite.projeto_titulo,
     convite.edital_nome,
-    <Badge key="status" status={convite.status} />,
+    <span key="status" className="flex items-center gap-2">
+      <StatusPill
+        status={convite.status}
+        label={convite.status === 'ENVIADO' ? 'Documentação enviada' : undefined}
+      />
+      {convite.status === 'ENVIADO' && <span className="text-xs text-gray-500">Revisar →</span>}
+    </span>,
     new Date(convite.data_envio_convite).toLocaleDateString('pt-BR'),
     <AcoesCell
       key="acoes"
@@ -111,15 +132,6 @@ export default function MeusConvitesPage() {
         ...(convite.status === 'PENDENTE'
           ? [{ label: 'Cancelar', variant: 'danger', onClick: () => cancelarConvite(convite) }]
           : []),
-        ...(convite.status === 'ENVIADO'
-          ? [
-              {
-                label: 'Revisar Documentos',
-                variant: 'accent',
-                onClick: () => setConviteRevisar(convite.id),
-              },
-            ]
-          : [{ label: 'Ver Detalhes', onClick: () => setConviteRevisar(convite.id) }]),
       ]}
     />,
   ])
@@ -146,6 +158,10 @@ export default function MeusConvitesPage() {
         rows={linhasConvites}
         loading={carregando}
         emptyMessage="Nenhum convite enviado ainda."
+        onRowClick={(indice) => {
+          const convite = convites[indice]
+          if (!SEM_DOCUMENTOS.includes(convite.status)) setConviteRevisar(convite.id)
+        }}
       />
 
       {bolsaConvidar && (
@@ -157,9 +173,11 @@ export default function MeusConvitesPage() {
       )}
 
       {conviteRevisar && (
-        <RevisarConviteModal
+        <RevisarConviteDrawer
+          key={conviteRevisar}
           conviteId={conviteRevisar}
           onFechar={() => setConviteRevisar(null)}
+          onAtualizado={substituirConvite}
           onDecisao={aoDecidirConvite}
         />
       )}

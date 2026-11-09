@@ -18,8 +18,8 @@ import EtapaNotas from './EtapaNotas'
 import EtapaRecursos from './EtapaRecursos'
 import EtapaResultado from './EtapaResultado'
 
-// Bolsas com seleção em andamento ou concluída, como no protótipo.
-const STATUS_EM_SELECAO = ['ABERTA', 'EM_SELECAO', 'PREENCHIDA']
+// Só bolsas aprovadas pela coordenação de área com vaga a preencher; as preenchidas saem.
+const STATUS_EM_SELECAO = ['ABERTA', 'EM_SELECAO']
 
 const ETAPAS = ['inscritos', 'recursos', 'notas', 'resultado']
 const NOMES_DO_STEPPER = ['Homologação', 'Recursos', 'Notas', 'Resultado']

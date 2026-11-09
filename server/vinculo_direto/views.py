@@ -22,7 +22,13 @@ from bolsistas.services import (
     tem_vinculo_ativo,
     vincular_por_convite,
 )
-from inscricoes.models import Documento, TipoDocumento
+from inscricoes.models import (
+    DecisaoDocumento,
+    Documento,
+    TipoDocumento,
+    motivo_documentos_nao_aprovados,
+)
+from inscricoes.serializers import DecisaoDocumentoSerializer
 
 from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
 from .regras import STATUS_ACEITAM_CONVITE, bolsa_elegivel_para_convite, vagas_livres
@@ -133,6 +139,9 @@ class AprovarConviteView(APIView):
             raise ValidationError(
                 {"detail": "Não é possível aprovar: faltam documentos obrigatórios."}
             )
+        bloqueio = motivo_documentos_nao_aprovados(convite.documentos.all())
+        if bloqueio:
+            raise ValidationError({"detail": f"Não é possível aprovar. {bloqueio}"})
         if tem_vinculo_ativo(convite.aluno):
             raise ValidationError({"detail": MOTIVO_ALUNO_JA_BOLSISTA})
         if convite.bolsa.status not in STATUS_ACEITAM_CONVITE:
@@ -177,6 +186,29 @@ class AprovarConviteView(APIView):
                 ),
             )
 
+        return Response(ConviteSerializer(convite, context={"request": request}).data)
+
+
+class DecidirDocumentoConviteView(APIView):
+    """Aprova ou recusa um documento do convite, no mesmo fluxo dos documentos da
+    inscrição; a decisão pode mudar enquanto o convite aguarda a análise."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        documento = get_object_or_404(
+            Documento, pk=pk, convite__in=_convites_do_coordenador(request.user)
+        )
+        convite = ConviteVinculoDireto.objects.select_for_update().get(pk=documento.convite_id)
+        if convite.status != StatusConvite.ENVIADO:
+            raise ValidationError(
+                {"detail": "Somente documentos de convites enviados podem ser analisados."}
+            )
+
+        serializer = DecisaoDocumentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        documento.decidir(**serializer.validated_data, usuario=request.user)
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -305,6 +337,13 @@ class EnviarConviteView(APIView):
         if faltando:
             nomes = ", ".join(TipoDocumento(t).label for t in faltando)
             raise ValidationError({"detail": f"Documentos obrigatórios pendentes: {nomes}."})
+
+        recusados = convite.documentos.filter(decisao=DecisaoDocumento.REJEITADO)
+        if recusados.exists():
+            nomes = ", ".join(sorted({d.get_tipo_display() for d in recusados}))
+            raise ValidationError(
+                {"detail": f"Substitua os documentos recusados antes de enviar: {nomes}."}
+            )
 
         convite.status = StatusConvite.ENVIADO
         convite.data_envio_documentos = timezone.now()

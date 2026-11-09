@@ -8,12 +8,28 @@ import {
   FormField,
   IconPlus,
   Modal,
+  StatusPill,
   TextInput,
   useConfirm,
   useToast,
 } from '../components'
 
 const MAX_DOCUMENTOS_ADICIONAIS = 5
+
+/** Decisão do coordenador sobre o documento; o recusado mostra o motivo e pede a troca. */
+function DecisaoDoDocumento({ documento }) {
+  if (!documento?.decisao || documento.decisao === 'PENDENTE') return null
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+      <StatusPill status={documento.decisao} label={documento.decisao_display} size="sm" />
+      {documento.decisao === 'REJEITADO' && (
+        <span className="text-red-600">
+          {documento.motivo_recusa} Remova o arquivo e anexe um novo.
+        </span>
+      )}
+    </div>
+  )
+}
 
 function extrairErro(corpo, mensagemPadrao) {
   if (!corpo) return mensagemPadrao
@@ -257,6 +273,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
           onChange={selecionarHistorico}
           disabled={processando}
         />
+        <DecisaoDoDocumento documento={historico} />
       </FormField>
 
       <FormField label="Comprovante de Matrícula (obrigatório)">
@@ -265,6 +282,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
           onChange={selecionarMatricula}
           disabled={processando}
         />
+        <DecisaoDoDocumento documento={matricula} />
       </FormField>
 
       <FormField label="Link do Lattes (opcional)">
@@ -285,6 +303,7 @@ export default function PreencherConviteModal({ convite, onFechar, onAtualizado,
                 onChange={(arquivo) => selecionarAdicional(slot.key, arquivo)}
                 disabled={processando || !!slot.documento}
               />
+              <DecisaoDoDocumento documento={slot.documento} />
             </div>
             <Button
               variant="outline"

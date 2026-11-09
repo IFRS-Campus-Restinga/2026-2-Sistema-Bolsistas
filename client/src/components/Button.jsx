@@ -38,6 +38,7 @@ export function Button({
   disabled,
   loading = false,
   className = '',
+  title,
 }) {
   const mostrarSpinner = useCarregamentoVisivel(loading)
 
@@ -45,6 +46,7 @@ export function Button({
     <button
       type={type}
       onClick={onClick}
+      title={title || undefined}
       disabled={disabled || loading || mostrarSpinner}
       aria-busy={loading || undefined}
       className={`${BASE} ${TAMANHOS[size]} ${VARIANTES[variant]} ${className}`}

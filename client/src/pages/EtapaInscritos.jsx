@@ -3,7 +3,29 @@ import { inscricoesFetch } from '../api'
 import { Alert, Avatar, Button, DataTable, Hint, StatusPill, useToast } from '../components'
 import { iniciais } from '../utils/iniciais'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
-import CandidatoAnaliseModal from './CandidatoAnaliseModal'
+import CandidatoAnaliseDrawer from './CandidatoAnaliseDrawer'
+
+const COR_DA_DECISAO = { APROVADO: 'bg-emerald-500', REJEITADO: 'bg-red-500' }
+const NOME_DA_DECISAO = { PENDENTE: 'pendente', APROVADO: 'aprovado', REJEITADO: 'recusado' }
+
+/** Uma barrinha por documento, colorida pela decisão, e quantos já foram aprovados. */
+function DecisoesDosDocumentos({ decisoes }) {
+  const aprovados = decisoes.filter((d) => d.decisao === 'APROVADO').length
+  return (
+    <span className="flex items-center gap-1">
+      {decisoes.map((d) => (
+        <span
+          key={d.id}
+          title={`${d.tipo_display}: ${NOME_DA_DECISAO[d.decisao]}`}
+          className={`h-2 w-5 rounded-full ${COR_DA_DECISAO[d.decisao] ?? 'bg-gray-200'}`}
+        />
+      ))}
+      <span className="ml-1 text-xs text-gray-500">
+        {aprovados}/{decisoes.length}
+      </span>
+    </span>
+  )
+}
 
 /** Etapa Inscritos da seleção: candidatos da bolsa e a decisão de homologação. */
 export default function EtapaInscritos({ bolsa, onMudou }) {
@@ -49,6 +71,13 @@ export default function EtapaInscritos({ bolsa, onMudou }) {
   }
 
   const { candidatos } = consulta
+
+  function substituir(atualizado) {
+    setConsulta((atual) => ({
+      ...atual,
+      candidatos: atual.candidatos.map((item) => (item.id === atualizado.id ? atualizado : item)),
+    }))
+  }
   const linhas = candidatos.map((candidato) => [
     <span key="nome" className="flex items-center gap-2.5">
       <Avatar initials={iniciais(candidato.aluno_nome)} size={26} />
@@ -57,6 +86,7 @@ export default function EtapaInscritos({ bolsa, onMudou }) {
     <span key="curso" className="text-gray-600">
       {candidato.aluno_curso || '—'}
     </span>,
+    <DecisoesDosDocumentos key="documentos" decisoes={candidato.decisoes_documentos ?? []} />,
     candidato.data_envio ? new Date(candidato.data_envio).toLocaleDateString('pt-BR') : '—',
     <StatusPill key="status" status={candidato.status} />,
   ])
@@ -65,7 +95,7 @@ export default function EtapaInscritos({ bolsa, onMudou }) {
     <>
       <Hint>Clique em um candidato para revisar os documentos e decidir a homologação.</Hint>
       <DataTable
-        columns={['Candidato', 'Curso', 'Enviada em', 'Situação']}
+        columns={['Candidato', 'Curso', 'Documentos', 'Enviada em', 'Situação']}
         rows={linhas}
         loading={consulta.carregando}
         emptyMessage="Nenhuma inscrição nesta bolsa ainda."
@@ -73,17 +103,13 @@ export default function EtapaInscritos({ bolsa, onMudou }) {
       />
 
       {candidatoId && (
-        <CandidatoAnaliseModal
+        <CandidatoAnaliseDrawer
           key={candidatoId}
           candidatoId={candidatoId}
           onFechar={() => setCandidatoId(null)}
+          onAtualizado={substituir}
           onDecisao={(atualizado) => {
-            setConsulta((atual) => ({
-              ...atual,
-              candidatos: atual.candidatos.map((item) =>
-                item.id === atualizado.id ? atualizado : item
-              ),
-            }))
+            substituir(atualizado)
             setCandidatoId(null)
             toast({
               message: 'Decisão registrada. O aluno foi notificado no sistema.',

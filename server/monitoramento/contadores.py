@@ -26,12 +26,21 @@ def _aluno(usuario):
     }
 
 
+# Mesmas bolsas listadas em Seleção de candidatos.
+STATUS_BOLSA_EM_SELECAO = [StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO]
+
+
 def _coordenador_projeto(usuario):
     do_coordenador = {"bolsa__projeto__coordenador_projeto__usuario": usuario}
-    inscricoes = Inscricao.objects.filter(status=StatusInscricao.PENDENTE, **do_coordenador)
+    inscricoes = Inscricao.objects.filter(
+        status=StatusInscricao.PENDENTE,
+        bolsa__status__in=STATUS_BOLSA_EM_SELECAO,
+        **do_coordenador,
+    )
     recursos = Recurso.objects.filter(
         status=StatusRecurso.PENDENTE,
         inscricao__bolsa__projeto__coordenador_projeto__usuario=usuario,
+        inscricao__bolsa__status__in=STATUS_BOLSA_EM_SELECAO,
     )
     return {
         "selecao": inscricoes.count() + recursos.count(),

@@ -9,7 +9,7 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
 from bolsistas.models import OrigemVinculo, StatusVinculo, VinculoBolsista
 from editais.models import Edital
-from inscricoes.models import Inscricao, StatusInscricao, TipoDocumento
+from inscricoes.models import DecisaoDocumento, Inscricao, StatusInscricao, TipoDocumento
 from projetos.models import Projeto
 
 from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
@@ -244,6 +244,28 @@ class FluxoAlunoTests(VinculoDiretoTestBase):
         self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
         self.assertIsNotNone(self.convite.data_envio_documentos)
 
+    def test_reenvio_exige_substituir_documento_recusado(self):
+        self.convite.status = StatusConvite.EM_PREENCHIMENTO
+        self.convite.termos_aceitos = True
+        self.convite.save(update_fields=["status", "termos_aceitos"])
+        historico = self.convite.documentos.create(
+            tipo=TipoDocumento.HISTORICO_ESCOLAR, arquivo="teste.pdf"
+        )
+        recusado = self.convite.documentos.create(
+            tipo=TipoDocumento.COMPROVANTE_MATRICULA, arquivo="teste.pdf"
+        )
+        recusado.decidir(DecisaoDocumento.REJEITADO, "Vencido.", self.coordenador)
+
+        response = self.client.post(self.url("convite-enviar"))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Comprovante de Matrícula", response.data["detail"])
+
+        recusado.delete()
+        self.convite.documentos.create(tipo=TipoDocumento.COMPROVANTE_MATRICULA, arquivo="novo.pdf")
+        response = self.client.post(self.url("convite-enviar"))
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(historico.decisao, DecisaoDocumento.PENDENTE)
+
     def test_nao_edita_convite_pendente(self):
         response = self.client.patch(
             self.url("convite-detalhe"), {"termos_aceitos": True}, format="json"
@@ -308,11 +330,28 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
             termos_aceitos=True,
         )
         for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
-            self.convite.documentos.create(tipo=tipo, arquivo="teste.pdf")
+            self.convite.documentos.create(
+                tipo=tipo,
+                arquivo="teste.pdf",
+                decisao=DecisaoDocumento.APROVADO,
+                decidido_em=timezone.now(),
+            )
         self.client.force_authenticate(self.coordenador)
 
     def url(self, acao):
         return reverse(f"vinculo_direto:{acao}", kwargs={"pk": self.convite.pk})
+
+    def test_nao_aprova_com_documento_nao_aprovado(self):
+        documento = self.convite.documentos.first()
+        documento.decidir(DecisaoDocumento.REJEITADO, "Comprovante vencido.", self.coordenador)
+
+        response = self.client.post(self.url("convite-aprovar"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("1 recusado", response.data["detail"])
+        self.convite.refresh_from_db()
+        self.assertEqual(self.convite.status, StatusConvite.ENVIADO)
+        self.assertFalse(VinculoBolsista.objects.exists())
 
     def test_aprovar_efetiva_vinculo_e_preenche_bolsa(self):
         response = self.client.post(self.url("convite-aprovar"))
@@ -397,6 +436,62 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         CoordenadorProjeto.objects.create(usuario=outro)
         self.client.force_authenticate(outro)
         self.assertEqual(self.client.post(self.url("convite-aprovar")).status_code, 404)
+
+
+class DecidirDocumentoConviteTests(VinculoDiretoTestBase):
+    """Os documentos do convite passam pelo mesmo fluxo de decisão da inscrição."""
+
+    def setUp(self):
+        super().setUp()
+        self.convite = ConviteVinculoDireto.objects.create(
+            bolsa=self.bolsa,
+            aluno=self.aluno,
+            coordenador_solicitante=self.coordenador,
+            status=StatusConvite.ENVIADO,
+            termos_aceitos=True,
+        )
+        self.convite.documentos.create(tipo=TipoDocumento.HISTORICO_ESCOLAR, arquivo="teste.pdf")
+        self.client.force_authenticate(self.coordenador)
+
+    def decidir(self, **dados):
+        url = reverse("vinculo_direto:documento-decisao", kwargs={"pk": self.documento().pk})
+        return self.client.post(url, dados)
+
+    def documento(self):
+        return self.convite.documentos.get(tipo=TipoDocumento.HISTORICO_ESCOLAR)
+
+    def test_aprova_e_devolve_o_convite(self):
+        resposta = self.decidir(decisao="APROVADO")
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        documento = self.documento()
+        self.assertEqual(documento.decisao, DecisaoDocumento.APROVADO)
+        self.assertEqual(documento.decidido_por, self.coordenador)
+        decisoes = {d["id"]: d["decisao"] for d in resposta.data["documentos"]}
+        self.assertEqual(decisoes[documento.pk], "APROVADO")
+
+    def test_recusa_exige_motivo(self):
+        self.assertEqual(self.decidir(decisao="REJEITADO").status_code, 400)
+        resposta = self.decidir(decisao="REJEITADO", motivo_recusa="Comprovante vencido.")
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(self.documento().motivo_recusa, "Comprovante vencido.")
+
+    def test_so_decide_com_o_convite_enviado(self):
+        self.convite.status = StatusConvite.EM_PREENCHIMENTO
+        self.convite.save(update_fields=["status"])
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 400)
+        self.assertEqual(self.documento().decisao, DecisaoDocumento.PENDENTE)
+
+    def test_coordenador_de_outro_projeto_nao_decide(self):
+        outro = Usuario.objects.create_user(
+            username="outro", email="outro@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.client.force_authenticate(outro)
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 404)
+
+    def test_aluno_nao_decide(self):
+        self.client.force_authenticate(self.aluno)
+        self.assertEqual(self.decidir(decisao="APROVADO").status_code, 403)
 
 
 class BolsasElegiveisEBuscaAlunoTests(VinculoDiretoTestBase):

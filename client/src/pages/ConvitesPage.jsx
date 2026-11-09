@@ -6,12 +6,14 @@ import {
   Badge,
   Button,
   DataTable,
+  DocChips,
   FormActions,
   Modal,
   PageHeader,
   useConfirm,
   useToast,
 } from '../components'
+import { documentosParaViewer } from '../utils/documentos'
 import PreencherConviteModal from './PreencherConviteModal'
 
 export default function ConvitesPage() {
@@ -209,15 +211,7 @@ function ComprovanteConviteModal({ convite, onFechar }) {
 
       <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
       {convite.documentos.length ? (
-        <ul className="pl-5">
-          {convite.documentos.map((doc) => (
-            <li key={doc.id}>
-              <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
-                {doc.tipo_display}: {doc.nome_original}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <DocChips docs={documentosParaViewer(convite.documentos)} />
       ) : (
         <p>Nenhum documento enviado.</p>
       )}

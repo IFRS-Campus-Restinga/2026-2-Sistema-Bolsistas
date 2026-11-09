@@ -6,12 +6,14 @@ import {
   Badge,
   Button,
   DataTable,
+  DocChips,
   FormActions,
   Modal,
   PageHeader,
   useConfirm,
   useToast,
 } from '../components'
+import { documentosParaViewer } from '../utils/documentos'
 import InscricaoWizard from './InscricaoWizard'
 import RecursosModal from './RecursosModal'
 import ResultadoSelecaoModal from './ResultadoSelecaoModal'
@@ -332,15 +334,7 @@ function ComprovanteModal({ inscricao, onFechar }) {
         <p>Decisão registrada em {new Date(inscricao.data_decisao).toLocaleString('pt-BR')}.</p>
       )}
       <p className="mt-4 mb-2 font-semibold">Documentos enviados:</p>
-      <ul className="pl-5">
-        {inscricao.documentos.map((doc) => (
-          <li key={doc.id}>
-            <a href={doc.arquivo} target="_blank" rel="noopener noreferrer">
-              {doc.tipo_display}: {doc.nome_original}
-            </a>
-          </li>
-        ))}
-      </ul>
+      <DocChips docs={documentosParaViewer(inscricao.documentos)} />
 
       {inscricao.link_lattes && (
         <p className="mt-2">

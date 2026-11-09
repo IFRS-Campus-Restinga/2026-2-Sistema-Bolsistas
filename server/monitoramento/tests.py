@@ -422,6 +422,15 @@ class ContadoresMenuTests(APITestCase):
             {"selecao": 2, "convites": 1, "finalizacao": 0},
         )
 
+    def test_selecao_ignora_bolsas_preenchidas(self):
+        Inscricao.objects.create(
+            aluno=self.aluno, bolsa=self.bolsa, status=StatusInscricao.PENDENTE
+        )
+        self.bolsa.status = StatusBolsa.PREENCHIDA
+        self.bolsa.save(update_fields=["status"])
+
+        self.assertEqual(self.contadores(self.coordenador)["selecao"], 0)
+
     def test_coordenador_de_area_ve_solicitacoes_da_area(self):
         dados = self.contadores(self.area)
 
