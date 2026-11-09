@@ -10,9 +10,10 @@ from bolsas.models import Bolsa, StatusBolsa
 from bolsistas.models import OrigemVinculo, VinculoBolsista
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao, TipoDocumento
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
-from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
+from .models import ConviteVinculoDireto, StatusConvite
 from .regras import bolsa_elegivel_para_convite, vagas_livres
 
 
@@ -324,9 +325,8 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
 
     def test_aprovar_notifica_coordenador_de_area(self):
         self.client.post(self.url("convite-aprovar"))
-        self.assertEqual(NotificacaoConvite.objects.count(), 1)
-        notificacao = NotificacaoConvite.objects.get()
-        self.assertEqual(notificacao.coordenador_area, self.coordenador_area)
+        notificacao = Notificacao.objects.get(destinatario=self.coordenador_area)
+        self.assertEqual(notificacao.destino, "solicitacoes")
         self.assertIn(self.projeto.titulo, notificacao.mensagem)
 
     def test_aprovar_bloqueia_sem_documentos_obrigatorios(self):

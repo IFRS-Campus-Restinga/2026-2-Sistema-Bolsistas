@@ -6,8 +6,9 @@
  *   name     — nome do usuário
  *   role     — papel/perfil
  *   initials — iniciais para o avatar
+ *   acoes    — elementos exibidos antes do usuário (ex.: sino de notificações)
  */
-export function TopHeader({ campus, name, role, initials }) {
+export function TopHeader({ campus, name, role, initials, acoes }) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#f0f0f0] bg-white px-8 shadow-[0_1px_0_#f4f4f4]">
       <div className="flex items-center gap-2">
@@ -16,6 +17,7 @@ export function TopHeader({ campus, name, role, initials }) {
       </div>
 
       <div className="flex items-center gap-3">
+        {acoes}
         <div className="text-right">
           <div className="text-base leading-[1.2] font-semibold text-gray-800">{name}</div>
           <div className="text-2xs font-semibold text-if-green">{role}</div>

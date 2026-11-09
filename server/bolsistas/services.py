@@ -1,6 +1,7 @@
 from django.utils import timezone
 
 from bolsas.models import STATUS_BOLSA_FINALIZADOS, StatusBolsa
+from notificacoes.services import Destino, Notificacao, coordenadores_da_bolsa
 
 from .models import (
     CancelamentoVaga,
@@ -79,5 +80,11 @@ def efetivar_desligamento(solicitacao, responsavel):
         ]
     )
 
-    atualizar_status_preenchimento(vinculo.bolsa)
+    bolsa = vinculo.bolsa
+    Notificacao.para(coordenadores_da_bolsa(bolsa)).aviso().titulo("Bolsista desligado").mensagem(
+        f"{vinculo.aluno.nome} foi desligado(a) da bolsa do projeto "
+        f'"{bolsa.projeto.titulo}". Motivo: {solicitacao.motivo}'
+    ).destino(Destino.AREA_MOVIMENTACOES).enviar()
+
+    atualizar_status_preenchimento(bolsa)
     return solicitacao

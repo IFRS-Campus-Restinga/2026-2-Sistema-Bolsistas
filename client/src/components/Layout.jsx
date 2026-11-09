@@ -1,4 +1,5 @@
 import { Sidebar } from './Sidebar'
+import { SinoNotificacoes } from './SinoNotificacoes'
 import { TopHeader } from './TopHeader'
 
 /**
@@ -26,6 +27,11 @@ export function Layout({
   initials,
   children,
 }) {
+  // O destino da notificação é o id de uma aba do menu do perfil.
+  function abrirDestino(destino) {
+    if (menuItems.some((item) => item.id === destino)) onNav(destino)
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -36,7 +42,13 @@ export function Layout({
         onLogout={onLogout}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopHeader campus={campus} name={userName} role={role} initials={initials} />
+        <TopHeader
+          campus={campus}
+          name={userName}
+          role={role}
+          initials={initials}
+          acoes={<SinoNotificacoes onAbrirDestino={abrirDestino} />}
+        />
         <main className="flex-1 overflow-y-auto bg-fundo p-8">{children}</main>
       </div>
     </div>

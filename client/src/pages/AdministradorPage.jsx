@@ -14,10 +14,12 @@ import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
 import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
+  { id: 'cronograma', label: 'Cronograma dos Editais', icon: <IconCalendar /> },
   { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
   { id: 'bolsas', label: 'Bolsas', icon: <IconBriefcase /> },
   { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardList /> },
@@ -69,6 +71,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
         </>
       )}
       {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
+      {active === 'cronograma' && <CronogramaEditaisPage podeVerHistorico />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
       {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}

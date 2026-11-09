@@ -14,18 +14,22 @@ from accounts.models import CoordenadorProjeto, Usuario
 from auditoria.models import LogAuditoria
 from bolsas.models import Bolsa
 from editais.models import Edital
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
 from .models import (
     AnexoRecurso,
     Documento,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
     TipoDocumento,
 )
+
+
+def _notificacoes(usuario):
+    return Notificacao.objects.filter(destinatario=usuario)
 
 
 class CandidatoListTests(APITestCase):
@@ -180,8 +184,8 @@ class HomologacaoTests(APITestCase):
         self.assertEqual(self.inscricao.responsavel_decisao, self.coordenador)
         self.assertIsNotNone(self.inscricao.data_decisao)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "")
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
-        self.assertIn("homologada", NotificacaoInscricao.objects.get().mensagem)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
+        self.assertIn("homologada", _notificacoes(self.aluno).get().mensagem)
 
     def test_indefere_com_motivo_visivel_somente_ao_aluno(self):
         response = self.client.post(
@@ -191,12 +195,12 @@ class HomologacaoTests(APITestCase):
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.INDEFERIDA)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "Documento ilegível.")
-        self.assertIn("Documento ilegível.", NotificacaoInscricao.objects.get().mensagem)
+        self.assertIn("Documento ilegível.", _notificacoes(self.aluno).get().mensagem)
         self.client.force_authenticate(self.aluno)
         response = self.client.get(self.url("detalhe"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["justificativa_indeferimento"], "Documento ilegível.")
-        self.assertEqual(len(response.data["notificacoes"]), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
         outro = Usuario.objects.create_user(
             username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
         )
@@ -217,7 +221,7 @@ class HomologacaoTests(APITestCase):
                 )
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_bloqueia_decisoes_em_estados_invalidos(self):
         for estado in [
@@ -234,7 +238,7 @@ class HomologacaoTests(APITestCase):
                         self.client.post(self.url(acao), {"justificativa": "Motivo"}).status_code,
                         400,
                     )
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_repeticao_nao_duplica_notificacao(self):
         self.assertEqual(self.client.post(self.url("homologar")).status_code, 200)
@@ -243,7 +247,7 @@ class HomologacaoTests(APITestCase):
             self.client.post(self.url("indeferir"), {"justificativa": "Outra decisão"}).status_code,
             400,
         )
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
 
     def test_outro_coordenador_nao_consulta_nem_decide(self):
         outro = Usuario.objects.create_user(
@@ -277,7 +281,7 @@ class HomologacaoTests(APITestCase):
             inscricao=self.inscricao, tipo=TipoDocumento.HISTORICO_ESCOLAR
         ).update(tipo=TipoDocumento.ADICIONAL)
         self.assertEqual(self.client.post(self.url("homologar")).status_code, 400)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_nao_decide_inscricao_sem_envio(self):
         self.inscricao.data_envio = None
@@ -298,7 +302,7 @@ class HomologacaoTests(APITestCase):
 
     def test_falha_na_notificacao_reverte_decisao(self):
         with patch(
-            "inscricoes.views.NotificacaoInscricao.objects.create",
+            "inscricoes.views.Notificacao.enviar",
             side_effect=RuntimeError("falha"),
         ):
             with self.assertRaises(RuntimeError):
@@ -306,7 +310,7 @@ class HomologacaoTests(APITestCase):
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
         self.assertIsNone(self.inscricao.data_decisao)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_aluno_nao_edita_inscricao_ou_documentos_apos_decisao(self):
         for acao in ["homologar", "indeferir"]:
@@ -344,8 +348,8 @@ class HomologacaoTests(APITestCase):
 
     def test_notificacao_so_pode_ser_lida_pelo_destinatario(self):
         self.client.post(self.url("homologar"))
-        notificacao = NotificacaoInscricao.objects.get()
-        url = reverse("inscricoes:notificacao-ler", kwargs={"pk": notificacao.pk})
+        notificacao = _notificacoes(self.aluno).get()
+        url = reverse("notificacoes:ler", kwargs={"pk": notificacao.pk})
         outro = Usuario.objects.create_user(
             username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
         )
@@ -414,7 +418,7 @@ class HomologacaoTests(APITestCase):
                         self.client.post(self.url(acao), {"justificativa": "Motivo"}).status_code,
                         400,
                     )
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
 
@@ -651,7 +655,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.inscricao.status, StatusInscricao.HOMOLOGADA)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "")
         self.assertEqual(self.inscricao.responsavel_decisao, self.coordenador)
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
         self.client.force_authenticate(self.aluno)
         self.assertEqual(self.enviar().status_code, 400)
         self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "DEFERIDO")
@@ -670,7 +674,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.inscricao.status, "INDEFERIDA")
         self.assertEqual(self.inscricao.data_decisao, data_anterior)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "Comprovante ilegível")
-        self.assertIn("Mantido por motivo técnico.", NotificacaoInscricao.objects.get().mensagem)
+        self.assertIn("Mantido por motivo técnico.", _notificacoes(self.aluno).get().mensagem)
 
     def test_julgamento_apenas_responsavel_e_sem_repeticao(self):
         self.enviar()
@@ -686,7 +690,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.client.post(url, {"decisao": "DEFERIDO"}).status_code, 401)
         self.assertEqual(self.julgar(recurso).status_code, 200)
         self.assertEqual(self.julgar(recurso, "INDEFERIDO", "Motivo").status_code, 400)
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
 
     def test_julgamento_permitido_apos_fim_do_envio(self):
         self.enviar()
@@ -709,7 +713,7 @@ class RecursosTests(APITestCase):
         recurso = Recurso.objects.get()
         with (
             patch(
-                "inscricoes.views.NotificacaoInscricao.objects.create",
+                "inscricoes.views.Notificacao.enviar",
                 side_effect=RuntimeError("falha"),
             ),
             self.assertRaises(RuntimeError),
@@ -720,7 +724,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(recurso.status, "PENDENTE")
         self.assertIsNone(recurso.julgado_em)
         self.assertEqual(self.inscricao.status, "INDEFERIDA")
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_download_privado_e_conteudo(self):
         resposta = self.enviar(1)
@@ -811,21 +815,10 @@ class RecursosTests(APITestCase):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(url).status_code, 401)
 
-    def test_mensagens_sem_ids_preservam_justificativa(self):
-        from .serializers import NotificacaoInscricaoSerializer
-
-        antiga = NotificacaoInscricao.objects.create(
-            inscricao=self.inscricao,
-            mensagem="Seu recurso #2 de homologação, na bolsa #6, foi indeferido. Justificativa: Rever item #7.",
-        )
-        texto = NotificacaoInscricaoSerializer(antiga).data["mensagem"]
-        self.assertNotIn("#2", texto)
-        self.assertNotIn("#6", texto)
-        self.assertIn('projeto "Projeto"', texto)
-        self.assertIn("item #7", texto)
+    def test_mensagem_do_julgamento_nao_expoe_ids(self):
         self.enviar()
         self.julgar(Recurso.objects.get())
-        texto = NotificacaoInscricao.objects.order_by("-id").first().mensagem
+        texto = _notificacoes(self.aluno).first().mensagem
         self.assertNotIn("#", texto)
 
 

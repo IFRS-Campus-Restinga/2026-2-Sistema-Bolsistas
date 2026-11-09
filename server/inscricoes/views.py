@@ -14,13 +14,13 @@ from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
+from notificacoes.services import Destino, Notificacao, coordenador_do_projeto
 
 from .models import (
     AnexoRecurso,
     Documento,
     EtapaRecurso,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
@@ -59,7 +59,7 @@ class InscricaoListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return (
             Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
-            .prefetch_related("documentos", "notificacoes")
+            .prefetch_related("documentos")
             .filter(aluno=self.request.user)
         )
 
@@ -74,7 +74,7 @@ class InscricaoDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return (
             Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
-            .prefetch_related("documentos", "notificacoes")
+            .prefetch_related("documentos")
             .filter(aluno=self.request.user)
         )
 
@@ -127,6 +127,11 @@ class EnviarInscricaoView(APIView):
         inscricao.status = StatusInscricao.PENDENTE
         inscricao.data_envio = timezone.now()
         inscricao.save(update_fields=["status", "data_envio"])
+
+        bolsa = inscricao.bolsa
+        Notificacao.para(coordenador_do_projeto(bolsa)).info().titulo("Nova inscrição").mensagem(
+            f'{request.user.nome} se inscreveu na bolsa do projeto "{bolsa.projeto.titulo}".'
+        ).destino(Destino.PROJETO_CANDIDATOS).enviar()
 
         return Response(InscricaoSerializer(inscricao, context={"request": request}).data)
 
@@ -310,7 +315,10 @@ class DecisaoInscricaoView(APIView):
         mensagem = f'Sua inscrição no projeto "{inscricao.bolsa.projeto.titulo}" foi {inscricao.get_status_display().lower()}.'
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
-        NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+        homologada = self.decisao == StatusInscricao.HOMOLOGADA
+        Notificacao.para(inscricao.aluno).tom("SUCESSO" if homologada else "ERRO").titulo(
+            "Inscrição homologada" if homologada else "Inscrição indeferida"
+        ).mensagem(mensagem).destino(Destino.ALUNO_INSCRICOES).enviar()
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
 
 
@@ -320,17 +328,6 @@ class HomologarInscricaoView(DecisaoInscricaoView):
 
 class IndeferirInscricaoView(DecisaoInscricaoView):
     decisao = StatusInscricao.INDEFERIDA
-
-
-class LerNotificacaoView(APIView):
-    permission_classes = [IsAuthenticated, IsAluno]
-
-    def post(self, request, pk):
-        notificacao = get_object_or_404(NotificacaoInscricao, pk=pk, inscricao__aluno=request.user)
-        NotificacaoInscricao.objects.filter(pk=notificacao.pk, lida_em__isnull=True).update(
-            lida_em=timezone.now()
-        )
-        return Response({"detail": "Notificação marcada como lida."})
 
 
 class DocumentoArquivoView(APIView):
@@ -443,6 +440,13 @@ class RecursosInscricaoView(APIView):
                     anexo.arquivo.save(arquivo.name, arquivo, save=False)
                     arquivos_salvos.append((anexo.arquivo.storage, anexo.arquivo.name))
                     anexo.save()
+                bolsa = inscricao.bolsa
+                Notificacao.para(coordenador_do_projeto(bolsa)).aviso().titulo(
+                    "Novo recurso de homologação"
+                ).mensagem(
+                    f"{request.user.nome} enviou um recurso contra o indeferimento da "
+                    f'inscrição na bolsa do projeto "{bolsa.projeto.titulo}".'
+                ).destino(Destino.PROJETO_CANDIDATOS).enviar()
                 resultado = resposta_recursos(inscricao, request)
             return Response(resultado, status=201)
         except Exception as exc:
@@ -525,7 +529,10 @@ class JulgarRecursoView(APIView):
         )
         if recurso.justificativa_julgamento:
             mensagem += f" Justificativa: {recurso.justificativa_julgamento}"
-        NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+        deferido = recurso.status == StatusRecurso.DEFERIDO
+        Notificacao.para(inscricao.aluno).tom("SUCESSO" if deferido else "ERRO").titulo(
+            "Recurso deferido" if deferido else "Recurso indeferido"
+        ).mensagem(mensagem).destino(Destino.ALUNO_RECURSOS).enviar()
         return Response(resposta_recursos(inscricao, request))
 
 

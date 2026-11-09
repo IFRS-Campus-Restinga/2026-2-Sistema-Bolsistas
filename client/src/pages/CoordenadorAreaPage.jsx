@@ -13,6 +13,7 @@ import {
   IconAlertTriangle,
 } from '../components'
 import EditaisPage from './EditaisPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
 import MovimentacoesBolsistasPage from './MovimentacoesBolsistasPage'
@@ -22,6 +23,7 @@ import PendenciasAreaPage from './PendenciasAreaPage'
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
   { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
+  { id: 'cronograma', label: 'Cronograma dos Editais', icon: <IconCalendar /> },
   { id: 'solicitacoes', label: 'Solicitações de Bolsa', icon: <IconBriefcase /> },
   { id: 'finalizacao', label: 'Finalização de Bolsas', icon: <IconCheck /> },
   {
@@ -55,6 +57,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       initials={initials}
     >
       {active === 'editais' && <EditaisPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage podeVerHistorico />}
 
       {active === 'dashboard' && (
         <>

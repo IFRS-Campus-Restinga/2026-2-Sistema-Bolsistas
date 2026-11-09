@@ -16,6 +16,7 @@ export { IFLogo } from './IFLogo'
 export { Sidebar } from './Sidebar'
 export { TopHeader } from './TopHeader'
 export { Layout } from './Layout'
+export { SinoNotificacoes } from './SinoNotificacoes'
 
 // Button (#178)
 export { Button } from './Button'

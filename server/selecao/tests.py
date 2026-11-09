@@ -10,7 +10,8 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EtapaAvaliacao, StatusBolsa
 from bolsistas.models import OrigemVinculo, VinculoBolsista
 from editais.models import Edital
-from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
+from inscricoes.models import Inscricao, StatusInscricao
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
 from .models import (
@@ -321,8 +322,8 @@ class PublicacaoEIndicacaoTests(SelecaoBaseTests):
         self.assertTrue(PublicacaoResultado.objects.filter(bolsa=self.bolsa).exists())
         self.assertEqual(ResultadoInscricao.objects.count(), 4)
         self.assertTrue(
-            NotificacaoInscricao.objects.filter(
-                inscricao=self.ana, mensagem__contains="Titular"
+            Notificacao.objects.filter(
+                destinatario=self.ana.aluno, mensagem__contains="Titular"
             ).exists()
         )
 
@@ -419,8 +420,8 @@ class PublicacaoEIndicacaoTests(SelecaoBaseTests):
         self.assertEqual(resposta.status_code, 200, resposta.data)
         self.assertTrue(DesistenciaVaga.objects.filter(inscricao=self.ana).exists())
         self.assertTrue(
-            NotificacaoInscricao.objects.filter(
-                inscricao=self.ana, mensagem__contains="não vai assumir"
+            Notificacao.objects.filter(
+                destinatario=self.ana.aluno, mensagem__contains="não vai assumir"
             ).exists()
         )
         self.assertEqual(self.indicar(self.bia).status_code, 200)

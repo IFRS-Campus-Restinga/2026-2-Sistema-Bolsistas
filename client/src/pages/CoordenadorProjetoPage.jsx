@@ -18,6 +18,7 @@ import MeusConvitesPage from './MeusConvitesPage'
 import SelecaoPage from './SelecaoPage'
 import MeusBolsistasPage from './MeusBolsistasPage'
 import FrequenciasPage from './FrequenciasPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
@@ -27,6 +28,7 @@ const menuItems = [
   { id: 'convites', label: 'Meus Convites', icon: <IconMail /> },
   { id: 'bolsistas', label: 'Meus Bolsistas', icon: <IconGradCap /> },
   { id: 'frequencias', label: 'Frequências', icon: <IconCalendar /> },
+  { id: 'cronograma', label: 'Cronograma dos Editais', icon: <IconCalendar /> },
 ]
 
 export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
@@ -60,6 +62,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'convites' && <MeusConvitesPage />}
       {active === 'bolsistas' && <MeusBolsistasPage />}
       {active === 'frequencias' && <FrequenciasPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage filtrarStatus={false} />}
     </Layout>
   )
 }

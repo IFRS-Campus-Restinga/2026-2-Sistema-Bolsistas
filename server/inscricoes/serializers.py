@@ -1,5 +1,3 @@
-import re
-
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -12,7 +10,6 @@ from .models import (
     AnexoRecurso,
     Documento,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
@@ -41,37 +38,12 @@ class DocumentoSerializer(serializers.ModelSerializer):
         return dados
 
 
-class NotificacaoInscricaoSerializer(serializers.ModelSerializer):
-    mensagem = serializers.SerializerMethodField()
-
-    def get_mensagem(self, notificacao):
-        # Compatibilidade com notificações antigas, sem modificar o motivo escrito.
-        mensagem = notificacao.mensagem
-        mensagem = re.sub(
-            r"^Seu recurso #\d+ de homologação", "Seu recurso de homologação", mensagem
-        )
-        prefixo, separador, restante = mensagem.partition(" foi ")
-        prefixo = re.sub(r" \(bolsa #\d+\)", "", prefixo)
-        prefixo = re.sub(
-            r", na bolsa #\d+,",
-            lambda _: f', na bolsa do projeto "{notificacao.inscricao.bolsa.projeto.titulo}",',
-            prefixo,
-        )
-        return prefixo + separador + restante
-
-    class Meta:
-        model = NotificacaoInscricao
-        fields = ["id", "mensagem", "criada_em", "lida_em"]
-        read_only_fields = fields
-
-
 class InscricaoSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     bolsa_tipo_display = serializers.CharField(source="bolsa.get_tipo_display", read_only=True)
     projeto_titulo = serializers.CharField(source="bolsa.projeto.titulo", read_only=True)
     edital_nome = serializers.CharField(source="bolsa.edital.nome", read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
-    notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
     resultado_selecao = serializers.SerializerMethodField()
 
@@ -93,7 +65,6 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "documentos",
             "justificativa_indeferimento",
             "data_decisao",
-            "notificacoes",
             "prazo_inscricao_encerrado",
             "resultado_selecao",
         ]
