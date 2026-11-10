@@ -928,6 +928,22 @@ class CronogramaConsolidadoAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class CronogramaCoordenadorSemPerfilTests(APITestCase):
+    def test_coordenador_de_area_sem_perfil_ve_editais_sem_bolsas(self):
+        Edital.objects.create(
+            nome="Edital", ano_codigo="2026-001", link_documento_oficial="https://example.com/e"
+        )
+        sem_perfil = Usuario.objects.create_user(
+            username="area_sem_perfil", email="sem@example.com", role=Usuario.Role.COORDENADOR_AREA
+        )
+        self.client.force_authenticate(sem_perfil)
+
+        response = self.client.get(reverse("editais:cronograma-consolidado"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["total_bolsas"], 0)
+
+
 class HistoricoCronogramaAPITests(APITestCase):
     def setUp(self):
         self.url = reverse("editais:historico-cronograma")
@@ -1027,9 +1043,10 @@ class HistoricoCronogramaAPITests(APITestCase):
     def test_rejeita_edital_invalido(self):
         self.client.force_authenticate(user=self.coord_area)
 
-        response = self.client.get(self.url, {"edital": "abc"})
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        for invalido in ("abc", "²", "1²"):
+            with self.subTest(edital=invalido):
+                response = self.client.get(self.url, {"edital": invalido})
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_administrador_pode_consultar(self):
         admin = Usuario.objects.create_user(

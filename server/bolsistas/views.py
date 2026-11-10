@@ -431,9 +431,11 @@ class RelatorioFinalView(APIView):
         relatorio.avaliado_em = None
         relatorio.save()
 
-        # O arquivo anterior só sai do disco depois que o novo foi salvo.
+        # O arquivo anterior só sai do disco depois que a transação confirmar; se algo falhar
+        # até lá (inclusive o aviso), o banco volta e ele continua valendo.
         if arquivo_anterior and arquivo_anterior != relatorio.arquivo.name:
-            relatorio.arquivo.storage.delete(arquivo_anterior)
+            storage = relatorio.arquivo.storage
+            transaction.on_commit(lambda: storage.delete(arquivo_anterior))
 
         bolsa = vinculo.bolsa
         Notificacao.para(coordenador_do_projeto(bolsa)).info().titulo(

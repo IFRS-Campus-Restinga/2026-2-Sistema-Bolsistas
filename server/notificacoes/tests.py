@@ -1,9 +1,11 @@
 from datetime import timedelta
 from importlib import import_module
 from io import StringIO
+from unittest import mock
 
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, transaction
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -17,7 +19,7 @@ from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista
 
 from .models import Notificacao as NotificacaoModel
-from .models import TomNotificacao
+from .models import PreferenciasPendencias, TomNotificacao
 from .pendencias import verificar_pendencias
 from .services import Destino, Notificacao, coordenadores_da_area
 
@@ -115,9 +117,7 @@ class ConstrutorNotificacaoTests(TestCase):
         with self.assertRaises(ValueError):
             Notificacao.para(self.ana).mensagem("Só mensagem").enviar()
 
-    def test_rejeita_tom_e_destinatario_invalidos(self):
-        with self.assertRaises(ValueError):
-            Notificacao.para(self.ana).tom("URGENTE")
+    def test_rejeita_destinatario_invalido(self):
         with self.assertRaises(TypeError):
             Notificacao.para("ana")
 
@@ -130,6 +130,45 @@ class ConstrutorNotificacaoTests(TestCase):
         self.assertEqual(len(avisar(self.ana)), 1)
         self.assertEqual(len(avisar(self.ana, self.bia)), 1)
         self.assertEqual(NotificacaoModel.objects.filter(chave="x:1").count(), 2)
+
+    def test_banco_barra_aviso_com_chave_repetida_e_o_envio_ignora(self):
+        NotificacaoModel.objects.create(
+            destinatario=self.ana, titulo="T", mensagem="M", chave="x:1"
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            NotificacaoModel.objects.create(
+                destinatario=self.ana, titulo="T", mensagem="M", chave="x:1"
+            )
+        # Sem chave pode repetir à vontade.
+        NotificacaoModel.objects.create(destinatario=self.ana, titulo="T", mensagem="M")
+        NotificacaoModel.objects.create(destinatario=self.ana, titulo="T", mensagem="M")
+
+        # Corrida: outra execução gravou depois da checagem; o envio não quebra.
+        aviso = Notificacao.para(self.ana).titulo("T").mensagem("M").chave("x:1")
+        with mock.patch.object(
+            Notificacao,
+            "_montar",
+            return_value=[
+                NotificacaoModel(destinatario=self.ana, titulo="T", mensagem="M", chave="x:1")
+            ],
+        ):
+            aviso.enviar()
+        self.assertEqual(NotificacaoModel.objects.filter(chave="x:1").count(), 1)
+
+    def test_enviar_todas_grava_avisos_diferentes_num_unico_insert(self):
+        avisos = [
+            Notificacao.para(destinatario).titulo("T").mensagem(f"Para {destinatario.nome}")
+            for destinatario in (self.ana, self.bia)
+        ]
+
+        with self.assertNumQueries(1):
+            Notificacao.enviar_todas(avisos)
+
+        self.assertEqual(
+            set(NotificacaoModel.objects.values_list("mensagem", flat=True)),
+            {"Para Ana", "Para Bia"},
+        )
 
     def test_coordenadores_da_area_por_tipo_e_indissociavel(self):
         pesquisa = coordenador_area("pesquisa", TipoArea.PESQUISA)
@@ -220,7 +259,6 @@ class NotificacoesAPITests(APITestCase):
         self.assertEqual(self.client.post(reverse("notificacoes:ler-todas")).status_code, 401)
 
 
-@override_settings(PRAZO_ANALISE_SOLICITACAO_BOLSA_DIAS=5)
 class PendenciasAdministradorTests(Cenario, APITestCase):
     def setUp(self):
         self.montar_cenario()
@@ -247,11 +285,73 @@ class PendenciasAdministradorTests(Cenario, APITestCase):
         self.assertIn("Robótica", bolsa.mensagem)
         self.assertEqual(self.avisos("recurso-parado:").get().destino, Destino.ADMIN_INSCRICOES)
 
-    def test_respeita_o_prazo_configurado(self):
-        with override_settings(PRAZO_ANALISE_SOLICITACAO_BOLSA_DIAS=10):
-            verificar_pendencias()
+    def preferir(self, **campos):
+        PreferenciasPendencias.objects.create(usuario=self.admin, **campos)
 
-        self.assertFalse(self.avisos("bolsa-parada:").exists())
+    def test_respeita_o_prazo_escolhido_pelo_administrador(self):
+        self.preferir(dias_solicitacao_parada=10, dias_recurso_parado=2)
+
+        self.assertEqual(verificar_pendencias(), 0)
+
+    def test_administrador_pode_desligar_um_tipo_de_aviso(self):
+        self.preferir(avisar_recurso_parado=False)
+
+        verificar_pendencias()
+
+        self.assertTrue(self.avisos("bolsa-parada:").exists())
+        self.assertFalse(self.avisos("recurso-parado:").exists())
+
+    def test_cada_administrador_usa_os_proprios_prazos(self):
+        outro = usuario("outro_admin", Usuario.Role.ADMINISTRADOR)
+        PreferenciasPendencias.objects.create(usuario=outro, dias_solicitacao_parada=30)
+
+        verificar_pendencias()
+
+        self.assertTrue(self.avisos("bolsa-parada:").exists())
+        self.assertFalse(
+            NotificacaoModel.objects.filter(
+                destinatario=outro, chave__startswith="bolsa-parada:"
+            ).exists()
+        )
+
+    def test_consulta_e_salva_as_preferencias(self):
+        self.client.force_authenticate(self.admin)
+        url = reverse("notificacoes:preferencias")
+
+        self.assertEqual(self.client.get(url).data["dias_solicitacao_parada"], 5)
+        response = self.client.put(
+            url,
+            {
+                "avisar_solicitacao_parada": True,
+                "dias_solicitacao_parada": 3,
+                "avisar_recurso_parado": False,
+                "dias_recurso_parado": 0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        preferencias = PreferenciasPendencias.objects.get(usuario=self.admin)
+        self.assertEqual(preferencias.dias_solicitacao_parada, 3)
+        self.assertFalse(preferencias.avisar_recurso_parado)
+        # Salvar não gera avisos: eles vêm só do comando agendado.
+        self.assertFalse(NotificacaoModel.objects.exists())
+
+    def test_rejeita_prazo_invalido(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.put(
+            reverse("notificacoes:preferencias"),
+            {"avisar_solicitacao_parada": True, "dias_solicitacao_parada": 0},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("dias_solicitacao_parada", response.data)
+
+    def test_somente_administrador_configura(self):
+        self.client.force_authenticate(self.coord_projeto)
+
+        self.assertEqual(self.client.get(reverse("notificacoes:preferencias")).status_code, 403)
+        self.assertFalse(self.client.get(reverse("notificacoes:lista")).data["configuravel"])
 
     def test_nao_avisa_itens_resolvidos_ou_dentro_do_prazo(self):
         self.bolsa.status = StatusBolsa.ABERTA
@@ -261,18 +361,14 @@ class PendenciasAdministradorTests(Cenario, APITestCase):
 
         self.assertEqual(verificar_pendencias(), 0)
 
-    def test_consulta_do_administrador_dispara_a_verificacao(self):
+    def test_consultar_as_notificacoes_nao_grava_avisos(self):
         self.client.force_authenticate(self.admin)
 
         response = self.client.get(reverse("notificacoes:lista"))
 
-        self.assertEqual(response.data["nao_lidas"], 2)
-
-    def test_consulta_de_outros_perfis_nao_dispara(self):
-        self.client.force_authenticate(self.coord_projeto)
-        self.client.get(reverse("notificacoes:lista"))
-
-        self.assertFalse(NotificacaoModel.objects.filter(destinatario=self.admin).exists())
+        self.assertEqual(response.data["nao_lidas"], 0)
+        self.assertTrue(response.data["configuravel"])
+        self.assertFalse(NotificacaoModel.objects.exists())
 
     def test_comando_agendavel(self):
         saida = StringIO()

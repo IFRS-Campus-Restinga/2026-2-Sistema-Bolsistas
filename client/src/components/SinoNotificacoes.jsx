@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { notificacoesFetch } from '../api'
 import { formatarDataHora } from '../utils/dataHora'
+import { aoPedirAbrirSino } from '../utils/sinoNotificacoes'
 import { IconBell } from './Icons'
+import { PreferenciasPendencias } from './PreferenciasPendencias'
 import { Spinner } from './Spinner'
 
 const INTERVALO_ATUALIZACAO = 60_000
@@ -17,6 +19,9 @@ const FILTROS = [
   { id: 'todas', label: 'Todas' },
   { id: 'nao_lidas', label: 'Não lidas' },
 ]
+
+// Só para quem recebe avisos de pendência (administrador).
+const ABA_CONFIGURAR = { id: 'configurar', label: 'Configurar' }
 
 async function buscarNotificacoes(filtro) {
   const sufixo = filtro === 'nao_lidas' ? '?nao_lidas=1' : ''
@@ -39,6 +44,7 @@ export function SinoNotificacoes({ onAbrirDestino }) {
   const [filtro, setFiltro] = useState('todas')
   const [notificacoes, setNotificacoes] = useState([])
   const [naoLidas, setNaoLidas] = useState(0)
+  const [configuravel, setConfiguravel] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const containerRef = useRef(null)
@@ -47,6 +53,7 @@ export function SinoNotificacoes({ onAbrirDestino }) {
   function aplicar(dados) {
     setNotificacoes(dados.resultados)
     setNaoLidas(dados.nao_lidas)
+    setConfiguravel(Boolean(dados.configuravel))
     setErro('')
   }
 
@@ -79,6 +86,17 @@ export function SinoNotificacoes({ onAbrirDestino }) {
     }
   }, [])
 
+  // Outras telas abrem o sino numa aba (ex.: o "Configurar" do painel do administrador).
+  useEffect(
+    () =>
+      aoPedirAbrirSino((aba) => {
+        if (aba !== ABA_CONFIGURAR.id) filtroRef.current = aba
+        setFiltro(aba)
+        setAberto(true)
+      }),
+    []
+  )
+
   useEffect(() => {
     if (!aberto) return undefined
 
@@ -109,8 +127,9 @@ export function SinoNotificacoes({ onAbrirDestino }) {
 
   async function trocarFiltro(novo) {
     if (novo === filtro) return
-    filtroRef.current = novo
     setFiltro(novo)
+    if (novo === ABA_CONFIGURAR.id) return
+    filtroRef.current = novo
     setCarregando(true)
     await carregar()
     setCarregando(false)
@@ -177,7 +196,7 @@ export function SinoNotificacoes({ onAbrirDestino }) {
           </div>
 
           <div className="mt-2 flex gap-4 border-b border-gray-200 px-4" role="tablist">
-            {FILTROS.map((item) => {
+            {(configuravel ? [...FILTROS, ABA_CONFIGURAR] : FILTROS).map((item) => {
               const ativo = filtro === item.id
               return (
                 <button
@@ -206,7 +225,9 @@ export function SinoNotificacoes({ onAbrirDestino }) {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {carregando ? (
+            {filtro === ABA_CONFIGURAR.id ? (
+              <PreferenciasPendencias />
+            ) : carregando ? (
               <div className="flex justify-center py-10">
                 <Spinner />
               </div>

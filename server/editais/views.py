@@ -168,8 +168,11 @@ class EncerrarEditalView(APIView):
 def _filtro_bolsas_do_perfil(usuario):
     """Bolsas que cada tipo de coordenador acompanha; o administrador vê todas."""
     if usuario.role == Usuario.Role.COORDENADOR_AREA:
-        area = usuario.perfil_coordenador_area.tipo_area
-        return Q(bolsas__tipo__in=[area, TipoBolsa.INDISSOCIAVEL])
+        perfil = getattr(usuario, "perfil_coordenador_area", None)
+        if perfil is None:
+            # Coordenador de área ainda sem área cadastrada não acompanha nenhuma bolsa.
+            return Q(bolsas__in=[])
+        return Q(bolsas__tipo__in=[perfil.tipo_area, TipoBolsa.INDISSOCIAVEL])
     if usuario.role == Usuario.Role.COORDENADOR_PROJETO:
         return Q(bolsas__projeto__coordenador_projeto__usuario=usuario)
     return Q()
@@ -224,7 +227,8 @@ class HistoricoCronogramaView(generics.ListAPIView):
 
         edital = self.request.query_params.get("edital", "").strip()
         if edital:
-            if not edital.isdigit():
+            # isdigit sozinho aceita dígitos como "²", que o int() do filtro rejeita.
+            if not (edital.isascii() and edital.isdigit()):
                 raise ValidationError({"edital": "Informe o id numérico do edital."})
             alteracoes = alteracoes.filter(edital_id=edital)
 

@@ -65,6 +65,8 @@ class BolsaListCreateView(generics.ListCreateAPIView):
 
         return queryset.none()
 
+    # Grava e avisa juntos: se o aviso falhar, nada fica salvo pela metade.
+    @transaction.atomic
     def perform_create(self, serializer):
         pendencias = pendencias_do_coordenador(self.request.user)
         if pendencias:

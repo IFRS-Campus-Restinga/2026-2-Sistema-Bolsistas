@@ -331,9 +331,11 @@ class DecisaoInscricaoView(APIView):
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
         homologada = self.decisao == StatusInscricao.HOMOLOGADA
-        Notificacao.para(inscricao.aluno).tom("SUCESSO" if homologada else "ERRO").titulo(
-            "Inscrição homologada" if homologada else "Inscrição indeferida"
-        ).mensagem(mensagem).destino(Destino.ALUNO_INSCRICOES).enviar()
+        aviso = Notificacao.para(inscricao.aluno)
+        aviso = aviso.sucesso() if homologada else aviso.erro()
+        aviso.titulo("Inscrição homologada" if homologada else "Inscrição indeferida").mensagem(
+            mensagem
+        ).destino(Destino.ALUNO_INSCRICOES).enviar()
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
 
 
@@ -588,9 +590,11 @@ class JulgarRecursoView(APIView):
         if recurso.justificativa_julgamento:
             mensagem += f" Justificativa: {recurso.justificativa_julgamento}"
         deferido = recurso.status == StatusRecurso.DEFERIDO
-        Notificacao.para(inscricao.aluno).tom("SUCESSO" if deferido else "ERRO").titulo(
-            "Recurso deferido" if deferido else "Recurso indeferido"
-        ).mensagem(mensagem).destino(Destino.ALUNO_RECURSOS).enviar()
+        aviso = Notificacao.para(inscricao.aluno)
+        aviso = aviso.sucesso() if deferido else aviso.erro()
+        aviso.titulo("Recurso deferido" if deferido else "Recurso indeferido").mensagem(
+            mensagem
+        ).destino(Destino.ALUNO_RECURSOS).enviar()
         return Response(resposta_recursos(inscricao, request))
 
 

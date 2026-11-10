@@ -173,14 +173,18 @@ class PublicarResultadoView(_BolsaDoCoordenadorMixin, APIView):
         )
 
         titulo = bolsa.projeto.titulo
-        for candidato in classificacao.candidatos:
-            Notificacao.para(candidato.inscricao.aluno).info().titulo(
-                "Resultado da seleção publicado"
-            ).mensagem(
+        Notificacao.enviar_todas(
+            Notificacao.para(candidato.inscricao.aluno)
+            .info()
+            .titulo("Resultado da seleção publicado")
+            .mensagem(
                 f'O resultado da seleção da bolsa do projeto "{titulo}" foi publicado. '
                 f"Sua situação: {SituacaoClassificacao(candidato.situacao).label}"
                 + (f" ({candidato.posicao}º lugar)." if candidato.posicao else ".")
-            ).destino(Destino.ALUNO_INSCRICOES).enviar()
+            )
+            .destino(Destino.ALUNO_INSCRICOES)
+            for candidato in classificacao.candidatos
+        )
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.PUBLICACAO,

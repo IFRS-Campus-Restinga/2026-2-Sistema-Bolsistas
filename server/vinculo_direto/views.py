@@ -90,6 +90,8 @@ class ConviteListCreateView(generics.ListCreateAPIView):
             .prefetch_related("documentos")
         )
 
+    # Grava e avisa juntos: se o aviso falhar, nada fica salvo pela metade.
+    @transaction.atomic
     def perform_create(self, serializer):
         convite = serializer.save(
             coordenador_solicitante=self.request.user, status=StatusConvite.PENDENTE
@@ -186,10 +188,11 @@ class AprovarConviteView(APIView):
         Notificacao.para(convite.aluno).sucesso().titulo("Convite aprovado").mensagem(
             f'Sua documentação foi aprovada e você é bolsista do projeto "{bolsa.projeto.titulo}".'
         ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+        # Frequências é onde a área acompanha cada bolsista, inclusive o recém-vinculado.
         Notificacao.para(bolsa.coordenador_area).info().titulo("Vínculo direto efetivado").mensagem(
-            f'Um vínculo direto foi efetivado na bolsa do projeto "{bolsa.projeto.titulo}" '
-            f"(edital {bolsa.edital.nome})."
-        ).destino(Destino.AREA_SOLICITACOES).enviar()
+            f"{convite.aluno.nome} passou a ser bolsista da bolsa do projeto "
+            f'"{bolsa.projeto.titulo}" (edital {bolsa.edital.nome}) por vínculo direto.'
+        ).destino(Destino.AREA_FREQUENCIAS).enviar()
 
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 

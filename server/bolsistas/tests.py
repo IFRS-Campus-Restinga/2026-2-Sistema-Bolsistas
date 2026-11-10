@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from importlib import import_module
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -367,12 +368,28 @@ class EnvioRelatorioTests(CenarioBolsista):
         self.enviar(pdf("versao-1.pdf"))
         caminho_anterior = RelatorioFinal.objects.get().arquivo.path
 
-        response = self.enviar(pdf("versao-2.pdf"))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.enviar(pdf("versao-2.pdf"))
 
         self.assertEqual(response.status_code, 200)
         relatorio = RelatorioFinal.objects.get()
         self.assertEqual(relatorio.nome_original, "versao-2.pdf")
         self.assertFalse(os.path.exists(caminho_anterior))
+        self.assertTrue(os.path.exists(relatorio.arquivo.path))
+
+    def test_reenvio_que_falha_mantem_o_arquivo_anterior(self):
+        self.enviar(pdf("versao-1.pdf"))
+        relatorio = RelatorioFinal.objects.get()
+
+        with (
+            mock.patch("bolsistas.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.captureOnCommitCallbacks(execute=True),
+            self.assertRaises(RuntimeError),
+        ):
+            self.enviar(pdf("versao-2.pdf"))
+
+        relatorio.refresh_from_db()
+        self.assertEqual(relatorio.nome_original, "versao-1.pdf")
         self.assertTrue(os.path.exists(relatorio.arquivo.path))
 
     def test_reenvio_apos_reprovacao_volta_para_avaliacao(self):

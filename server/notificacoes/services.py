@@ -7,6 +7,8 @@ Uso:
 
 `para` aceita usuários, perfis (com `.usuario`), listas/querysets ou None (ignorado).
 As notificações são gravadas na transação da view: se a ação falhar, nada é enviado.
+Para avisos diferentes a vários destinatários, monte todos e grave de uma vez com
+`Notificacao.enviar_todas([...])`.
 """
 
 from collections.abc import Iterable
@@ -35,6 +37,7 @@ class Destino:
     PROJETO_FINALIZACAO = "finalizacao"
 
     AREA_SOLICITACOES = "solicitacoes"
+    AREA_FREQUENCIAS = "frequencias"
     AREA_FINALIZACAO = "finalizacao"
     AREA_MOVIMENTACOES = "movimentacoes"
 
@@ -76,21 +79,21 @@ class Notificacao:
     def para(cls, *destinatarios):
         return cls(destinatarios)
 
-    def tom(self, tom):
-        self._tom = TomNotificacao(tom)
+    def _com_tom(self, tom):
+        self._tom = tom
         return self
 
     def info(self):
-        return self.tom(TomNotificacao.INFO)
+        return self._com_tom(TomNotificacao.INFO)
 
     def sucesso(self):
-        return self.tom(TomNotificacao.SUCESSO)
+        return self._com_tom(TomNotificacao.SUCESSO)
 
     def aviso(self):
-        return self.tom(TomNotificacao.AVISO)
+        return self._com_tom(TomNotificacao.AVISO)
 
     def erro(self):
-        return self.tom(TomNotificacao.ERRO)
+        return self._com_tom(TomNotificacao.ERRO)
 
     def titulo(self, titulo):
         self._titulo = titulo
@@ -110,6 +113,18 @@ class Notificacao:
         return self
 
     def enviar(self):
+        return Notificacao.enviar_todas([self])
+
+    @staticmethod
+    def enviar_todas(notificacoes):
+        """Grava as notificações montadas num único insert e devolve as criadas."""
+        registros = [registro for notificacao in notificacoes for registro in notificacao._montar()]
+        # A restrição única de (destinatário, chave) barra o aviso que outra execução simultânea
+        # já gravou; nesse caso ele é ignorado em vez de quebrar a requisição.
+        com_chave = any(registro.chave for registro in registros)
+        return models.Notificacao.objects.bulk_create(registros, ignore_conflicts=com_chave)
+
+    def _montar(self):
         if not self._titulo or not self._mensagem:
             raise ValueError("Toda notificação precisa de título e mensagem.")
 
@@ -122,7 +137,7 @@ class Notificacao:
             )
             destinatarios = [usuario for usuario in destinatarios if usuario.pk not in ja_avisados]
 
-        return models.Notificacao.objects.bulk_create(
+        return [
             models.Notificacao(
                 destinatario=usuario,
                 tom=self._tom,
@@ -132,7 +147,7 @@ class Notificacao:
                 chave=self._chave,
             )
             for usuario in destinatarios
-        )
+        ]
 
 
 def coordenador_do_projeto(bolsa):
