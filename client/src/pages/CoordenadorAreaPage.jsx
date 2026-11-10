@@ -4,12 +4,14 @@ import {
   IconHome,
   IconAlertTriangle,
   IconArrowLeftRight,
+  IconCalendar,
   IconCalendarCheck,
   IconEdital,
   IconFlag,
   IconInbox,
 } from '../components'
 import EditaisPage from './EditaisPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 import InicioAreaPage from './InicioAreaPage'
 import SolicitacoesBolsaPage from './SolicitacoesBolsaPage'
 import FinalizacaoBolsasPage from './FinalizacaoBolsasPage'
@@ -23,6 +25,7 @@ const secoes = [
     title: 'Gestão',
     items: [
       { id: 'editais', label: 'Editais', icon: <IconEdital /> },
+      { id: 'cronograma', label: 'Cronograma', icon: <IconCalendar /> },
       { id: 'solicitacoes', label: 'Solicitações de bolsa', icon: <IconInbox /> },
     ],
   },
@@ -59,6 +62,7 @@ export default function CoordenadorAreaPage({ me, initials, onVoltarHub }) {
       initials={initials}
     >
       {active === 'editais' && <EditaisPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage podeVerHistorico />}
 
       {active === 'dashboard' && <InicioAreaPage areaLabel={areaLabel} onNav={setActive} />}
 

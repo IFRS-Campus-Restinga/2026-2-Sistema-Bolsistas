@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from importlib import import_module
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -19,6 +20,8 @@ from bolsistas.services import alunos_com_vinculo_ativo, tem_vinculo_ativo
 from editais.models import Edital
 from frequencias.tests import CenarioFrequencia
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
+from notificacoes.models import Notificacao
+from notificacoes.services import Destino
 from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista, PublicacaoResultado
 from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
@@ -365,12 +368,28 @@ class EnvioRelatorioTests(CenarioBolsista):
         self.enviar(pdf("versao-1.pdf"))
         caminho_anterior = RelatorioFinal.objects.get().arquivo.path
 
-        response = self.enviar(pdf("versao-2.pdf"))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.enviar(pdf("versao-2.pdf"))
 
         self.assertEqual(response.status_code, 200)
         relatorio = RelatorioFinal.objects.get()
         self.assertEqual(relatorio.nome_original, "versao-2.pdf")
         self.assertFalse(os.path.exists(caminho_anterior))
+        self.assertTrue(os.path.exists(relatorio.arquivo.path))
+
+    def test_reenvio_que_falha_mantem_o_arquivo_anterior(self):
+        self.enviar(pdf("versao-1.pdf"))
+        relatorio = RelatorioFinal.objects.get()
+
+        with (
+            mock.patch("bolsistas.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.captureOnCommitCallbacks(execute=True),
+            self.assertRaises(RuntimeError),
+        ):
+            self.enviar(pdf("versao-2.pdf"))
+
+        relatorio.refresh_from_db()
+        self.assertEqual(relatorio.nome_original, "versao-1.pdf")
         self.assertTrue(os.path.exists(relatorio.arquivo.path))
 
     def test_reenvio_apos_reprovacao_volta_para_avaliacao(self):
@@ -531,6 +550,15 @@ class ParecerRelatorioTests(CenarioBolsista):
         self.assertEqual(self.relatorio_ana.avaliado_por, self.coordenador)
         self.assertIsNotNone(self.relatorio_ana.avaliado_em)
 
+    def test_ultimo_relatorio_aprovado_avisa_o_coordenador_que_pode_finalizar(self):
+        PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
+
+        self.avaliar(SituacaoRelatorio.APROVADO)
+
+        aviso = Notificacao.objects.get(destinatario=self.coordenador)
+        self.assertEqual(aviso.titulo, "Bolsa pronta para finalizar")
+        self.assertEqual(aviso.destino, Destino.PROJETO_FINALIZACAO)
+
     def test_reprova_com_justificativa(self):
         response = self.avaliar(SituacaoRelatorio.REPROVADO, "  Faltou o cronograma.  ")
 
@@ -687,6 +715,25 @@ class FinalizarBolsaTests(CenarioBolsista):
         self.assertEqual(self.bolsa.finalizada_por, self.coordenador)
         self.assertIsNotNone(self.bolsa.finalizada_em)
         self.assertIsNone(self.bolsa.ciencia_finalizacao_em)
+
+    def test_finalizacao_notifica_bolsistas_e_pede_ciencia_da_area(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        self.relatorio(self.vinculo_bia, SituacaoRelatorio.APROVADO)
+
+        self.finalizar()
+
+        area = Notificacao.objects.get(destinatario=self.coordenador_area)
+        self.assertEqual(area.titulo, "Bolsa finalizada")
+        self.assertEqual(area.destino, Destino.AREA_FINALIZACAO)
+        self.assertEqual(
+            Notificacao.objects.filter(
+                destinatario__in=[self.vinculo_ana.aluno, self.vinculo_bia.aluno],
+                destino=Destino.ALUNO_MINHA_BOLSA,
+            ).count(),
+            2,
+        )
+        # Quem finalizou não é avisado da própria ação.
+        self.assertFalse(Notificacao.objects.filter(destinatario=self.coordenador).exists())
 
     def test_lista_os_relatorios_pendentes(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.AGUARDANDO_AVALIACAO)

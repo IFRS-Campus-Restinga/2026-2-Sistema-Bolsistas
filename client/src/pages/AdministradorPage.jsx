@@ -4,6 +4,7 @@ import {
   Layout,
   IconHome,
   IconBolsa,
+  IconCalendar,
   IconClipboardCheck,
   IconEdital,
   IconFolder,
@@ -15,6 +16,7 @@ import MonitoramentoPage from './MonitoramentoPage'
 import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
 import AdminEditaisPage from './AdminEditaisPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 
 const secoes = [
   { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
@@ -22,6 +24,7 @@ const secoes = [
     title: 'Gestão',
     items: [
       { id: 'editais', label: 'Editais', icon: <IconEdital /> },
+      { id: 'cronograma', label: 'Cronograma', icon: <IconCalendar /> },
       { id: 'projetos', label: 'Projetos', icon: <IconFolder /> },
       { id: 'bolsas', label: 'Bolsas', icon: <IconBolsa /> },
       { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardCheck /> },
@@ -63,6 +66,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
     >
       {active === 'dashboard' && <PainelAdministrativo onNavigate={navegar} />}
       {active === 'editais' && <AdminEditaisPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage podeVerHistorico />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
       {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}

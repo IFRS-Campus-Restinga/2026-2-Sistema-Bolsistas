@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
@@ -74,6 +75,17 @@ class SolicitarBolsaAPITests(APITestCase):
         bolsa = Bolsa.objects.get()
         self.assertEqual(bolsa.status, StatusBolsa.SOLICITADA)
         self.assertEqual(bolsa.projeto_id, self.projeto.id)
+
+    def test_falha_no_aviso_desfaz_a_solicitacao(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        with (
+            mock.patch("bolsas.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(self.url, self.dados, format="json")
+
+        self.assertFalse(Bolsa.objects.exists())
 
     def test_valor_mensal_vem_da_tabela_do_edital(self):
         self.client.force_authenticate(user=self.coordenador)

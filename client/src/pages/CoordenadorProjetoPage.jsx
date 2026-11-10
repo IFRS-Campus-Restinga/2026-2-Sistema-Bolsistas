@@ -3,6 +3,7 @@ import {
   Layout,
   IconHome,
   IconUsers,
+  IconCalendar,
   IconCalendarCheck,
   IconFlag,
   IconFolder,
@@ -15,6 +16,7 @@ import MeusConvitesPage from './MeusConvitesPage'
 import SelecaoCandidatosPage from './SelecaoCandidatosPage'
 import MeusBolsistasPage from './MeusBolsistasPage'
 import FrequenciasPage from './FrequenciasPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 import FinalizacaoProjetoPage from './FinalizacaoProjetoPage'
 
 const secoes = [
@@ -29,6 +31,7 @@ const secoes = [
     items: [
       { id: 'selecao', label: 'Seleção de candidatos', icon: <IconFunnel /> },
       { id: 'convites', label: 'Convites', icon: <IconSend /> },
+      { id: 'cronograma', label: 'Cronograma', icon: <IconCalendar /> },
     ],
   },
   {
@@ -63,6 +66,7 @@ export default function CoordenadorProjetoPage({ me, initials, onVoltarHub }) {
       {active === 'bolsistas' && <MeusBolsistasPage />}
       {active === 'frequencias' && <FrequenciasPage />}
       {active === 'finalizacao' && <FinalizacaoProjetoPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage filtrarStatus={false} />}
     </Layout>
   )
 }

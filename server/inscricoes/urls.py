@@ -17,7 +17,6 @@ from .views import (
     InscricaoDetailView,
     InscricaoListCreateView,
     JulgarRecursoView,
-    LerNotificacaoView,
     RecursosInscricaoView,
     RecursosListView,
 )
@@ -35,7 +34,6 @@ urlpatterns = [
     path("candidatos/<int:pk>/", CandidatoDetailView.as_view(), name="candidato-detalhe"),
     path("<int:pk>/homologar/", HomologarInscricaoView.as_view(), name="homologar"),
     path("<int:pk>/indeferir/", IndeferirInscricaoView.as_view(), name="indeferir"),
-    path("notificacoes/<int:pk>/ler/", LerNotificacaoView.as_view(), name="notificacao-ler"),
     path("documentos/<int:pk>/decisao/", DecidirDocumentoView.as_view(), name="documento-decisao"),
     path("documentos/<int:pk>/arquivo/", DocumentoArquivoView.as_view(), name="documento-arquivo"),
     path("", InscricaoListCreateView.as_view(), name="lista-criacao"),

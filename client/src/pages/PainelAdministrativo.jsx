@@ -9,6 +9,7 @@ import {
   Carregando,
   IconBolsa,
   IconEdital,
+  IconGear,
   IconUserCog,
   IconUsers,
   PageHeader,
@@ -17,6 +18,7 @@ import {
   Timeline,
 } from '../components'
 import { formatarDataHora } from '../utils/dataHora'
+import { abrirSinoNotificacoes } from '../utils/sinoNotificacoes'
 
 // Ações de auditoria que aparecem em vermelho na atividade recente, como no protótipo.
 const ACOES_EM_DESTAQUE = ['REJEICAO', 'DESATIVACAO']
@@ -126,7 +128,18 @@ export default function PainelAdministrativo({ onNavigate }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-2">
           <SectionTitle
-            title="Requer atenção"
+            title={
+              <span className="flex flex-wrap items-center gap-2">
+                Requer atenção
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => abrirSinoNotificacoes('configurar')}
+                >
+                  <IconGear size={13} /> Configurar notificações
+                </Button>
+              </span>
+            }
             description="Itens parados que podem precisar de intervenção."
           />
           <AttentionList

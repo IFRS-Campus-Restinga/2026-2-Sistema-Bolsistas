@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { monitoramentoFetch } from '../api'
 import { Sidebar } from './Sidebar'
+import { SinoNotificacoes } from './SinoNotificacoes'
 import { TopHeader } from './TopHeader'
 
 /**
@@ -68,6 +69,15 @@ export function Layout({
     secaoAtual?.items.find((item) => item.id === active)?.label ??
     accountItems.find((item) => item.id === active)?.label
 
+  // O destino da notificação é o id de uma tab da sidebar ou de um atalho do avatar.
+  function abrirDestino(destino) {
+    if (grupos.some((secao) => secao.items.some((item) => item.id === destino))) {
+      onNav(destino)
+      return
+    }
+    accountItems.find((item) => item.id === destino)?.onClick()
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-fundo">
       <Sidebar
@@ -88,6 +98,7 @@ export function Layout({
           initials={initials}
           accountItems={accountItems}
           onLogout={onLogout}
+          acoes={<SinoNotificacoes onAbrirDestino={abrirDestino} />}
         />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1200px] px-8 py-7">{children}</div>

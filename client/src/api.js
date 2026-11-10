@@ -125,6 +125,10 @@ export function selecaoFetch(path = '/', options = {}) {
   return fetchWithRefresh(`${DJANGO_HOST}/api/selecao`, path, options)
 }
 
+export function notificacoesFetch(path = '/', options = {}) {
+  return fetchWithRefresh(`${DJANGO_HOST}/api/notificacoes`, path, options)
+}
+
 export { SessaoExpiradaError }
 
 export async function getUsuarios() {

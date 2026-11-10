@@ -113,6 +113,7 @@ function MenuDaConta({ name, role, initials, items, onLogout }) {
  *   name, role, initials — dados do usuário logado
  *   accountItems — atalhos do menu do avatar [{ id, label, icon?, hint?, onClick }]
  *   onLogout     — "Voltar ao HUB" no menu do avatar
+ *   acoes        — elementos exibidos antes do avatar (ex.: sino de notificações)
  */
 export function TopHeader({
   campus,
@@ -123,9 +124,10 @@ export function TopHeader({
   initials,
   accountItems = [],
   onLogout,
+  acoes,
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white/80 px-6 backdrop-blur">
+    <header className="relative z-30 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white/80 px-6 backdrop-blur">
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
         <span className="text-gray-400">{campus}</span>
         {section && (
@@ -141,13 +143,16 @@ export function TopHeader({
           </>
         )}
       </div>
-      <MenuDaConta
-        name={name}
-        role={role}
-        initials={initials}
-        items={accountItems}
-        onLogout={onLogout}
-      />
+      <div className="flex items-center gap-1.5">
+        {acoes}
+        <MenuDaConta
+          name={name}
+          role={role}
+          initials={initials}
+          items={accountItems}
+          onLogout={onLogout}
+        />
+      </div>
     </header>
   )
 }

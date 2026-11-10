@@ -243,16 +243,6 @@ class BolsaEdicaoSerializer(BolsaSerializer):
         return tipo
 
 
-# Fases do cronograma do edital mostradas ao aluno, como no protótipo: (rótulo, campo do fim).
-FASES_DO_EDITAL = [
-    ("Inscrições", "data_fechamento_inscricoes"),
-    ("Homologação", "data_homologacao"),
-    ("Recursos", "data_recurso_homologacao_fim"),
-    ("Resultado", "data_resultado"),
-    ("Vigência", "data_fim_vigencia"),
-]
-
-
 class BolsaDisponivelSerializer(BolsaSerializer):
     """Bolsa vista pelo aluno em Bolsas disponíveis (US93): o card e o painel de detalhes.
 
@@ -280,19 +270,8 @@ class BolsaDisponivelSerializer(BolsaSerializer):
         return (fechamento - timezone.localdate()).days if fechamento else None
 
     def get_cronograma(self, bolsa):
-        hoje = timezone.localdate()
-        fases = [
-            {"rotulo": rotulo, "fim": getattr(bolsa.edital, campo)}
-            for rotulo, campo in FASES_DO_EDITAL
-        ]
         # A vigência pode ser própria da bolsa (exceção à do edital).
-        fases[-1]["fim"] = bolsa.fim_vigencia
-        # Fase atual: a primeira que ainda não terminou (sem data conta como não terminada).
-        atual = next(
-            (i for i, fase in enumerate(fases) if fase["fim"] is None or fase["fim"] >= hoje),
-            len(fases),
-        )
-        return {"fases": fases, "atual": atual}
+        return bolsa.edital.fases_do_cronograma(fim_vigencia=bolsa.fim_vigencia)
 
 
 class EtapaAvaliacaoSerializer(serializers.ModelSerializer):

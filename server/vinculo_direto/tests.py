@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
@@ -10,9 +11,10 @@ from bolsas.models import Bolsa, StatusBolsa
 from bolsistas.models import OrigemVinculo, StatusVinculo, VinculoBolsista
 from editais.models import Edital
 from inscricoes.models import DecisaoDocumento, Inscricao, StatusInscricao, TipoDocumento
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
-from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
+from .models import ConviteVinculoDireto, StatusConvite
 from .regras import bolsa_elegivel_para_convite, vagas_livres
 
 
@@ -131,6 +133,15 @@ class CriarConviteTests(VinculoDiretoTestBase):
         convite = ConviteVinculoDireto.objects.get()
         self.assertEqual(convite.status, StatusConvite.PENDENTE)
         self.assertEqual(convite.coordenador_solicitante, self.coordenador)
+
+    def test_falha_no_aviso_desfaz_o_convite(self):
+        with (
+            mock.patch("vinculo_direto.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(reverse("vinculo_direto:convites"), self._payload())
+
+        self.assertFalse(ConviteVinculoDireto.objects.exists())
 
     def test_bloqueia_bolsa_de_outro_coordenador(self):
         outro_perfil = CoordenadorProjeto.objects.create(
@@ -385,10 +396,10 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
 
     def test_aprovar_notifica_coordenador_de_area(self):
         self.client.post(self.url("convite-aprovar"))
-        self.assertEqual(NotificacaoConvite.objects.count(), 1)
-        notificacao = NotificacaoConvite.objects.get()
-        self.assertEqual(notificacao.coordenador_area, self.coordenador_area)
+        notificacao = Notificacao.objects.get(destinatario=self.coordenador_area)
+        self.assertEqual(notificacao.destino, "frequencias")
         self.assertIn(self.projeto.titulo, notificacao.mensagem)
+        self.assertIn(self.aluno.nome, notificacao.mensagem)
 
     def test_aprovar_bloqueia_sem_documentos_obrigatorios(self):
         self.convite.documentos.all().delete()

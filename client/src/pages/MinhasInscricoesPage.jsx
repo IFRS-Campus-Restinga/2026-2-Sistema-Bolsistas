@@ -176,31 +176,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
     return []
   }
 
-  function recursoHomologacaoDeferido(mensagem = '') {
-    const texto = mensagem.toLocaleLowerCase('pt-BR')
-
-    return texto.includes('recurso de homologação') && texto.includes('foi deferido')
-  }
-
-  const [lendoNotificacao, setLendoNotificacao] = useState(null)
-
-  async function marcarLida(id) {
-    setLendoNotificacao(id)
-    try {
-      const res = await inscricoesFetch(`/notificacoes/${id}/ler/`, { method: 'POST' })
-      if (!res.ok) throw new Error('Não foi possível marcar a notificação como lida.')
-      forcarRecarga()
-    } catch (e) {
-      toast({ message: e.message, tone: 'error' })
-    } finally {
-      setLendoNotificacao(null)
-    }
-  }
-
-  const notificacoes = inscricoes
-    .flatMap((inscricao) => (inscricao.notificacoes || []).map((item) => ({ ...item, inscricao })))
-    .filter((item) => !item.lida_em)
-
   const linhas = inscricoes.map((inscricao) => [
     inscricao.projeto_titulo,
     inscricao.bolsa_tipo_display,
@@ -242,36 +217,6 @@ export default function MinhasInscricoesPage({ onHistorico }) {
       <PageHeader title="Minhas Inscrições" />
 
       {erro && <Alert tone="error">{erro}</Alert>}
-      {notificacoes.length > 0 && (
-        <section aria-label="Notificações das inscrições">
-          <h3>Novas notificações</h3>
-          {notificacoes.map((item) => {
-            const recursoDeferido = recursoHomologacaoDeferido(item.mensagem)
-
-            return (
-              <Alert key={item.id} tone={recursoDeferido ? 'success' : 'warning'}>
-                <p>{item.mensagem}</p>
-                <p>{new Date(item.criada_em).toLocaleString('pt-BR')}</p>
-                <Button
-                  size="sm"
-                  disabled={lendoNotificacao !== null}
-                  loading={lendoNotificacao === item.id}
-                  onClick={() => marcarLida(item.id)}
-                >
-                  Marcar como lida
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setBolsaInscricao(item.inscricao)}
-                >
-                  Ir para a bolsa
-                </Button>
-              </Alert>
-            )
-          })}
-        </section>
-      )}
 
       <DataTable
         columns={['Projeto', 'Tipo', 'Edital', 'Status', 'Seleção', 'Ações']}

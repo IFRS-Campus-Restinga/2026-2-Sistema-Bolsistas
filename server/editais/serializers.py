@@ -162,6 +162,89 @@ class CronogramaEditalSerializer(EditalSerializer):
         fields = CAMPOS_CRONOGRAMA
 
 
+class AlteracaoCronogramaSerializer(serializers.ModelSerializer):
+    edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
+    etapa = serializers.SerializerMethodField()
+    responsavel_nome = serializers.SerializerMethodField()
+    responsavel_email = serializers.EmailField(source="responsavel.email", read_only=True)
+
+    class Meta:
+        model = AlteracaoCronograma
+        fields = [
+            "id",
+            "edital",
+            "edital_nome",
+            "edital_ano_codigo",
+            "campo",
+            "etapa",
+            "data_anterior",
+            "data_nova",
+            "responsavel_nome",
+            "responsavel_email",
+            "alterado_em",
+        ]
+        read_only_fields = fields
+
+    def get_etapa(self, alteracao):
+        return dict(ETAPAS + VIGENCIA).get(alteracao.campo, alteracao.campo)
+
+    def get_responsavel_nome(self, alteracao):
+        return str(alteracao.responsavel)
+
+
+def _etapa(campo, nome, data):
+    return {"campo": campo, "etapa": nome, "data": data.isoformat() if data else None}
+
+
+def _proxima_etapa(edital, hoje):
+    futuras = [
+        (data, campo, nome)
+        for campo, nome in ETAPAS + VIGENCIA
+        if (data := getattr(edital, campo)) is not None and data >= hoje
+    ]
+    if not futuras:
+        return None
+    data, campo, nome = min(futuras, key=lambda futura: futura[0])
+    return {**_etapa(campo, nome, data), "dias": (data - hoje).days}
+
+
+class CronogramaConsolidadoSerializer(serializers.ModelSerializer):
+    """Edital com as datas-chave do cronograma, para a visão consolidada (US19)."""
+
+    etapas = serializers.SerializerMethodField()
+    fases = serializers.SerializerMethodField()
+    proxima_etapa = serializers.SerializerMethodField()
+    total_bolsas = serializers.IntegerField(read_only=True)
+    total_alteracoes = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Edital
+        fields = [
+            "id",
+            "nome",
+            "ano_codigo",
+            "status",
+            "etapas",
+            "fases",
+            "proxima_etapa",
+            "total_bolsas",
+            "total_alteracoes",
+        ]
+        read_only_fields = fields
+
+    def get_etapas(self, edital):
+        return [_etapa(campo, nome, getattr(edital, campo)) for campo, nome in ETAPAS + VIGENCIA]
+
+    def get_fases(self, edital):
+        return edital.fases_do_cronograma()
+
+    def get_proxima_etapa(self, edital):
+        if edital.status != Edital.Status.EM_VIGOR:
+            return None
+        return _proxima_etapa(edital, timezone.localdate())
+
+
 class ValorBolsaItemSerializer(serializers.Serializer):
     tipo_bolsa_modalidade = serializers.IntegerField()
     valor_mensal = serializers.DecimalField(

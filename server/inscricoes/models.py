@@ -154,19 +154,6 @@ def _remover_arquivo_do_disco(sender, instance, **kwargs):
     instance.arquivo.delete(save=False)
 
 
-class NotificacaoInscricao(models.Model):
-    inscricao = models.ForeignKey(Inscricao, on_delete=models.CASCADE, related_name="notificacoes")
-    mensagem = models.TextField()
-    criada_em = models.DateTimeField(auto_now_add=True)
-    lida_em = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-criada_em", "-id"]
-
-    def __str__(self):
-        return f"Notificação da inscrição {self.inscricao_id}"
-
-
 class EtapaRecurso(models.TextChoices):
     HOMOLOGACAO = "HOMOLOGACAO", "Homologação"
 
