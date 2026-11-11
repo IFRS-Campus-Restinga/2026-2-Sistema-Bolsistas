@@ -1524,6 +1524,11 @@ class TermoCompromissoTests(CenarioBolsista):
         self.assertTrue(termo.aluno_assinou)
         self.assertFalse(termo.assinado)
         self.assertTrue(response.data["arquivo_assinado_aluno_url"])
+        aviso = Notificacao.objects.get(destinatario=self.coordenador)
+        self.assertEqual(aviso.tom, "AVISO")
+        self.assertEqual(aviso.destino, Destino.PROJETO_BOLSISTAS)
+        self.assertIn("ana", aviso.mensagem)
+        self.assertIn("Termo de Compromisso", aviso.mensagem)
 
     def test_gerar_novo_termo_invalida_assinatura_anterior_do_aluno(self):
         self.gerar()
@@ -1572,6 +1577,10 @@ class TermoCompromissoTests(CenarioBolsista):
         self.vinculo_ana.refresh_from_db()
         self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
         self.assertIsNotNone(self.vinculo_ana.data_inicio)
+        aviso = Notificacao.objects.get(destinatario=self.vinculo_ana.aluno)
+        self.assertEqual(aviso.tom, "SUCESSO")
+        self.assertEqual(aviso.destino, Destino.ALUNO_MINHA_BOLSA)
+        self.assertIn("vínculo está ativo", aviso.mensagem)
 
     def test_upload_do_aluno_rejeita_arquivo_que_nao_e_docx(self):
         self.gerar()

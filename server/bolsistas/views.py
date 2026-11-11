@@ -254,6 +254,12 @@ class TermoAssinadoView(APIView):
             )
             if anterior and anterior != termo.arquivo_assinado_aluno.name:
                 termo.arquivo_assinado_aluno.storage.delete(anterior)
+            Notificacao.para(coordenador_do_projeto(vinculo.bolsa)).aviso().titulo(
+                "Termo aguardando revisão"
+            ).mensagem(
+                f"{vinculo.aluno.nome} enviou sua parte assinada do Termo de Compromisso "
+                f'do projeto "{vinculo.bolsa.projeto.titulo}".'
+            ).destino(Destino.PROJETO_BOLSISTAS).enviar()
             registrar_log(
                 usuario=request.user,
                 acao=AcaoAuditoria.ATUALIZACAO,
@@ -285,6 +291,12 @@ class TermoAssinadoView(APIView):
             vinculo.data_inicio = timezone.localdate()
         vinculo.save(update_fields=["status", "data_inicio"])
         atualizar_status_preenchimento(vinculo.bolsa)
+        Notificacao.para(vinculo.aluno).sucesso().titulo(
+            "Termo de compromisso finalizado"
+        ).mensagem(
+            f'O Termo de Compromisso do projeto "{vinculo.bolsa.projeto.titulo}" foi '
+            "finalizado e seu vínculo está ativo."
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.ATIVACAO,
