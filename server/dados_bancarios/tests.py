@@ -11,6 +11,7 @@ from accounts.models import Aluno, CoordenadorProjeto, Usuario
 from bolsas.models import Bolsa
 from editais.models import Edital
 from inscricoes.models import Inscricao, StatusInscricao
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
 from .models import DadosBancarios
@@ -107,6 +108,23 @@ class MeusDadosBancariosTests(APITestCase):
             DadosBancarios.objects.get().banco,
             "Caixa Econômica",
         )
+
+    def test_alteracao_notifica_administradores_e_cadastro_nao(self):
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.put(self.url, self.dados_validos(), format="multipart")
+        self.assertFalse(Notificacao.objects.filter(destinatario=admin).exists())
+
+        self.client.put(
+            self.url,
+            self.dados_validos(incluir_comprovante=False, banco="Caixa Econômica"),
+            format="multipart",
+        )
+
+        notificacao = Notificacao.objects.get(destinatario=admin)
+        self.assertEqual(notificacao.titulo, "Dados bancários alterados")
+        self.assertIn("Aluno Teste", notificacao.mensagem)
 
     def test_campos_do_cadastro_sao_obrigatorios(self):
         for campo in [

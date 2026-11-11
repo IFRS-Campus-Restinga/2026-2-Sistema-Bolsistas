@@ -1,5 +1,5 @@
 from django.db import IntegrityError, transaction
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics
@@ -14,21 +14,24 @@ from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
 from editais.models import Edital
+from notificacoes.services import Destino, Notificacao, coordenador_do_projeto
 
+from .comprovantes import pdf_do_comprovante, protocolo_da_inscricao
 from .models import (
     AnexoRecurso,
     Documento,
     EtapaRecurso,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
     TipoDocumento,
+    motivo_documentos_nao_aprovados,
 )
 from .serializers import (
     CandidatoDetalheSerializer,
     CandidatoSerializer,
+    DecisaoDocumentoSerializer,
     DocumentoSerializer,
     EnvioRecursoSerializer,
     IndeferimentoSerializer,
@@ -58,8 +61,10 @@ class InscricaoListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return (
-            Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
-            .prefetch_related("documentos", "notificacoes")
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            )
+            .prefetch_related("documentos")
             .filter(aluno=self.request.user)
         )
 
@@ -73,8 +78,10 @@ class InscricaoDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return (
-            Inscricao.objects.select_related("bolsa__projeto", "bolsa__edital")
-            .prefetch_related("documentos", "notificacoes")
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            )
+            .prefetch_related("documentos")
             .filter(aluno=self.request.user)
         )
 
@@ -127,6 +134,11 @@ class EnviarInscricaoView(APIView):
         inscricao.status = StatusInscricao.PENDENTE
         inscricao.data_envio = timezone.now()
         inscricao.save(update_fields=["status", "data_envio"])
+
+        bolsa = inscricao.bolsa
+        Notificacao.para(coordenador_do_projeto(bolsa)).info().titulo("Nova inscrição").mensagem(
+            f'{request.user.nome} se inscreveu na bolsa do projeto "{bolsa.projeto.titulo}".'
+        ).destino(Destino.PROJETO_SELECAO).enviar()
 
         return Response(InscricaoSerializer(inscricao, context={"request": request}).data)
 
@@ -229,7 +241,7 @@ class CandidatoListView(generics.ListAPIView):
                     StatusInscricao.CANCELADA,
                 ]
             )
-            .select_related("aluno")
+            .select_related("aluno__perfil_aluno")
             .prefetch_related("documentos")
             .order_by("data_envio", "id")
         )
@@ -249,8 +261,29 @@ class CandidatoDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return (
             _candidatos_do_coordenador(self.request.user)
-            .select_related("aluno")
+            .select_related("aluno__perfil_aluno")
             .prefetch_related("documentos")
+        )
+
+
+def _garantir_em_analise(inscricao):
+    """Condições para o coordenador decidir sobre a inscrição ou sobre os documentos dela."""
+    if inscricao.status != StatusInscricao.PENDENTE or not inscricao.data_envio:
+        raise ValidationError(
+            {"detail": "Somente inscrições enviadas e pendentes podem ser analisadas."}
+        )
+    if inscricao.bolsa.status not in (StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO):
+        raise ValidationError({"detail": "Esta bolsa não está disponível para homologação."})
+    if inscricao.bolsa.edital.status != Edital.Status.EM_VIGOR:
+        raise ValidationError(
+            {"detail": "O edital precisa estar em vigor para analisar inscrições."}
+        )
+
+    if not inscricao.bolsa.edital.inscricoes_encerradas():
+        raise ValidationError(
+            {
+                "detail": "A homologação e o indeferimento só são permitidos após o encerramento das inscrições."
+            }
         )
 
 
@@ -265,23 +298,7 @@ class DecisaoInscricaoView(APIView):
             pk=pk,
             bolsa__projeto__coordenador_projeto__usuario=request.user,
         )
-        if inscricao.status != StatusInscricao.PENDENTE or not inscricao.data_envio:
-            raise ValidationError(
-                {"detail": "Somente inscrições enviadas e pendentes podem ser analisadas."}
-            )
-        if inscricao.bolsa.status not in (StatusBolsa.ABERTA, StatusBolsa.EM_SELECAO):
-            raise ValidationError({"detail": "Esta bolsa não está disponível para homologação."})
-        if inscricao.bolsa.edital.status != Edital.Status.EM_VIGOR:
-            raise ValidationError(
-                {"detail": "O edital precisa estar em vigor para analisar inscrições."}
-            )
-
-        if not inscricao.bolsa.edital.inscricoes_encerradas():
-            raise ValidationError(
-                {
-                    "detail": "A homologação e o indeferimento só são permitidos após o encerramento das inscrições."
-                }
-            )
+        _garantir_em_analise(inscricao)
 
         justificativa = ""
         if self.decisao == StatusInscricao.INDEFERIDA:
@@ -294,6 +311,9 @@ class DecisaoInscricaoView(APIView):
                 raise ValidationError(
                     {"detail": "Não é possível homologar: faltam documentos obrigatórios."}
                 )
+            bloqueio = motivo_documentos_nao_aprovados(inscricao.documentos.all())
+            if bloqueio:
+                raise ValidationError({"detail": f"Não é possível homologar. {bloqueio}"})
 
         inscricao.status = self.decisao
         inscricao.justificativa_indeferimento = justificativa
@@ -310,7 +330,12 @@ class DecisaoInscricaoView(APIView):
         mensagem = f'Sua inscrição no projeto "{inscricao.bolsa.projeto.titulo}" foi {inscricao.get_status_display().lower()}.'
         if justificativa:
             mensagem += f" Motivo: {justificativa}"
-        NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+        homologada = self.decisao == StatusInscricao.HOMOLOGADA
+        aviso = Notificacao.para(inscricao.aluno)
+        aviso = aviso.sucesso() if homologada else aviso.erro()
+        aviso.titulo("Inscrição homologada" if homologada else "Inscrição indeferida").mensagem(
+            mensagem
+        ).destino(Destino.ALUNO_INSCRICOES).enviar()
         return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
 
 
@@ -322,15 +347,47 @@ class IndeferirInscricaoView(DecisaoInscricaoView):
     decisao = StatusInscricao.INDEFERIDA
 
 
-class LerNotificacaoView(APIView):
+class DecidirDocumentoView(APIView):
+    """Aprova ou recusa um documento da inscrição; a decisão pode mudar enquanto a
+    inscrição está em análise. Os documentos do convite seguem o mesmo fluxo em
+    vinculo_direto.DecidirDocumentoConviteView."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        documento = get_object_or_404(
+            Documento,
+            pk=pk,
+            inscricao__bolsa__projeto__coordenador_projeto__usuario=request.user,
+        )
+        inscricao = Inscricao.objects.select_for_update().get(pk=documento.inscricao_id)
+        _garantir_em_analise(inscricao)
+
+        serializer = DecisaoDocumentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        documento.decidir(**serializer.validated_data, usuario=request.user)
+        return Response(CandidatoDetalheSerializer(inscricao, context={"request": request}).data)
+
+
+class ComprovanteInscricaoView(APIView):
+    """PDF do comprovante de inscrição (US91), só para o aluno dono e depois do envio."""
+
     permission_classes = [IsAuthenticated, IsAluno]
 
-    def post(self, request, pk):
-        notificacao = get_object_or_404(NotificacaoInscricao, pk=pk, inscricao__aluno=request.user)
-        NotificacaoInscricao.objects.filter(pk=notificacao.pk, lida_em__isnull=True).update(
-            lida_em=timezone.now()
+    def get(self, request, pk):
+        inscricao = get_object_or_404(
+            Inscricao.objects.select_related(
+                "aluno__perfil_aluno", "bolsa__projeto", "bolsa__edital"
+            ).prefetch_related("documentos"),
+            pk=pk,
+            aluno=request.user,
+            data_envio__isnull=False,
         )
-        return Response({"detail": "Notificação marcada como lida."})
+        resposta = HttpResponse(pdf_do_comprovante(inscricao), content_type="application/pdf")
+        nome = f"comprovante-{protocolo_da_inscricao(inscricao)}.pdf"
+        resposta["Content-Disposition"] = f'attachment; filename="{nome}"'
+        return resposta
 
 
 class DocumentoArquivoView(APIView):
@@ -443,6 +500,13 @@ class RecursosInscricaoView(APIView):
                     anexo.arquivo.save(arquivo.name, arquivo, save=False)
                     arquivos_salvos.append((anexo.arquivo.storage, anexo.arquivo.name))
                     anexo.save()
+                bolsa = inscricao.bolsa
+                Notificacao.para(coordenador_do_projeto(bolsa)).aviso().titulo(
+                    "Novo recurso de homologação"
+                ).mensagem(
+                    f"{request.user.nome} enviou um recurso contra o indeferimento da "
+                    f'inscrição na bolsa do projeto "{bolsa.projeto.titulo}".'
+                ).destino(Destino.PROJETO_SELECAO).enviar()
                 resultado = resposta_recursos(inscricao, request)
             return Response(resultado, status=201)
         except Exception as exc:
@@ -525,7 +589,12 @@ class JulgarRecursoView(APIView):
         )
         if recurso.justificativa_julgamento:
             mensagem += f" Justificativa: {recurso.justificativa_julgamento}"
-        NotificacaoInscricao.objects.create(inscricao=inscricao, mensagem=mensagem)
+        deferido = recurso.status == StatusRecurso.DEFERIDO
+        aviso = Notificacao.para(inscricao.aluno)
+        aviso = aviso.sucesso() if deferido else aviso.erro()
+        aviso.titulo("Recurso deferido" if deferido else "Recurso indeferido").mensagem(
+            mensagem
+        ).destino(Destino.ALUNO_RECURSOS).enviar()
         return Response(resposta_recursos(inscricao, request))
 
 
@@ -548,15 +617,18 @@ class RecursosListView(APIView):
     permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
 
     def get(self, request):
-        recursos = (
-            Recurso.objects.filter(
-                inscricao__in=inscricoes_acessiveis(request.user), etapa=EtapaRecurso.HOMOLOGACAO
-            )
-            .select_related(
-                "inscricao__aluno", "inscricao__bolsa__projeto", "inscricao__bolsa__edital"
-            )
-            .prefetch_related("anexos")
+        recursos = Recurso.objects.filter(
+            inscricao__in=inscricoes_acessiveis(request.user), etapa=EtapaRecurso.HOMOLOGACAO
         )
+        # ?bolsa=<id> restringe à bolsa (etapa Recursos da Seleção de candidatos).
+        bolsa = request.query_params.get("bolsa")
+        if bolsa:
+            if not bolsa.isdigit():
+                raise ValidationError({"bolsa": "Informe o id numérico da bolsa."})
+            recursos = recursos.filter(inscricao__bolsa_id=bolsa)
+        recursos = recursos.select_related(
+            "inscricao__aluno", "inscricao__bolsa__projeto", "inscricao__bolsa__edital"
+        ).prefetch_related("anexos")
         return Response(RecursoSerializer(recursos, many=True, context={"request": request}).data)
 
 

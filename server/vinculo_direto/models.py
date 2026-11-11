@@ -58,23 +58,3 @@ class ConviteVinculoDireto(models.Model):
 
     def __str__(self):
         return f"Convite {self.aluno} -> {self.bolsa} ({self.get_status_display()})"
-
-
-class NotificacaoConvite(models.Model):
-    convite = models.ForeignKey(
-        ConviteVinculoDireto, on_delete=models.CASCADE, related_name="notificacoes"
-    )
-    coordenador_area = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="notificacoes_vinculo_direto",
-    )
-    mensagem = models.TextField()
-    criada_em = models.DateTimeField(auto_now_add=True)
-    lida_em = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-criada_em", "-id"]
-
-    def __str__(self):
-        return f"Notificação de vínculo direto para {self.coordenador_area_id}"

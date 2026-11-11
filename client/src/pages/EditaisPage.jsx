@@ -150,37 +150,40 @@ export default function EditaisPage() {
     })
   }
 
-  const linhas = editais.map((edital) => [
-    edital.nome,
-    edital.ano_codigo,
-    <Badge key={`status-${edital.id}`} status={edital.status} />,
-    <a
-      key={`documento-${edital.id}`}
-      href={edital.link_documento_oficial}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Documento oficial
-    </a>,
-    <AcoesCell
-      key={`acoes-${edital.id}`}
-      mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
-      ocupado={processandoId === edital.id}
-      acoes={[
-        {
-          label: 'Editar',
-          disabled: processandoId !== null || mostrarFormulario,
-          onClick: () => abrirEdicao(edital),
-        },
-        {
-          label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
-          variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
-          disabled: processandoId !== null || mostrarFormulario,
-          onClick: () => confirmarStatus(edital),
-        },
-      ]}
-    />,
-  ])
+  // Arquivar é do administrador; para a coordenação de área o arquivado sai da lista.
+  const linhas = editais
+    .filter((edital) => edital.status !== 'ARQUIVADO')
+    .map((edital) => [
+      edital.nome,
+      edital.ano_codigo,
+      <Badge key={`status-${edital.id}`} status={edital.status} />,
+      <a
+        key={`documento-${edital.id}`}
+        href={edital.link_documento_oficial}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Documento oficial
+      </a>,
+      <AcoesCell
+        key={`acoes-${edital.id}`}
+        mostrar={['RASCUNHO', 'EM_VIGOR'].includes(edital.status)}
+        ocupado={processandoId === edital.id}
+        acoes={[
+          {
+            label: 'Editar',
+            disabled: processandoId !== null || mostrarFormulario,
+            onClick: () => abrirEdicao(edital),
+          },
+          {
+            label: edital.status === 'RASCUNHO' ? 'Publicar' : 'Encerrar',
+            variant: edital.status === 'RASCUNHO' ? 'accent' : 'danger',
+            disabled: processandoId !== null || mostrarFormulario,
+            onClick: () => confirmarStatus(edital),
+          },
+        ]}
+      />,
+    ])
 
   return (
     <>

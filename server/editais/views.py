@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
@@ -6,13 +7,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsCoordenadorArea, IsCoordenadorProjeto
+from accounts.models import Usuario
+from accounts.permissions import IsAdministrador, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsas.models import EditalValorBolsa, StatusBolsa
+from bolsas.models import EditalValorBolsa, StatusBolsa, TipoBolsa
 
-from .models import Edital
+from .models import AlteracaoCronograma, Edital
 from .serializers import (
+    CAMPOS_CRONOGRAMA,
+    AlteracaoCronogramaSerializer,
+    CronogramaConsolidadoSerializer,
     CronogramaEditalSerializer,
     EditalSerializer,
     ValoresBolsaEditalSerializer,
@@ -28,13 +33,17 @@ STATUS_BOLSA_FINALIZADOS = {
 
 
 class EditalListCreateView(generics.ListCreateAPIView):
-    queryset = Edital.objects.order_by("-id")
+    queryset = Edital.objects.annotate(total_bolsas=Count("bolsas")).order_by("-id")
     serializer_class = EditalSerializer
 
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAuthenticated(), IsCoordenadorArea()]
-        return [IsAuthenticated(), (IsCoordenadorProjeto | IsCoordenadorArea)()]
+        # O administrador só consulta a lista (aba Editais do admin).
+        return [
+            IsAuthenticated(),
+            (IsCoordenadorProjeto | IsCoordenadorArea | IsAdministrador)(),
+        ]
 
     def perform_create(self, serializer):
         edital = serializer.save()
@@ -154,6 +163,82 @@ class EncerrarEditalView(APIView):
         )
 
         return Response(EditalSerializer(edital).data)
+
+
+def _filtro_bolsas_do_perfil(usuario):
+    """Bolsas que cada tipo de coordenador acompanha; o administrador vê todas."""
+    if usuario.role == Usuario.Role.COORDENADOR_AREA:
+        perfil = getattr(usuario, "perfil_coordenador_area", None)
+        if perfil is None:
+            # Coordenador de área ainda sem área cadastrada não acompanha nenhuma bolsa.
+            return Q(bolsas__in=[])
+        return Q(bolsas__tipo__in=[perfil.tipo_area, TipoBolsa.INDISSOCIAVEL])
+    if usuario.role == Usuario.Role.COORDENADOR_PROJETO:
+        return Q(bolsas__projeto__coordenador_projeto__usuario=usuario)
+    return Q()
+
+
+class CronogramaConsolidadoView(APIView):
+    """Todos os editais visíveis ao perfil, com as datas-chave do cronograma (US19).
+
+    O coordenador de projeto só acompanha editais em vigor; coordenador de área e
+    administrador veem todos. A contagem de bolsas segue o escopo de cada perfil.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        IsCoordenadorArea | IsCoordenadorProjeto | IsAdministrador,
+    ]
+
+    def get(self, request):
+        editais = Edital.objects.all()
+
+        if request.user.role == Usuario.Role.COORDENADOR_PROJETO:
+            editais = editais.filter(status=Edital.Status.EM_VIGOR)
+
+        status_filtro = request.query_params.get("status", "").strip()
+        if status_filtro:
+            if status_filtro not in Edital.Status.values:
+                raise ValidationError({"status": f"Valor inválido: {status_filtro}."})
+            editais = editais.filter(status=status_filtro)
+
+        editais = editais.annotate(
+            total_bolsas=Count(
+                "bolsas", filter=_filtro_bolsas_do_perfil(request.user), distinct=True
+            ),
+            total_alteracoes=Count("historico_cronograma", distinct=True),
+        ).order_by("-id")
+
+        return Response(CronogramaConsolidadoSerializer(editais, many=True).data)
+
+
+class HistoricoCronogramaView(generics.ListAPIView):
+    """Alterações de prazos do cronograma: data anterior, nova data, quem e quando (US20).
+
+    Disponível só para administrador e coordenador de área. Filtros opcionais:
+    ``edital`` (id) e ``campo`` (etapa do cronograma).
+    """
+
+    serializer_class = AlteracaoCronogramaSerializer
+    permission_classes = [IsAuthenticated, IsCoordenadorArea | IsAdministrador]
+
+    def get_queryset(self):
+        alteracoes = AlteracaoCronograma.objects.select_related("edital", "responsavel")
+
+        edital = self.request.query_params.get("edital", "").strip()
+        if edital:
+            # isdigit sozinho aceita dígitos como "²", que o int() do filtro rejeita.
+            if not (edital.isascii() and edital.isdigit()):
+                raise ValidationError({"edital": "Informe o id numérico do edital."})
+            alteracoes = alteracoes.filter(edital_id=edital)
+
+        campo = self.request.query_params.get("campo", "").strip()
+        if campo:
+            if campo not in CAMPOS_CRONOGRAMA:
+                raise ValidationError({"campo": f"Valor inválido: {campo}."})
+            alteracoes = alteracoes.filter(campo=campo)
+
+        return alteracoes
 
 
 class ValoresBolsaEditalView(APIView):

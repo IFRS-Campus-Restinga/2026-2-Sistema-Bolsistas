@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
+from django.utils import timezone
 
 from bolsas.models import Bolsa
 
@@ -61,6 +62,12 @@ class TipoDocumento(models.TextChoices):
 EXTENSOES_DOCUMENTO = ["pdf", "jpg", "jpeg", "png"]
 
 
+class DecisaoDocumento(models.TextChoices):
+    PENDENTE = "PENDENTE", "Pendente"
+    APROVADO = "APROVADO", "Aprovado"
+    REJEITADO = "REJEITADO", "Recusado"
+
+
 def caminho_documento(instance, filename):
     if instance.inscricao_id:
         return f"inscricoes/{instance.inscricao_id}/{instance.tipo}/{filename}"
@@ -82,38 +89,69 @@ class Documento(models.Model):
     nome_original = models.CharField(max_length=255, blank=True, default="")
     arquivo = models.FileField(upload_to=caminho_documento)
     enviado_em = models.DateTimeField(auto_now_add=True)
+    # Revisão do coordenador, documento a documento (US89).
+    decisao = models.CharField(
+        max_length=10, choices=DecisaoDocumento.choices, default=DecisaoDocumento.PENDENTE
+    )
+    motivo_recusa = models.TextField(blank=True, default="")
+    decidido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="documentos_decididos",
+    )
+    decidido_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=~Q(decisao="REJEITADO", motivo_recusa=""),
+                name="documento_recusado_exige_motivo",
+            ),
+            models.CheckConstraint(
+                condition=Q(decisao="PENDENTE", decidido_em__isnull=True)
+                | (~Q(decisao="PENDENTE") & Q(decidido_em__isnull=False)),
+                name="documento_decisao_coerente_com_data",
+            ),
             models.CheckConstraint(
                 condition=(
                     Q(inscricao__isnull=False, convite__isnull=True)
                     | Q(inscricao__isnull=True, convite__isnull=False)
                 ),
                 name="documento_pertence_a_inscricao_xor_convite",
-            )
+            ),
         ]
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.inscricao_id or self.convite_id}"
 
+    def decidir(self, decisao, motivo_recusa, usuario):
+        """Registra a aprovação ou a recusa do documento pelo coordenador."""
+        self.decisao = decisao
+        self.motivo_recusa = motivo_recusa if decisao == DecisaoDocumento.REJEITADO else ""
+        self.decidido_por = usuario
+        self.decidido_em = timezone.now()
+        self.save(update_fields=["decisao", "motivo_recusa", "decidido_por", "decidido_em"])
+
+
+def motivo_documentos_nao_aprovados(documentos):
+    """Texto do bloqueio quando algum documento não foi aprovado; vazio se todos foram."""
+    recusados = documentos.filter(decisao=DecisaoDocumento.REJEITADO).count()
+    pendentes = documentos.filter(decisao=DecisaoDocumento.PENDENTE).count()
+    partes = []
+    if pendentes:
+        partes.append(f"{pendentes} {'pendente' if pendentes == 1 else 'pendentes'} de análise")
+    if recusados:
+        partes.append(f"{recusados} {'recusado' if recusados == 1 else 'recusados'}")
+    if not partes:
+        return ""
+    return "Todos os documentos precisam estar aprovados: " + " e ".join(partes) + "."
+
 
 @receiver(pre_delete, sender=Documento)
 def _remover_arquivo_do_disco(sender, instance, **kwargs):
     instance.arquivo.delete(save=False)
-
-
-class NotificacaoInscricao(models.Model):
-    inscricao = models.ForeignKey(Inscricao, on_delete=models.CASCADE, related_name="notificacoes")
-    mensagem = models.TextField()
-    criada_em = models.DateTimeField(auto_now_add=True)
-    lida_em = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-criada_em", "-id"]
-
-    def __str__(self):
-        return f"Notificação da inscrição {self.inscricao_id}"
 
 
 class EtapaRecurso(models.TextChoices):

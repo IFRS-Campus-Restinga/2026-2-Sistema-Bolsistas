@@ -1,19 +1,38 @@
 import { useState } from 'react'
-import { Alert, Button, FileField, IconPaperclip, useConfirm, useToast } from '../components'
+import { projetosFetch } from '../api'
+import {
+  Alert,
+  Button,
+  Card,
+  DocumentViewer,
+  EmptyState,
+  FileField,
+  FormActions,
+  FormField,
+  IconEye,
+  IconFileText,
+  IconPaperclip,
+  Modal,
+  RichTextEditor,
+  RichTextView,
+  SectionTitle,
+  useConfirm,
+  useToast,
+} from '../components'
 import {
   enviarEmentaProjeto,
   removerEmentaProjeto,
   validarArquivoEmenta,
 } from '../utils/ementaProjeto'
+import { mensagemDeErro } from '../utils/mensagemDeErro'
 
-export default function EmentaProjetoCard({ projeto, onAtualizado }) {
+/** Arquivo da ementa (PDF, DOC ou DOCX): enviar, substituir e remover. */
+function ArquivoDaEmenta({ projeto, onAtualizado }) {
   const confirmar = useConfirm()
   const toast = useToast()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
   const [versaoCampo, setVersaoCampo] = useState(0)
-
-  const podeAlterar = projeto.status === 'ATIVO'
 
   async function selecionarArquivo(arquivo) {
     if (!arquivo) return
@@ -27,7 +46,7 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
     setErro('')
     try {
       onAtualizado(await enviarEmentaProjeto(projeto.id, arquivo))
-      toast({ message: 'Matriz/ementa anexada.', tone: 'success' })
+      toast({ message: 'Arquivo da ementa anexado.', tone: 'success' })
     } catch (e) {
       setErro(e.message)
     } finally {
@@ -38,15 +57,15 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
 
   function remover() {
     confirmar({
-      title: 'Remover matriz/ementa',
-      message: 'Remover o arquivo de matriz/ementa deste projeto?',
+      title: 'Remover arquivo da ementa',
+      message: 'Remover o arquivo da ementa deste projeto?',
       confirmLabel: 'Remover',
       tone: 'danger',
       onConfirm: async () => {
         try {
           await removerEmentaProjeto(projeto.id)
           onAtualizado({ ...projeto, arquivo_ementa: null, nome_original_arquivo: '' })
-          toast({ message: 'Matriz/ementa removida.', tone: 'success' })
+          toast({ message: 'Arquivo da ementa removido.', tone: 'success' })
         } catch (e) {
           setErro(e.message)
         }
@@ -55,46 +74,150 @@ export default function EmentaProjetoCard({ projeto, onAtualizado }) {
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-      <strong>Matriz / ementa</strong>
+    <FormField
+      label="Arquivo da ementa (opcional)"
+      hint={`${projeto.arquivo_ementa ? 'Enviar outro arquivo substitui o atual. ' : ''}.pdf, .doc ou .docx, até 10 MB.`}
+    >
       {erro && <Alert tone="error">{erro}</Alert>}
-
-      <div className="mt-2 flex items-center gap-3">
-        {projeto.arquivo_ementa ? (
-          <a
-            href={projeto.arquivo_ementa}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1"
-          >
-            <IconPaperclip size={14} />
-            {projeto.nome_original_arquivo || 'Abrir arquivo'}
-          </a>
-        ) : (
-          <span className="text-gray-400">Nenhum arquivo anexado.</span>
-        )}
-        {podeAlterar && projeto.arquivo_ementa && (
-          <Button size="sm" variant="danger" onClick={remover} disabled={enviando}>
+      {projeto.arquivo_ementa && (
+        <div className="flex items-center justify-between gap-3 rounded-controle border border-gray-200 bg-gray-50 py-1.5 pr-1.5 pl-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
+            <IconPaperclip size={15} className="shrink-0 text-gray-400" />
+            <span className="truncate">{projeto.nome_original_arquivo || 'Arquivo anexado'}</span>
+          </span>
+          <Button size="sm" variant="ghost" onClick={remover} disabled={enviando}>
             Remover
           </Button>
-        )}
-      </div>
-
-      {podeAlterar && (
-        <div className="mt-3">
-          <FileField
-            key={versaoCampo}
-            value={enviando ? 'Enviando...' : ''}
-            onChange={selecionarArquivo}
-            accept=".pdf,.doc,.docx"
-            disabled={enviando}
-          />
-          <p className="mt-1 text-xs text-gray-400">
-            {projeto.arquivo_ementa ? 'Enviar outro arquivo substitui o atual. ' : ''}
-            .pdf, .doc ou .docx, até 10 MB.
-          </p>
         </div>
       )}
-    </div>
+      <FileField
+        key={versaoCampo}
+        value={enviando ? 'Enviando...' : ''}
+        onChange={selecionarArquivo}
+        accept=".pdf,.doc,.docx"
+        disabled={enviando}
+      />
+    </FormField>
+  )
+}
+
+/**
+ * Ementa do projeto como no protótipo (US90): o texto escrito no editor, com "Ver PDF"
+ * para o arquivo anexado e "Editar" para o texto e o arquivo.
+ */
+export default function EmentaProjetoCard({ projeto, onAtualizado, className = '' }) {
+  const toast = useToast()
+  const [editando, setEditando] = useState(false)
+  const [rascunho, setRascunho] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [verArquivo, setVerArquivo] = useState(false)
+
+  const podeAlterar = projeto.status === 'ATIVO'
+  const temTexto = Boolean(projeto.ementa_html)
+
+  function abrirEdicao() {
+    setRascunho(projeto.ementa_html || '')
+    setErro('')
+    setEditando(true)
+  }
+
+  async function salvar() {
+    setSalvando(true)
+    setErro('')
+    try {
+      const res = await projetosFetch(`/${projeto.id}/ementa/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ementa_html: rascunho }),
+      })
+      const dados = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(mensagemDeErro(dados, 'Não foi possível salvar a ementa.'))
+      onAtualizado(dados)
+      setEditando(false)
+      toast({ message: 'Ementa salva.', tone: 'success' })
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Card className={className}>
+      <SectionTitle
+        title="Ementa"
+        action={
+          <div className="flex gap-1.5">
+            {projeto.arquivo_ementa && (
+              <Button size="sm" variant="ghost" onClick={() => setVerArquivo(true)}>
+                <IconEye /> Ver PDF
+              </Button>
+            )}
+            {podeAlterar && (
+              <Button size="sm" onClick={abrirEdicao}>
+                Editar
+              </Button>
+            )}
+          </div>
+        }
+      />
+      {temTexto ? (
+        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+          <RichTextView html={projeto.ementa_html} maxHeight={260} />
+        </div>
+      ) : (
+        <EmptyState
+          compact
+          icon={<IconFileText />}
+          title="Nenhuma ementa escrita"
+          description="Descreva objetivos, metodologia e resultados esperados do projeto."
+          action={
+            podeAlterar && (
+              <Button size="sm" variant="primary" onClick={abrirEdicao}>
+                Escrever ementa
+              </Button>
+            )
+          }
+        />
+      )}
+
+      {editando && (
+        <Modal title="Editar ementa" width={720} onClose={() => !salvando && setEditando(false)}>
+          {erro && <Alert tone="error">{erro}</Alert>}
+          <div className="mb-4">
+            <RichTextEditor
+              value={rascunho}
+              onChange={setRascunho}
+              minHeight={280}
+              placeholder="Descreva objetivos, metodologia e resultados esperados…"
+            />
+          </div>
+          <ArquivoDaEmenta projeto={projeto} onAtualizado={onAtualizado} />
+          <FormActions>
+            <Button onClick={() => setEditando(false)} disabled={salvando}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={salvar} loading={salvando}>
+              Salvar ementa
+            </Button>
+          </FormActions>
+        </Modal>
+      )}
+
+      {verArquivo && (
+        <DocumentViewer
+          docs={[
+            {
+              id: 'ementa',
+              label: 'Ementa do projeto',
+              fileName: projeto.nome_original_arquivo || 'ementa',
+              url: projeto.arquivo_ementa,
+            },
+          ]}
+          onClose={() => setVerArquivo(false)}
+        />
+      )}
+    </Card>
   )
 }

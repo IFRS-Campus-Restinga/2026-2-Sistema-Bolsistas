@@ -11,16 +11,28 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Usuario
-from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
+from accounts.permissions import IsAluno, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsas.serializers import BolsaSerializer
-from bolsistas.services import vincular_por_convite
-from inscricoes.models import Documento, TipoDocumento
+from bolsistas.services import (
+    MOTIVO_ALUNO_JA_BOLSISTA,
+    MOTIVO_VOCE_JA_E_BOLSISTA,
+    tem_vinculo_ativo,
+    vincular_por_convite,
+)
+from inscricoes.models import (
+    DecisaoDocumento,
+    Documento,
+    TipoDocumento,
+    motivo_documentos_nao_aprovados,
+)
+from inscricoes.serializers import DecisaoDocumentoSerializer
+from notificacoes.services import Destino, Notificacao, coordenador_do_projeto
 
-from .models import ConviteVinculoDireto, NotificacaoConvite, StatusConvite
-from .regras import bolsa_elegivel_para_convite, vagas_livres
+from .models import ConviteVinculoDireto, StatusConvite
+from .regras import STATUS_ACEITAM_CONVITE, bolsa_elegivel_para_convite, vagas_livres
 from .serializers import ConviteSerializer, DocumentoConviteSerializer, RejeitarConviteSerializer
 
 DOCUMENTOS_OBRIGATORIOS = {TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA}
@@ -78,8 +90,16 @@ class ConviteListCreateView(generics.ListCreateAPIView):
             .prefetch_related("documentos")
         )
 
+    # Grava e avisa juntos: se o aviso falhar, nada fica salvo pela metade.
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(coordenador_solicitante=self.request.user, status=StatusConvite.PENDENTE)
+        convite = serializer.save(
+            coordenador_solicitante=self.request.user, status=StatusConvite.PENDENTE
+        )
+        Notificacao.para(convite.aluno).info().titulo("Novo convite de bolsa").mensagem(
+            f"{self.request.user.nome} convidou você para a bolsa do projeto "
+            f'"{convite.bolsa.projeto.titulo}".'
+        ).destino(Destino.ALUNO_CONVITES).enviar()
 
 
 class ConviteCoordenadorDetailView(generics.RetrieveAPIView):
@@ -128,6 +148,20 @@ class AprovarConviteView(APIView):
             raise ValidationError(
                 {"detail": "Não é possível aprovar: faltam documentos obrigatórios."}
             )
+        bloqueio = motivo_documentos_nao_aprovados(convite.documentos.all())
+        if bloqueio:
+            raise ValidationError({"detail": f"Não é possível aprovar. {bloqueio}"})
+        if tem_vinculo_ativo(convite.aluno):
+            raise ValidationError({"detail": MOTIVO_ALUNO_JA_BOLSISTA})
+        if convite.bolsa.status not in STATUS_ACEITAM_CONVITE:
+            raise ValidationError(
+                {
+                    "detail": (
+                        f'A bolsa está "{convite.bolsa.get_status_display()}" e não aceita '
+                        "mais vínculo direto."
+                    )
+                }
+            )
 
         convite.status = StatusConvite.APROVADO
         convite.responsavel_decisao = request.user
@@ -151,16 +185,38 @@ class AprovarConviteView(APIView):
             ),
         )
 
-        if bolsa.coordenador_area_id:
-            NotificacaoConvite.objects.create(
-                convite=convite,
-                coordenador_area=bolsa.coordenador_area.usuario,
-                mensagem=(
-                    f'Um vínculo direto foi efetivado na bolsa do projeto "{bolsa.projeto.titulo}" '
-                    f"(edital {bolsa.edital.nome})."
-                ),
+        Notificacao.para(convite.aluno).sucesso().titulo("Convite aprovado").mensagem(
+            f'Sua documentação foi aprovada e você é bolsista do projeto "{bolsa.projeto.titulo}".'
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+        # Frequências é onde a área acompanha cada bolsista, inclusive o recém-vinculado.
+        Notificacao.para(bolsa.coordenador_area).info().titulo("Vínculo direto efetivado").mensagem(
+            f"{convite.aluno.nome} passou a ser bolsista da bolsa do projeto "
+            f'"{bolsa.projeto.titulo}" (edital {bolsa.edital.nome}) por vínculo direto.'
+        ).destino(Destino.AREA_FREQUENCIAS).enviar()
+
+        return Response(ConviteSerializer(convite, context={"request": request}).data)
+
+
+class DecidirDocumentoConviteView(APIView):
+    """Aprova ou recusa um documento do convite, no mesmo fluxo dos documentos da
+    inscrição; a decisão pode mudar enquanto o convite aguarda a análise."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        documento = get_object_or_404(
+            Documento, pk=pk, convite__in=_convites_do_coordenador(request.user)
+        )
+        convite = ConviteVinculoDireto.objects.select_for_update().get(pk=documento.convite_id)
+        if convite.status != StatusConvite.ENVIADO:
+            raise ValidationError(
+                {"detail": "Somente documentos de convites enviados podem ser analisados."}
             )
 
+        serializer = DecisaoDocumentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        documento.decidir(**serializer.validated_data, usuario=request.user)
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -195,6 +251,16 @@ class RejeitarConviteView(APIView):
                 "data_decisao",
             ]
         )
+        projeto = convite.bolsa.projeto.titulo
+        if dados["definitivo"]:
+            aviso = Notificacao.para(convite.aluno).erro().titulo("Convite rejeitado")
+            texto = f'Sua documentação para a bolsa do projeto "{projeto}" foi rejeitada.'
+        else:
+            aviso = Notificacao.para(convite.aluno).aviso().titulo("Documentação devolvida")
+            texto = f'Ajuste a documentação do convite para a bolsa do projeto "{projeto}".'
+        aviso.mensagem(f"{texto} Justificativa: {convite.justificativa_rejeicao}").destino(
+            Destino.ALUNO_CONVITES
+        ).enviar()
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -233,6 +299,16 @@ class ConviteDetailView(generics.RetrieveUpdateAPIView):
         serializer.save()
 
 
+def _notificar_resposta(convite, aceito):
+    bolsa = convite.bolsa
+    aviso = Notificacao.para(coordenador_do_projeto(bolsa))
+    aviso = aviso.sucesso() if aceito else aviso.aviso()
+    aviso.titulo("Convite aceito" if aceito else "Convite recusado").mensagem(
+        f"{convite.aluno.nome} {'aceitou' if aceito else 'recusou'} o convite para a bolsa do "
+        f'projeto "{bolsa.projeto.titulo}".'
+    ).destino(Destino.PROJETO_CONVITES).enviar()
+
+
 class AceitarConviteView(APIView):
     permission_classes = [IsAuthenticated, IsAluno]
 
@@ -243,9 +319,12 @@ class AceitarConviteView(APIView):
         )
         if convite.status != StatusConvite.PENDENTE:
             raise ValidationError({"detail": "Este convite já foi respondido."})
+        if tem_vinculo_ativo(request.user):
+            raise ValidationError({"detail": MOTIVO_VOCE_JA_E_BOLSISTA})
         convite.status = StatusConvite.EM_PREENCHIMENTO
         convite.data_resposta_aluno = timezone.now()
         convite.save(update_fields=["status", "data_resposta_aluno"])
+        _notificar_resposta(convite, aceito=True)
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -262,6 +341,7 @@ class RecusarConviteView(APIView):
         convite.status = StatusConvite.RECUSADO
         convite.data_resposta_aluno = timezone.now()
         convite.save(update_fields=["status", "data_resposta_aluno"])
+        _notificar_resposta(convite, aceito=False)
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -274,6 +354,8 @@ class EnviarConviteView(APIView):
             ConviteVinculoDireto.objects.select_for_update(), pk=pk, aluno=request.user
         )
         _garantir_editavel(convite)
+        if tem_vinculo_ativo(request.user):
+            raise ValidationError({"detail": MOTIVO_VOCE_JA_E_BOLSISTA})
 
         if not convite.termos_aceitos:
             raise ValidationError(
@@ -286,9 +368,23 @@ class EnviarConviteView(APIView):
             nomes = ", ".join(TipoDocumento(t).label for t in faltando)
             raise ValidationError({"detail": f"Documentos obrigatórios pendentes: {nomes}."})
 
+        recusados = convite.documentos.filter(decisao=DecisaoDocumento.REJEITADO)
+        if recusados.exists():
+            nomes = ", ".join(sorted({d.get_tipo_display() for d in recusados}))
+            raise ValidationError(
+                {"detail": f"Substitua os documentos recusados antes de enviar: {nomes}."}
+            )
+
         convite.status = StatusConvite.ENVIADO
         convite.data_envio_documentos = timezone.now()
         convite.save(update_fields=["status", "data_envio_documentos"])
+        bolsa = convite.bolsa
+        Notificacao.para(coordenador_do_projeto(bolsa)).info().titulo(
+            "Documentação do convite enviada"
+        ).mensagem(
+            f"{convite.aluno.nome} enviou a documentação do convite para a bolsa do projeto "
+            f'"{bolsa.projeto.titulo}". Analise para aprovar ou rejeitar.'
+        ).destino(Destino.PROJETO_CONVITES).enviar()
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 
 
@@ -367,34 +463,3 @@ class DocumentoConviteArquivoView(APIView):
         return FileResponse(
             arquivo, as_attachment=True, filename=documento.nome_original or "documento"
         )
-
-
-class NotificacaoConviteListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsCoordenadorArea]
-
-    def get(self, request):
-        notificacoes = NotificacaoConvite.objects.filter(
-            coordenador_area=request.user
-        ).select_related("convite__bolsa__projeto")
-        return Response(
-            [
-                {
-                    "id": n.id,
-                    "mensagem": n.mensagem,
-                    "criada_em": n.criada_em,
-                    "lida_em": n.lida_em,
-                }
-                for n in notificacoes
-            ]
-        )
-
-
-class LerNotificacaoConviteView(APIView):
-    permission_classes = [IsAuthenticated, IsCoordenadorArea]
-
-    def post(self, request, pk):
-        notificacao = get_object_or_404(NotificacaoConvite, pk=pk, coordenador_area=request.user)
-        NotificacaoConvite.objects.filter(pk=notificacao.pk, lida_em__isnull=True).update(
-            lida_em=timezone.now()
-        )
-        return Response({"detail": "Notificação marcada como lida."})

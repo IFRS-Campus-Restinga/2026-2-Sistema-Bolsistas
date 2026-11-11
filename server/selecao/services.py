@@ -5,7 +5,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 
 from bolsas.models import StatusBolsa
-from bolsistas.services import STATUS_VINCULO_OCUPA_VAGA, capacidade_efetiva
+from bolsistas.services import (
+    MOTIVO_ALUNO_JA_BOLSISTA,
+    STATUS_VINCULO_OCUPA_VAGA,
+    alunos_com_vinculo_ativo,
+    capacidade_efetiva,
+)
 from editais.models import Edital
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
 
@@ -194,6 +199,7 @@ class SituacaoVagas:
     indicados: set
     desistentes: set
     disponiveis: list  # classificados ainda sem indicação e sem desistência, pela posição
+    bolsistas_ativos: set  # alunos disponíveis que já têm vínculo ativo em outra bolsa
 
     @property
     def vagas_livres(self):
@@ -236,6 +242,7 @@ def situacao_vagas(bolsa):
         indicados,
         desistentes,
         disponiveis,
+        alunos_com_vinculo_ativo([r.inscricao.aluno_id for r in disponiveis]),
     )
 
 
@@ -248,6 +255,8 @@ def motivo_bloqueio_indicacao(resultado, vagas):
         return "Este candidato não vai assumir a vaga."
     if resultado.inscricao.status != StatusInscricao.HOMOLOGADA:
         return "A inscrição deste candidato não está mais ativa."
+    if resultado.inscricao.aluno_id in vagas.bolsistas_ativos:
+        return MOTIVO_ALUNO_JA_BOLSISTA
     if vagas.vagas_livres == 0:
         return "Todas as vagas desta bolsa já foram preenchidas."
     if resultado.situacao == SituacaoClassificacao.SUPLENTE and vagas.vagas_para_suplentes == 0:

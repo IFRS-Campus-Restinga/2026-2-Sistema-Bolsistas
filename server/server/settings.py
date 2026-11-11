@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "selecao",
     "bolsistas",
     "frequencias",
+    "notificacoes",
 ]
 
 MIDDLEWARE = [

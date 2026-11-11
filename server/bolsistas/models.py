@@ -246,9 +246,16 @@ SITUACOES_QUE_ACEITAM_ENVIO = [
 EXTENSOES_RELATORIO = ["pdf"]
 TAMANHO_MAX_RELATORIO_MB = 10
 
+# Modelo opcional que o coordenador anexa ao solicitar, para o bolsista seguir o formato.
+EXTENSOES_MODELO_RELATORIO = ["pdf", "doc", "docx", "odt"]
+
 
 def caminho_relatorio(instance, filename):
     return f"relatorios_finais/{instance.vinculo_id}/{filename}"
+
+
+def caminho_modelo_relatorio(instance, filename):
+    return f"relatorios_finais/{instance.vinculo_id}/modelo/{filename}"
 
 
 class RelatorioFinal(models.Model):
@@ -265,6 +272,12 @@ class RelatorioFinal(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="relatorios_solicitados"
     )
     solicitado_em = models.DateTimeField(default=timezone.now)
+    modelo = models.FileField(
+        upload_to=caminho_modelo_relatorio,
+        validators=[FileExtensionValidator(EXTENSOES_MODELO_RELATORIO)],
+        blank=True,
+    )
+    nome_original_modelo = models.CharField(max_length=255, blank=True, default="")
     arquivo = models.FileField(
         upload_to=caminho_relatorio,
         validators=[FileExtensionValidator(EXTENSOES_RELATORIO)],
@@ -272,6 +285,9 @@ class RelatorioFinal(models.Model):
     )
     nome_original = models.CharField(max_length=255, blank=True, default="")
     enviado_em = models.DateTimeField(null=True, blank=True)
+    fora_do_prazo = models.BooleanField(
+        default=False, help_text="Enviado depois do prazo de entrega do edital."
+    )
     situacao = models.CharField(
         max_length=25,
         choices=SituacaoRelatorio.choices,
@@ -330,3 +346,4 @@ class RelatorioFinal(models.Model):
 @receiver(pre_delete, sender=RelatorioFinal)
 def _remover_relatorio_do_disco(sender, instance, **kwargs):
     instance.arquivo.delete(save=False)
+    instance.modelo.delete(save=False)

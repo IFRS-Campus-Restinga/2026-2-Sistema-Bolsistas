@@ -1,9 +1,11 @@
 from decimal import Decimal
 
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import serializers
 
 from editais.models import Edital
+from inscricoes.models import StatusInscricao
 from projetos.models import StatusProjeto
 
 from .models import PESO_TOTAL, Bolsa, EditalValorBolsa, EtapaAvaliacao, StatusBolsa
@@ -22,11 +24,32 @@ def _decimal_str(valor):
     return None if valor is None else f"{valor:.2f}"
 
 
+# Rascunho ainda não foi enviado e cancelada saiu da seleção: não contam como inscritos.
+STATUS_FORA_DA_SELECAO = [StatusInscricao.RASCUNHO, StatusInscricao.CANCELADA]
+
+
+def com_contagem_de_inscricoes(queryset):
+    return queryset.annotate(
+        total_inscritos=Count(
+            "inscricoes", filter=~Q(inscricoes__status__in=STATUS_FORA_DA_SELECAO), distinct=True
+        ),
+        inscricoes_pendentes=Count(
+            "inscricoes", filter=Q(inscricoes__status=StatusInscricao.PENDENTE), distinct=True
+        ),
+    )
+
+
 class BolsaSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
     modalidade_display = serializers.CharField(source="get_modalidade_display", read_only=True)
+    # Vigência efetiva: a da bolsa (exceção) ou a do edital.
+    inicio_vigencia = serializers.DateField(read_only=True)
+    fim_vigencia = serializers.DateField(read_only=True)
     edital_nome = serializers.CharField(source="edital.nome", read_only=True)
+    edital_ano_codigo = serializers.CharField(source="edital.ano_codigo", read_only=True)
+    total_inscritos = serializers.SerializerMethodField()
+    inscricoes_pendentes = serializers.SerializerMethodField()
     edital_link_documento_oficial = serializers.URLField(
         source="edital.link_documento_oficial", read_only=True
     )
@@ -34,6 +57,12 @@ class BolsaSerializer(serializers.ModelSerializer):
     minha_inscricao_status = serializers.SerializerMethodField()
     pode_editar = serializers.SerializerMethodField()
     pode_editar_etapas = serializers.SerializerMethodField()
+    # Motivos de bloqueio (vazio quando pode), mostrados no painel da bolsa.
+    motivo_bloqueio_edicao = serializers.SerializerMethodField()
+    motivo_bloqueio_etapas = serializers.SerializerMethodField()
+    edital_fechamento_inscricoes = serializers.DateField(
+        source="edital.data_fechamento_inscricoes", read_only=True
+    )
 
     projeto_arquivo_ementa = serializers.FileField(source="projeto.arquivo_ementa", read_only=True)
     projeto_nome_arquivo = serializers.CharField(
@@ -50,10 +79,16 @@ class BolsaSerializer(serializers.ModelSerializer):
             "projeto_titulo",
             "edital",
             "edital_nome",
+            "edital_ano_codigo",
             "edital_link_documento_oficial",
+            "total_inscritos",
+            "inscricoes_pendentes",
             "minha_inscricao_status",
             "pode_editar",
             "pode_editar_etapas",
+            "motivo_bloqueio_edicao",
+            "motivo_bloqueio_etapas",
+            "edital_fechamento_inscricoes",
             "tipo",
             "tipo_display",
             "modalidade",
@@ -70,6 +105,8 @@ class BolsaSerializer(serializers.ModelSerializer):
             "nota_minima",
             "data_inicio_vigencia",
             "data_fim_vigencia",
+            "inicio_vigencia",
+            "fim_vigencia",
             "status",
             "status_display",
             "data_solicitacao",
@@ -87,6 +124,19 @@ class BolsaSerializer(serializers.ModelSerializer):
             "coordenador_area",
         ]
 
+    # Na lista vêm anotados (com_contagem_de_inscricoes); fora dela, conta direto.
+    def get_total_inscritos(self, bolsa):
+        total = getattr(bolsa, "total_inscritos", None)
+        if total is None:
+            total = bolsa.inscricoes.exclude(status__in=STATUS_FORA_DA_SELECAO).count()
+        return total
+
+    def get_inscricoes_pendentes(self, bolsa):
+        total = getattr(bolsa, "inscricoes_pendentes", None)
+        if total is None:
+            total = bolsa.inscricoes.filter(status=StatusInscricao.PENDENTE).count()
+        return total
+
     def get_minha_inscricao_status(self, bolsa):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
@@ -99,6 +149,12 @@ class BolsaSerializer(serializers.ModelSerializer):
 
     def get_pode_editar_etapas(self, bolsa):
         return not bolsa.motivo_bloqueio_etapas()
+
+    def get_motivo_bloqueio_edicao(self, bolsa):
+        return bolsa.motivo_bloqueio_edicao() or ""
+
+    def get_motivo_bloqueio_etapas(self, bolsa):
+        return bolsa.motivo_bloqueio_etapas() or ""
 
     def get_etapas(self, bolsa):
         efetivos = bolsa.pesos_efetivos_etapas()
@@ -185,6 +241,37 @@ class BolsaEdicaoSerializer(BolsaSerializer):
                 "O tipo não pode ser alterado depois que a bolsa foi aprovada."
             )
         return tipo
+
+
+class BolsaDisponivelSerializer(BolsaSerializer):
+    """Bolsa vista pelo aluno em Bolsas disponíveis (US93): o card e o painel de detalhes.
+
+    Datas relativas (dias até o fim das inscrições, fase atual) vêm calculadas do servidor.
+    """
+
+    coordenador_projeto_nome = serializers.CharField(
+        source="projeto.coordenador_projeto.usuario.nome", read_only=True
+    )
+    projeto_ementa_html = serializers.CharField(source="projeto.ementa_html", read_only=True)
+    dias_para_encerrar_inscricoes = serializers.SerializerMethodField()
+    cronograma = serializers.SerializerMethodField()
+
+    class Meta(BolsaSerializer.Meta):
+        fields = [
+            *BolsaSerializer.Meta.fields,
+            "coordenador_projeto_nome",
+            "projeto_ementa_html",
+            "dias_para_encerrar_inscricoes",
+            "cronograma",
+        ]
+
+    def get_dias_para_encerrar_inscricoes(self, bolsa):
+        fechamento = bolsa.edital.data_fechamento_inscricoes
+        return (fechamento - timezone.localdate()).days if fechamento else None
+
+    def get_cronograma(self, bolsa):
+        # A vigência pode ser própria da bolsa (exceção à do edital).
+        return bolsa.edital.fases_do_cronograma(fim_vigencia=bolsa.fim_vigencia)
 
 
 class EtapaAvaliacaoSerializer(serializers.ModelSerializer):

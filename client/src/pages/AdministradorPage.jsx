@@ -2,30 +2,44 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Layout,
-  Button,
-  PageHeader,
   IconHome,
+  IconBolsa,
   IconCalendar,
-  IconBriefcase,
-  IconUsers,
-  IconClipboardList,
+  IconClipboardCheck,
+  IconEdital,
+  IconFolder,
+  IconHistory,
+  IconUserCog,
 } from '../components'
 import UsuariosPage from './UsuariosPage'
 import MonitoramentoPage from './MonitoramentoPage'
 import PainelAdministrativo from './PainelAdministrativo'
 import AuditoriaPage from './AuditoriaPage'
+import AdminEditaisPage from './AdminEditaisPage'
+import CronogramaEditaisPage from './CronogramaEditaisPage'
 
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { id: 'editais', label: 'Editais', icon: <IconCalendar /> },
-  { id: 'projetos', label: 'Projetos', icon: <IconBriefcase /> },
-  { id: 'bolsas', label: 'Bolsas', icon: <IconBriefcase /> },
-  { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardList /> },
-  { id: 'usuarios', label: 'Usuários', icon: <IconUsers /> },
-  { id: 'auditoria', label: 'Auditoria', icon: <IconClipboardList /> },
+const secoes = [
+  { items: [{ id: 'dashboard', label: 'Início', icon: <IconHome /> }] },
+  {
+    title: 'Gestão',
+    items: [
+      { id: 'editais', label: 'Editais', icon: <IconEdital /> },
+      { id: 'cronograma', label: 'Cronograma', icon: <IconCalendar /> },
+      { id: 'projetos', label: 'Projetos', icon: <IconFolder /> },
+      { id: 'bolsas', label: 'Bolsas', icon: <IconBolsa /> },
+      { id: 'inscricoes', label: 'Inscrições', icon: <IconClipboardCheck /> },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { id: 'usuarios', label: 'Usuários', icon: <IconUserCog /> },
+      { id: 'auditoria', label: 'Auditoria', icon: <IconHistory /> },
+    ],
+  },
 ]
 
-const ABAS = new Set(menuItems.map((item) => item.id))
+const ABAS = new Set(secoes.flatMap((secao) => secao.items.map((item) => item.id)))
 
 export default function AdministradorPage({ me, initials, onVoltarHub }) {
   const [parametros, setParametros] = useSearchParams()
@@ -42,7 +56,7 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
   return (
     <Layout
       role="Administrador"
-      menuItems={menuItems}
+      sections={secoes}
       active={active}
       onNav={navegar}
       onLogout={onVoltarHub}
@@ -50,25 +64,9 @@ export default function AdministradorPage({ me, initials, onVoltarHub }) {
       userName={me.nome || '(sem nome)'}
       initials={initials}
     >
-      {active === 'dashboard' && (
-        <>
-          <PageHeader
-            title="Painel Administrativo"
-            action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => (window.location.href = '/showcase')}
-              >
-                Ver Showcase
-              </Button>
-            }
-          />
-
-          <PainelAdministrativo onNavigate={navegar} />
-        </>
-      )}
-      {active === 'editais' && <MonitoramentoPage secao="editais_ativos" />}
+      {active === 'dashboard' && <PainelAdministrativo onNavigate={navegar} />}
+      {active === 'editais' && <AdminEditaisPage />}
+      {active === 'cronograma' && <CronogramaEditaisPage podeVerHistorico />}
       {active === 'projetos' && <MonitoramentoPage secao="projetos_cadastrados" />}
       {active === 'bolsas' && <MonitoramentoPage secao="bolsas_ativas" />}
       {active === 'inscricoes' && <MonitoramentoPage secao="inscricoes_ativas" />}

@@ -1,12 +1,12 @@
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +15,13 @@ from accounts.models import Aluno, Usuario
 from accounts.permissions import IsAluno, IsCoordenadorArea, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
-from bolsas.models import Bolsa, StatusBolsa, TipoBolsa
+from bolsas.models import Bolsa, StatusBolsa, TipoBolsa, fim_vigencia_efetivo
+from notificacoes.services import (
+    Destino,
+    Notificacao,
+    coordenador_do_projeto,
+    coordenadores_da_bolsa,
+)
 
 from .models import (
     CancelamentoVaga,
@@ -31,11 +37,14 @@ from .models import (
 from .regras import (
     MOTIVO_BOLSA_ENCERRADA,
     bolsa_aceita_acompanhamento,
+    fora_do_prazo,
     motivo_bloqueio_envio,
+    motivo_bloqueio_finalizacao,
     motivo_bloqueio_solicitacao,
     relatorio_do_vinculo,
 )
 from .serializers import (
+    BolsaDoCoordenadorProjetoSerializer,
     BolsaParaFinalizarSerializer,
     CancelamentoVagaSerializer,
     DadosTermoAlunoSerializer,
@@ -48,6 +57,7 @@ from .serializers import (
     ParecerSerializer,
     RelatorioFinalSerializer,
     SolicitacaoDesligamentoSerializer,
+    SolicitacaoRelatorioSerializer,
     TermoCompromissoSerializer,
     VinculoDoCoordenadorSerializer,
 )
@@ -339,6 +349,13 @@ class SolicitarMeuDesligamentoView(APIView):
             origem=OrigemDesligamento.ALUNO,
             motivo=serializer.validated_data["motivo"],
         )
+        bolsa = vinculo.bolsa
+        Notificacao.para(coordenador_do_projeto(bolsa)).aviso().titulo(
+            "Pedido de desligamento"
+        ).mensagem(
+            f"{request.user.nome} pediu desligamento da bolsa do projeto "
+            f'"{bolsa.projeto.titulo}". Motivo: {solicitacao.motivo}'
+        ).destino(Destino.PROJETO_BOLSISTAS).enviar()
         return Response(
             SolicitacaoDesligamentoSerializer(solicitacao).data,
             status=status.HTTP_201_CREATED,
@@ -375,6 +392,10 @@ class SolicitarDesligamentoCoordenadorView(APIView):
             motivo=serializer.validated_data["motivo"],
         )
         efetivar_desligamento(solicitacao, request.user)
+        Notificacao.para(vinculo.aluno).erro().titulo("Desligamento da bolsa").mensagem(
+            f'Você foi desligado(a) da bolsa do projeto "{vinculo.bolsa.projeto.titulo}". '
+            f"Motivo: {solicitacao.motivo}"
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.DESATIVACAO,
@@ -442,6 +463,19 @@ class DecidirDesligamentoView(APIView):
                 ]
             )
 
+        projeto = solicitacao.vinculo.bolsa.projeto.titulo
+        aviso = Notificacao.para(solicitacao.vinculo.aluno)
+        if aprovar:
+            aviso.info().titulo("Desligamento aprovado").mensagem(
+                f'Seu pedido de desligamento da bolsa do projeto "{projeto}" foi aprovado.'
+            )
+        else:
+            aviso.erro().titulo("Desligamento recusado").mensagem(
+                f'Seu pedido de desligamento da bolsa do projeto "{projeto}" foi recusado. '
+                f"Justificativa: {solicitacao.justificativa_decisao}"
+            )
+        aviso.destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.APROVACAO if aprovar else AcaoAuditoria.REJEICAO,
@@ -476,6 +510,12 @@ class CancelarVagaView(APIView):
             justificativa=serializer.validated_data["motivo"],
         )
         atualizar_status_preenchimento(vinculo.bolsa)
+        Notificacao.para(coordenadores_da_bolsa(vinculo.bolsa)).aviso().titulo(
+            "Vaga cancelada"
+        ).mensagem(
+            f'Uma vaga da bolsa do projeto "{vinculo.bolsa.projeto.titulo}" foi cancelada. '
+            f"Justificativa: {cancelamento.justificativa}"
+        ).destino(Destino.AREA_MOVIMENTACOES).enviar()
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.CANCELAMENTO,
@@ -547,9 +587,11 @@ class CienciaCancelamentoVagaView(APIView):
 
 
 class SolicitarRelatorioView(APIView):
-    """O coordenador do projeto solicita o relatório final a um bolsista."""
+    """O coordenador do projeto solicita o relatório final a um bolsista, podendo anexar
+    um modelo para o bolsista seguir."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @transaction.atomic
     def post(self, request, pk):
@@ -564,9 +606,19 @@ class SolicitarRelatorioView(APIView):
         if motivo:
             raise ValidationError({"detail": motivo})
 
+        serializer = SolicitacaoRelatorioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        modelo = serializer.validated_data.get("modelo")
+
         vinculo.relatorio_final = RelatorioFinal.objects.create(
-            vinculo=vinculo, solicitado_por=request.user
+            vinculo=vinculo,
+            solicitado_por=request.user,
+            modelo=modelo or "",
+            nome_original_modelo=modelo.name if modelo else "",
         )
+        Notificacao.para(vinculo.aluno).aviso().titulo("Relatório final solicitado").mensagem(
+            f'Envie o relatório final da bolsa do projeto "{vinculo.bolsa.projeto.titulo}".'
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
         return Response(
             VinculoDoCoordenadorSerializer(vinculo, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -600,15 +652,26 @@ class RelatorioFinalView(APIView):
         relatorio.arquivo = arquivo
         relatorio.nome_original = arquivo.name
         relatorio.enviado_em = timezone.now()
+        relatorio.fora_do_prazo = fora_do_prazo(vinculo.bolsa.edital)
         relatorio.situacao = SituacaoRelatorio.AGUARDANDO_AVALIACAO
         relatorio.justificativa = ""
         relatorio.avaliado_por = None
         relatorio.avaliado_em = None
         relatorio.save()
 
-        # O arquivo anterior só sai do disco depois que o novo foi salvo.
+        # O arquivo anterior só sai do disco depois que a transação confirmar; se algo falhar
+        # até lá (inclusive o aviso), o banco volta e ele continua valendo.
         if arquivo_anterior and arquivo_anterior != relatorio.arquivo.name:
-            relatorio.arquivo.storage.delete(arquivo_anterior)
+            storage = relatorio.arquivo.storage
+            transaction.on_commit(lambda: storage.delete(arquivo_anterior))
+
+        bolsa = vinculo.bolsa
+        Notificacao.para(coordenador_do_projeto(bolsa)).info().titulo(
+            "Relatório final enviado"
+        ).mensagem(
+            f"{request.user.nome} enviou o relatório final da bolsa do projeto "
+            f'"{bolsa.projeto.titulo}". Ele aguarda sua avaliação.'
+        ).destino(Destino.PROJETO_FINALIZACAO).enviar()
 
         return Response(RelatorioFinalSerializer(relatorio, context={"request": request}).data)
 
@@ -639,7 +702,8 @@ class BolsistasDoCoordenadorView(generics.ListAPIView):
 
 
 class BolsasParaFinalizarView(generics.ListAPIView):
-    """Bolsas da área do coordenador que têm bolsistas, com o andamento dos relatórios finais."""
+    """Bolsas da área do coordenador para acompanhar a finalização: as em andamento com
+    bolsista ativo e as encerradas, que pedem ciência."""
 
     permission_classes = [IsAuthenticated, IsCoordenadorArea]
     serializer_class = BolsaParaFinalizarSerializer
@@ -648,11 +712,21 @@ class BolsasParaFinalizarView(generics.ListAPIView):
     def get_queryset(self):
         area = self.request.user.perfil_coordenador_area.tipo_area
         return (
-            Bolsa.objects.filter(tipo__in=[area, TipoBolsa.INDISSOCIAVEL], vinculos__isnull=False)
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                tipo__in=[area, TipoBolsa.INDISSOCIAVEL],
+            )
             .exclude(
                 status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
             )
-            .select_related("projeto__coordenador_projeto__usuario", "edital")
+            .select_related("projeto__coordenador_projeto__usuario", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch(
+                    "vinculos",
+                    queryset=VinculoBolsista.objects.select_related("aluno", "relatorio_final"),
+                )
+            )
             .annotate(
                 total_bolsistas=Count(
                     "vinculos",
@@ -724,24 +798,97 @@ class ParecerRelatorioView(APIView):
             ),
         )
 
+        bolsa = vinculo.bolsa
+        aviso = Notificacao.para(vinculo.aluno).destino(Destino.ALUNO_MINHA_BOLSA)
+        if aprovado:
+            aviso.sucesso().titulo("Relatório final aprovado").mensagem(
+                f'Seu relatório final da bolsa do projeto "{bolsa.projeto.titulo}" foi aprovado.'
+            ).enviar()
+            # Quem finaliza é o próprio coordenador do projeto, que acabou de dar o parecer.
+            if not motivo_bloqueio_finalizacao(bolsa):
+                Notificacao.para(request.user).info().titulo(
+                    "Bolsa pronta para finalizar"
+                ).mensagem(
+                    f'Todos os relatórios finais da bolsa do projeto "{bolsa.projeto.titulo}" '
+                    "foram aprovados. A bolsa já pode ser finalizada."
+                ).destino(Destino.PROJETO_FINALIZACAO).enviar()
+        else:
+            aviso.erro().titulo("Relatório final reprovado").mensagem(
+                f'Seu relatório final da bolsa do projeto "{bolsa.projeto.titulo}" foi '
+                f"reprovado. Justificativa: {relatorio.justificativa}"
+            ).enviar()
+
         return Response(RelatorioFinalSerializer(relatorio, context={"request": request}).data)
+
+
+def _relatorio_visivel(usuario, pk):
+    """Relatório do vínculo, visível ao próprio bolsista e ao coordenador do projeto."""
+    if usuario.role == Usuario.Role.ALUNO:
+        relatorios = RelatorioFinal.objects.filter(vinculo__aluno=usuario)
+    else:
+        relatorios = relatorios_do_coordenador(usuario)
+    return get_object_or_404(relatorios, vinculo_id=pk)
+
+
+def _baixar(campo, nome):
+    try:
+        arquivo = campo.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404("Arquivo não encontrado.") from None
+    return FileResponse(arquivo, as_attachment=True, filename=nome)
 
 
 class RelatorioFinalArquivoView(APIView):
     permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
 
     def get(self, request, pk):
-        if request.user.role == Usuario.Role.ALUNO:
-            relatorios = RelatorioFinal.objects.filter(vinculo__aluno=request.user)
-        else:
-            relatorios = relatorios_do_coordenador(request.user)
-        relatorio = get_object_or_404(relatorios, vinculo_id=pk)
+        relatorio = _relatorio_visivel(request.user, pk)
         if not relatorio.arquivo:
             raise Http404("O relatório ainda não foi enviado.")
-        try:
-            arquivo = relatorio.arquivo.open("rb")
-        except (FileNotFoundError, OSError):
-            raise Http404("Arquivo não encontrado.") from None
-        return FileResponse(
-            arquivo, as_attachment=True, filename=relatorio.nome_original or "relatorio-final.pdf"
+        return _baixar(relatorio.arquivo, relatorio.nome_original or "relatorio-final.pdf")
+
+
+class ModeloRelatorioArquivoView(APIView):
+    permission_classes = [IsAuthenticated, IsAluno | IsCoordenadorProjeto]
+
+    def get(self, request, pk):
+        relatorio = _relatorio_visivel(request.user, pk)
+        if not relatorio.modelo:
+            raise Http404("Nenhum modelo foi anexado a este relatório.")
+        return _baixar(relatorio.modelo, relatorio.nome_original_modelo or "modelo-relatorio")
+
+
+class BolsasDoCoordenadorProjetoView(generics.ListAPIView):
+    """Bolsas dos projetos do coordenador logado para a Finalização: as em andamento com
+    bolsista ativo e as já encerradas."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+    serializer_class = BolsaDoCoordenadorProjetoSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            Bolsa.objects.filter(
+                Q(status=StatusBolsa.ENCERRADA, vinculos__isnull=False)
+                | Q(vinculos__status=StatusVinculo.ATIVO),
+                projeto__coordenador_projeto__usuario=self.request.user,
+            )
+            .exclude(
+                status__in=[StatusBolsa.SOLICITADA, StatusBolsa.REJEITADA, StatusBolsa.CANCELADA]
+            )
+            .distinct()
+            .select_related("projeto", "edital", "finalizada_por")
+            .prefetch_related(
+                Prefetch(
+                    "vinculos",
+                    queryset=VinculoBolsista.objects.select_related(
+                        "aluno",
+                        "bolsa__edital",
+                        "bolsa__projeto",
+                        "relatorio_final",
+                        "cancelamento_vaga",
+                    ).order_by("aluno__nome"),
+                )
+            )
+            .order_by(fim_vigencia_efetivo(), "id")
         )

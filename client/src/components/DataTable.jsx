@@ -1,25 +1,27 @@
 import { useState } from 'react'
+import { EmptyState } from './EmptyState'
+import { IconSearch } from './Icons'
 import { Paginacao } from './Paginacao'
 import { useCarregamentoVisivel } from './useCarregamentoVisivel'
 
 const LINHAS_ESQUELETO = 4
 const LARGURAS_ESQUELETO = ['70%', '55%', '80%', '60%']
 
-const CAIXA = 'rounded-2xl border border-gray-100 bg-white shadow-card'
-const WRAPPER = `${CAIXA} overflow-x-auto overflow-y-hidden`
-const TABELA = 'w-full border-collapse text-base'
+const WRAPPER =
+  'overflow-x-auto overflow-y-hidden rounded-card border border-gray-200 bg-white shadow-card'
+const TABELA = 'w-full border-collapse text-sm'
 const LINHA =
-  'border-b border-[#f8f8f8] transition-colors duration-100 ease-[ease] last:border-b-0 hover:bg-green-50/30'
-const CELULA = 'px-5 py-3.5 text-center align-middle text-gray-700'
+  'border-b border-gray-100 transition-colors duration-100 ease-[ease] last:border-b-0 hover:bg-gray-50/70'
+const CELULA = 'px-4 py-3 text-left align-middle text-gray-700'
 
 function Cabecalho({ columns }) {
   return (
     <thead>
-      <tr className="border-b border-[#f0f0f0] bg-[#fafafa]">
+      <tr className="border-b border-gray-200 bg-gray-50/70">
         {columns.map((col, i) => (
           <th
             key={i}
-            className="px-5 py-3 text-center text-[10px] font-bold tracking-widest whitespace-nowrap text-gray-400 uppercase"
+            className="px-4 py-2.5 text-left text-xs font-medium whitespace-nowrap text-gray-500"
           >
             {col}
           </th>
@@ -38,6 +40,7 @@ function Cabecalho({ columns }) {
  *   emptyMessage — texto quando não há registros
  *   loading      — mostra linhas-esqueleto enquanto os dados carregam
  *   porPagina    — linhas por página (padrão 10); null desliga a paginação
+ *   onRowClick   — callback(índice da linha em `rows`) ao clicar numa linha
  */
 export function DataTable({
   columns,
@@ -45,6 +48,7 @@ export function DataTable({
   emptyMessage = 'Nenhum registro encontrado.',
   loading = false,
   porPagina = 10,
+  onRowClick,
 }) {
   const mostrarEsqueleto = useCarregamentoVisivel(loading)
 
@@ -72,7 +76,7 @@ export function DataTable({
                 {columns.map((_, j) => (
                   <td key={j} className={CELULA}>
                     <span
-                      className="inline-block h-3 animate-brilho rounded-md bg-[linear-gradient(90deg,#f3f4f6_25%,#e5e7eb_37%,#f3f4f6_63%)] bg-size-[400%_100%] motion-reduce:animate-none"
+                      className="inline-block h-3 animate-brilho rounded-md bg-[linear-gradient(90deg,var(--color-gray-100)_25%,var(--color-gray-200)_37%,var(--color-gray-100)_63%)] bg-size-[400%_100%] motion-reduce:animate-none"
                       style={{ width: LARGURAS_ESQUELETO[(i + j) % LARGURAS_ESQUELETO.length] }}
                     />
                   </td>
@@ -86,26 +90,7 @@ export function DataTable({
   }
 
   if (rows.length === 0) {
-    return (
-      <div className={`${CAIXA} p-12 text-center`}>
-        <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-gray-100">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#9ca3af"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </div>
-        <p className="text-base font-medium text-gray-400">{emptyMessage}</p>
-      </div>
-    )
+    return <EmptyState compact icon={<IconSearch />} title={emptyMessage} />
   }
 
   return (
@@ -115,7 +100,13 @@ export function DataTable({
           <Cabecalho columns={columns} />
           <tbody>
             {linhasVisiveis.map((row, i) => (
-              <tr key={i} className={LINHA}>
+              <tr
+                key={i}
+                className={`${LINHA} ${onRowClick ? 'cursor-pointer' : ''}`}
+                onClick={
+                  onRowClick ? () => onRowClick((pagina - 1) * (porPagina || 0) + i) : undefined
+                }
+              >
                 {row.map((cell, j) => (
                   <td key={j} className={CELULA}>
                     {cell}
