@@ -1,0 +1,11 @@
+<b>TERMO DE COMPROMISSO PARA ESTUDANTE BOLSISTA</b>
+
+Eu, <b>{{ aluno_nome }}</b>, matrícula {{ matricula }}, estudante do curso {{ curso }} do IFRS Campus {{ campus }}, declaro estar ciente das obrigações e aceitar a condição de bolsista no projeto de {{ modalidade }} abaixo identificado.
+
+<b>Projeto:</b> {{ projeto_titulo }}<br/><b>Coordenador(a):</b> {{ coordenador_nome }}<br/><b>Edital:</b> {{ edital }}<br/><b>Vigência:</b> {{ vigencia }}<br/><b>Carga horária:</b> {{ carga_horaria }} horas semanais.
+
+Comprometo-me a participar das atividades definidas pelo projeto, cumprir a carga horária, manter desempenho acadêmico satisfatório, observar as regras do edital e da instituição, entregar os relatórios solicitados e comunicar qualquer situação que impeça a continuidade das atividades.
+
+Declaro que as informações apresentadas são verdadeiras e que conheço as consequências do descumprimento deste termo.
+
+Porto Alegre, ____ de __________________ de ______.

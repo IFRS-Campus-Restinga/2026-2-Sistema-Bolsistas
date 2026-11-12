@@ -246,7 +246,8 @@ class IndicarBolsistaView(_ResultadoPublicadoMixin, APIView):
         )
         vincular_por_indicacao(indicacao)
         Notificacao.para(inscricao.aluno).sucesso().titulo("Indicação como bolsista").mensagem(
-            f'Você foi indicado(a) como bolsista da bolsa do projeto "{bolsa.projeto.titulo}".'
+            f'Você foi indicado(a) como bolsista da bolsa do projeto "{bolsa.projeto.titulo}". '
+            "Preencha e assine o termo de compromisso em Minha bolsa para efetivar o vínculo."
         ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
         atualizar_status_preenchimento(bolsa)
         registrar_log(

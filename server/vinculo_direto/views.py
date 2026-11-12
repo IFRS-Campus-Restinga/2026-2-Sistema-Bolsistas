@@ -186,13 +186,9 @@ class AprovarConviteView(APIView):
         )
 
         Notificacao.para(convite.aluno).sucesso().titulo("Convite aprovado").mensagem(
-            f'Sua documentação foi aprovada e você é bolsista do projeto "{bolsa.projeto.titulo}".'
+            f'Sua documentação foi aprovada no projeto "{bolsa.projeto.titulo}". Preencha e '
+            "assine o termo de compromisso em Minha bolsa para efetivar o vínculo."
         ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
-        # Frequências é onde a área acompanha cada bolsista, inclusive o recém-vinculado.
-        Notificacao.para(bolsa.coordenador_area).info().titulo("Vínculo direto efetivado").mensagem(
-            f"{convite.aluno.nome} passou a ser bolsista da bolsa do projeto "
-            f'"{bolsa.projeto.titulo}" (edital {bolsa.edital.nome}) por vínculo direto.'
-        ).destino(Destino.AREA_FREQUENCIAS).enviar()
 
         return Response(ConviteSerializer(convite, context={"request": request}).data)
 

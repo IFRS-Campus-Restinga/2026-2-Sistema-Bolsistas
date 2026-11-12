@@ -3,6 +3,7 @@ import { bolsistasFetch } from '../api'
 import { AcoesCell, Alert, Badge, DataTable, PageHeader, useConfirm, useToast } from '../components'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import MotivoModal from './MotivoModal'
+import RevisarTermoDrawer from './RevisarTermoDrawer'
 
 export default function MeusBolsistasPage() {
   const confirmar = useConfirm()
@@ -14,6 +15,7 @@ export default function MeusBolsistasPage() {
   const [desligando, setDesligando] = useState(null)
   const [cancelando, setCancelando] = useState(null)
   const [rejeitando, setRejeitando] = useState(null)
+  const [revisandoTermo, setRevisandoTermo] = useState(null)
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
@@ -53,9 +55,48 @@ export default function MeusBolsistasPage() {
     }
   }, [versao])
 
+  async function lembrarAluno(vinculo) {
+    const response = await bolsistasFetch(`/vinculos/${vinculo.id}/termo/lembrete/`, {
+      method: 'POST',
+    })
+    if (!response.ok) {
+      const dados = await response.json().catch(() => null)
+      toast({
+        message: mensagemDeErro(dados, 'Não foi possível enviar o lembrete.'),
+        tone: 'error',
+      })
+      return
+    }
+    toast({ message: `${vinculo.aluno_nome} foi lembrado(a) do termo.`, tone: 'success' })
+    setVersao((atual) => atual + 1)
+  }
+
   function acoesDoVinculo(vinculo) {
     const acoes = []
-    if (vinculo.status === 'ATIVO') {
+    const termo = vinculo.termo
+    if (termo?.aluno_assinou && !termo.assinado) {
+      acoes.push({
+        label: 'Revisar termo',
+        variant: 'accent',
+        onClick: () => setRevisandoTermo(vinculo),
+      })
+    }
+    if (vinculo.pode_lembrar_termo) {
+      acoes.push({
+        label: 'Lembrar aluno do termo',
+        variant: 'outline',
+        onClick: () => lembrarAluno(vinculo),
+      })
+    }
+    if (termo?.assinado) {
+      acoes.push({
+        label: 'Baixar termo assinado',
+        variant: 'outline',
+        onClick: () => window.open(termo.arquivo_assinado_url, '_blank', 'noopener'),
+      })
+    }
+
+    if (vinculo.status !== 'DESLIGADO') {
       acoes.push({
         label: 'Desligar bolsista',
         variant: 'danger',
@@ -119,6 +160,9 @@ export default function MeusBolsistasPage() {
     setVersao((atual) => atual + 1)
   }
 
+  const termosAguardandoCoordenador = vinculos.filter(
+    (vinculo) => vinculo.termo?.aluno_assinou && !vinculo.termo.assinado
+  )
   const linhas = vinculos.map((vinculo) => [
     <div key="aluno" className="text-left">
       <p className="font-medium text-gray-900">{vinculo.aluno_nome}</p>
@@ -154,6 +198,13 @@ export default function MeusBolsistasPage() {
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
+      {termosAguardandoCoordenador.map((vinculo) => (
+        <Alert key={`termo-${vinculo.id}`} tone="warning">
+          {vinculo.aluno_nome} enviou o termo de compromisso assinado do projeto “
+          {vinculo.projeto_titulo}”. Revise o termo e envie a versão final para efetivar o vínculo.
+        </Alert>
+      ))}
+
       {pedidos.length > 0 && (
         <section className="mb-7">
           <h2 className="mb-3 text-base font-bold text-gray-900">Pedidos de desligamento</h2>
@@ -175,6 +226,17 @@ export default function MeusBolsistasPage() {
         loading={carregando}
         emptyMessage="Seus projetos ainda não têm bolsistas."
       />
+
+      {revisandoTermo && (
+        <RevisarTermoDrawer
+          vinculo={revisandoTermo}
+          onFechar={() => setRevisandoTermo(null)}
+          onConcluido={() => {
+            setRevisandoTermo(null)
+            setVersao((atual) => atual + 1)
+          }}
+        />
+      )}
 
       {desligando && (
         <MotivoModal

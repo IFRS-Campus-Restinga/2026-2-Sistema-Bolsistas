@@ -15,6 +15,7 @@ class OrigemVinculo(models.TextChoices):
 
 
 class StatusVinculo(models.TextChoices):
+    AGUARDANDO_TERMO = "AGUARDANDO_TERMO", "Aguardando termo"
     ATIVO = "ATIVO", "Ativo"
     DESLIGADO = "DESLIGADO", "Desligado"
 
@@ -42,10 +43,12 @@ class VinculoBolsista(models.Model):
         blank=True,
     )
     status = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=StatusVinculo.choices,
         default=StatusVinculo.ATIVO,
     )
+    data_inicio = models.DateField(null=True, blank=True)
+    lembrete_termo_em = models.DateTimeField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     desligado_em = models.DateTimeField(null=True, blank=True)
 
@@ -68,6 +71,83 @@ class VinculoBolsista(models.Model):
 
     def __str__(self):
         return f"{self.aluno} na bolsa {self.bolsa_id} ({self.get_origem_display()})"
+
+
+EXTENSOES_TERMO_ALUNO = ["docx"]
+EXTENSOES_TERMO_FINAL = ["pdf"]
+TAMANHO_MAX_TERMO_MB = 10
+
+
+def caminho_termo_gerado(instance, filename):
+    return f"termos_compromisso/{instance.vinculo_id}/gerado/{filename}"
+
+
+def caminho_termo_assinado(instance, filename):
+    return f"termos_compromisso/{instance.vinculo_id}/assinado/{filename}"
+
+
+def caminho_termo_assinado_aluno(instance, filename):
+    return f"termos_compromisso/{instance.vinculo_id}/aluno/{filename}"
+
+
+class TipoTermo(models.TextChoices):
+    MAIOR = "MAIOR", "Estudante maior de idade"
+    MENOR = "MENOR", "Estudante menor de idade"
+
+
+class TermoCompromisso(models.Model):
+    vinculo = models.OneToOneField(
+        VinculoBolsista, on_delete=models.CASCADE, related_name="termo_compromisso"
+    )
+    tipo = models.CharField(max_length=10, choices=TipoTermo.choices)
+    data_nascimento = models.DateField()
+    nome_responsavel_legal = models.CharField(max_length=150, blank=True, default="")
+    arquivo_gerado = models.FileField(upload_to=caminho_termo_gerado)
+    gerado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="termos_gerados",
+    )
+    gerado_em = models.DateTimeField(auto_now_add=True)
+    arquivo_assinado_aluno = models.FileField(
+        upload_to=caminho_termo_assinado_aluno,
+        blank=True,
+    )
+    nome_original_assinado_aluno = models.CharField(max_length=255, blank=True, default="")
+    enviado_aluno_em = models.DateTimeField(null=True, blank=True)
+    motivo_recusa_aluno = models.TextField(blank=True, default="")
+    arquivo_assinado = models.FileField(upload_to=caminho_termo_assinado, blank=True)
+    nome_original_assinado = models.CharField(max_length=255, blank=True, default="")
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="termos_assinados_enviados",
+    )
+    enviado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "termo de compromisso"
+        verbose_name_plural = "termos de compromisso"
+
+    def __str__(self):
+        return f"Termo do vínculo {self.vinculo_id}"
+
+    @property
+    def assinado(self):
+        return bool(self.arquivo_assinado)
+
+    @property
+    def aluno_assinou(self):
+        return bool(self.arquivo_assinado_aluno)
+
+
+@receiver(pre_delete, sender=TermoCompromisso)
+def _remover_arquivos_termo(sender, instance, **kwargs):
+    instance.arquivo_gerado.delete(save=False)
+    instance.arquivo_assinado_aluno.delete(save=False)
+    instance.arquivo_assinado.delete(save=False)
 
 
 class OrigemDesligamento(models.TextChoices):

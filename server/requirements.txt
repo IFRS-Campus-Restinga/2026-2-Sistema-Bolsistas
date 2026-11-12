@@ -8,3 +8,4 @@ PyJWT==2.12.1
 FS_auth_middleware @ git+https://github.com/Cassio-de-Paula/FS_auth_middleware.git@v0.2.0#egg=fs-auth-middleware
 reportlab==4.4.4
 requests==2.32.3
+python-docx==1.2.0

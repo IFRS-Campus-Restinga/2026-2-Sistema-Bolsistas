@@ -9,6 +9,7 @@ export const STATUS = {
   ARQUIVADO: ['Encerrado', 'neutral'],
   // Projeto / vínculo
   ATIVO: ['Ativo', 'success'],
+  AGUARDANDO_TERMO: ['Aguardando termo', 'warning'],
   DESLIGADO: ['Desligado', 'neutral'],
   // Bolsa
   SOLICITADA: ['Solicitada', 'warning'],

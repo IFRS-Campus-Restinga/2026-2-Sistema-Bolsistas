@@ -26,12 +26,27 @@ def vinculos_vigentes():
     )
 
 
+# O vínculo aguardando o termo de compromisso é provisório, mas já reserva a vaga.
+STATUS_VINCULO_OCUPA_VAGA = [
+    StatusVinculo.AGUARDANDO_TERMO,
+    StatusVinculo.ATIVO,
+]
+
+
+def vinculos_em_andamento():
+    """Vínculos vigentes mais os provisórios (aguardando termo): é o que impede o aluno de
+    assumir outra bolsa."""
+    return VinculoBolsista.objects.filter(status__in=STATUS_VINCULO_OCUPA_VAGA).exclude(
+        bolsa__status=StatusBolsa.ENCERRADA
+    )
+
+
 def tem_vinculo_ativo(aluno):
-    return vinculos_vigentes().filter(aluno=aluno).exists()
+    return vinculos_em_andamento().filter(aluno=aluno).exists()
 
 
 def alunos_com_vinculo_ativo(alunos):
-    return set(vinculos_vigentes().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
+    return set(vinculos_em_andamento().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
 
 
 def _garantir_sem_vinculo_ativo(aluno):
@@ -49,6 +64,7 @@ def vincular_por_indicacao(indicacao):
         aluno=indicacao.inscricao.aluno,
         origem=OrigemVinculo.SELECAO,
         indicacao=indicacao,
+        status=StatusVinculo.AGUARDANDO_TERMO,
     )
 
 
@@ -59,6 +75,7 @@ def vincular_por_convite(convite):
         aluno=convite.aluno,
         origem=OrigemVinculo.VINCULO_DIRETO,
         convite=convite,
+        status=StatusVinculo.AGUARDANDO_TERMO,
     )
 
 
@@ -68,8 +85,9 @@ def capacidade_efetiva(bolsa):
     return max(bolsa.quantidade_vagas - canceladas, 0)
 
 
-def quantidade_vinculos_ativos(bolsa):
-    return bolsa.vinculos.filter(status=StatusVinculo.ATIVO).count()
+def quantidade_vinculos_ocupantes(bolsa):
+    """Conta vínculos que já reservam uma vaga, mesmo antes da assinatura do termo."""
+    return bolsa.vinculos.filter(status__in=STATUS_VINCULO_OCUPA_VAGA).count()
 
 
 def atualizar_status_preenchimento(bolsa):
@@ -80,7 +98,7 @@ def atualizar_status_preenchimento(bolsa):
     capacidade = capacidade_efetiva(bolsa)
     if capacidade == 0:
         novo_status = StatusBolsa.CANCELADA
-    elif quantidade_vinculos_ativos(bolsa) >= capacidade:
+    elif quantidade_vinculos_ocupantes(bolsa) >= capacidade:
         novo_status = StatusBolsa.PREENCHIDA
     else:
         novo_status = StatusBolsa.EM_SELECAO

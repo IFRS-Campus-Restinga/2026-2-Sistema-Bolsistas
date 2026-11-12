@@ -16,9 +16,11 @@ from bolsistas.models import (
     OrigemVinculo,
     SolicitacaoDesligamento,
     StatusSolicitacaoDesligamento,
+    StatusVinculo,
 )
 from bolsistas.regras import motivos_bloqueio_finalizacao
-from bolsistas.services import vinculos_vigentes
+from bolsistas.services import vinculos_em_andamento, vinculos_vigentes
+from bolsistas.termos import motivo_dados_termo_incompletos
 from dados_bancarios.models import DadosBancarios
 from dados_bancarios.serializers import DadosBancariosSerializer
 from editais.models import Edital
@@ -235,6 +237,7 @@ def _minha_bolsa(vinculo, hoje):
             "dias_restantes": max(0, (fim - hoje).days),
         }
     return {
+        "status": vinculo.status,
         "modalidade": bolsa.modalidade,
         "carga_horaria_semanal": bolsa.carga_horaria_semanal,
         "valor_mensal": bolsa.valor_mensal,
@@ -247,9 +250,9 @@ def painel_do_aluno(usuario, hoje=None):
     hoje = hoje or timezone.localdate()
     inscricoes = Inscricao.objects.filter(aluno=usuario).exclude(status=StatusInscricao.CANCELADA)
     vinculo = (
-        vinculos_vigentes()
+        vinculos_em_andamento()
         .filter(aluno=usuario)
-        .select_related("bolsa__projeto", "bolsa__edital")
+        .select_related("bolsa__projeto", "bolsa__edital", "termo_compromisso")
         .first()
     )
     dados_bancarios = DadosBancarios.objects.filter(aluno__usuario=usuario).first()
@@ -270,4 +273,17 @@ def painel_do_aluno(usuario, hoje=None):
             dados_bancarios and DadosBancariosSerializer().get_cadastro_completo(dados_bancarios)
         ),
         "inscricao_em_rascunho": inscricoes.filter(status=StatusInscricao.RASCUNHO).exists(),
+        **_pendencias_do_termo(vinculo, perfil),
+    }
+
+
+def _pendencias_do_termo(vinculo, perfil):
+    """O vínculo provisório só é efetivado com o termo: o aluno informa os dados adicionais e
+    envia a parte assinada."""
+    pendente = vinculo is not None and vinculo.status == StatusVinculo.AGUARDANDO_TERMO
+    termo = getattr(vinculo, "termo_compromisso", None) if pendente else None
+    return {
+        "termo_pendente": pendente and not (termo and termo.aluno_assinou),
+        "dados_termo_completos": not motivo_dados_termo_incompletos(perfil),
+        "termo_motivo_recusa": termo.motivo_recusa_aluno if termo else "",
     }
