@@ -21,7 +21,7 @@ import MotivoModal from './MotivoModal'
 function SituacaoFrequencia({ linha }) {
   const { frequencia } = linha
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge status={linha.status} />
       {frequencia?.fora_do_prazo && <Badge status="PENDENTE" label="Lançada fora do prazo" />}
       {linha.pendente && <span className="text-xs font-medium text-red-600">Prazo vencido</span>}
@@ -35,7 +35,7 @@ function SituacaoFrequencia({ linha }) {
 function SituacaoPagamento({ frequencia }) {
   if (!frequencia) return <span className="text-sm text-gray-400">Aguarda a frequência</span>
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge status={frequencia.status_pagamento} />
       {frequencia.justificativa_pagamento && (
         <p className="max-w-[220px] text-xs text-gray-500">{frequencia.justificativa_pagamento}</p>

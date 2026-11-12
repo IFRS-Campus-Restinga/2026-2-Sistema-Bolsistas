@@ -1,7 +1,9 @@
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models.functions import Coalesce
 
 from editais.models import Edital
 from projetos.models import Projeto
@@ -21,8 +23,8 @@ class TipoBolsa(models.TextChoices):
 
 
 class StatusBolsa(models.TextChoices):
+    # Aprovada pela coordenação de área, a bolsa vai direto de SOLICITADA para ABERTA.
     SOLICITADA = "SOLICITADA", "Solicitada"
-    APROVADA = "APROVADA", "Aprovada"
     REJEITADA = "REJEITADA", "Rejeitada"
     ABERTA = "ABERTA", "Aberta"
     EM_SELECAO = "EM_SELECAO", "Em Seleção"
@@ -31,7 +33,8 @@ class StatusBolsa(models.TextChoices):
     CANCELADA = "CANCELADA", "Cancelada"
 
 
-STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA, StatusBolsa.APROVADA, StatusBolsa.ABERTA]
+# Depois da aprovação da coordenação de área, a bolsa não muda mais; só as etapas.
+STATUS_EDITAVEIS = [StatusBolsa.SOLICITADA]
 STATUS_BOLSA_FINALIZADOS = [StatusBolsa.REJEITADA, StatusBolsa.ENCERRADA, StatusBolsa.CANCELADA]
 
 
@@ -118,6 +121,7 @@ class Bolsa(models.Model):
         null=True,
         blank=True,
     )
+    # Exceção: só preenchidas quando a bolsa tem vigência diferente da do edital.
     data_inicio_vigencia = models.DateField(null=True, blank=True)
     data_fim_vigencia = models.DateField(null=True, blank=True)
     status = models.CharField(
@@ -136,6 +140,23 @@ class Bolsa(models.Model):
         related_name="bolsas_avaliadas",
         help_text="Coordenador de Área que aprovou/rejeitou esta bolsa.",
     )
+    # Finalização feita pelo coordenador do projeto; a coordenação de área só toma ciência.
+    finalizada_em = models.DateTimeField(null=True, blank=True)
+    finalizada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bolsas_finalizadas",
+    )
+    ciencia_finalizacao_em = models.DateTimeField(null=True, blank=True)
+    ciencia_finalizacao_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ciencias_de_finalizacao",
+    )
 
     class Meta:
         ordering = ["-data_solicitacao"]
@@ -143,24 +164,43 @@ class Bolsa(models.Model):
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.carga_horaria_semanal}h ({self.get_status_display()})"
 
-    def motivo_bloqueio_edicao(self):
-        if self.status not in STATUS_EDITAVEIS:
-            return f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada.'
+    @property
+    def inicio_vigencia(self):
+        """Início da vigência: o da própria bolsa (exceção) ou o do edital."""
+        return self.data_inicio_vigencia or self.edital.data_inicio_vigencia
 
+    @property
+    def fim_vigencia(self):
+        """Fim da vigência: o da própria bolsa (exceção) ou o do edital."""
+        return self.data_fim_vigencia or self.edital.data_fim_vigencia
+
+    def _motivo_inscricoes_encerradas(self, o_que):
         if self.edital.inscricoes_encerradas():
             return (
                 "O prazo de inscrições do edital terminou em "
                 f"{self.edital.data_fechamento_inscricoes:%d/%m/%Y}; "
-                "a bolsa não pode mais ser editada."
+                f"{o_que} não pode mais ser alterada."
             )
         return ""
 
+    def motivo_bloqueio_edicao(self):
+        """Só a bolsa solicitada (ainda não aprovada pela área) pode ser editada."""
+        if self.status not in STATUS_EDITAVEIS:
+            return (
+                f'Uma bolsa "{self.get_status_display()}" não pode mais ser editada; '
+                "só a bolsa solicitada, antes da aprovação, pode ser alterada."
+            )
+        return self._motivo_inscricoes_encerradas("a bolsa")
+
     def motivo_bloqueio_etapas(self):
+        """Etapas só na bolsa aberta (aprovada) e até o fim das inscrições."""
         if self.status == StatusBolsa.SOLICITADA:
             return (
                 "As etapas de avaliação só podem ser cadastradas depois que a bolsa for aprovada."
             )
-        return self.motivo_bloqueio_edicao()
+        if self.status != StatusBolsa.ABERTA:
+            return f'As etapas de uma bolsa "{self.get_status_display()}" não podem mais ser alteradas.'
+        return self._motivo_inscricoes_encerradas("a etapa")
 
     def pesos_efetivos_etapas(self):
         etapas = list(self.etapas.all())
@@ -216,3 +256,8 @@ class EtapaAvaliacao(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.peso if self.peso is not None else 'peso igual'})"
+
+
+def fim_vigencia_efetivo():
+    """Expressão do fim da vigência para filtrar e ordenar no banco (bolsa ou edital)."""
+    return Coalesce("data_fim_vigencia", "edital__data_fim_vigencia")

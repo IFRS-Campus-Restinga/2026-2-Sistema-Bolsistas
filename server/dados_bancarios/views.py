@@ -13,6 +13,7 @@ from accounts.models import Usuario
 from accounts.permissions import IsAdministrador, IsAluno, IsCoordenadorProjeto
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
+from notificacoes.services import Destino, Notificacao, administradores
 
 from .models import DadosBancarios
 from .serializers import DadosBancariosSerializer
@@ -98,6 +99,13 @@ class MeusDadosBancariosView(APIView):
                 else "Dados bancários atualizados pelo aluno."
             ),
         )
+
+        if not criado:
+            Notificacao.para(administradores()).aviso().titulo(
+                "Dados bancários alterados"
+            ).mensagem(f"{request.user.nome} alterou os próprios dados bancários.").destino(
+                Destino.ADMIN_AUDITORIA
+            ).enviar()
 
         return Response(
             serializer.data,

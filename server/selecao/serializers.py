@@ -109,6 +109,9 @@ def representar_classificacao(bolsa, classificacao):
                     if desistencia
                     else None
                 ),
+                "bolsista_em_outra_bolsa": bool(
+                    vagas and inscricao.aluno_id in vagas.bolsistas_ativos
+                ),
                 "pode_indicar": bool(oficial and not motivo_bloqueio_indicacao(oficial, vagas)),
                 "exige_justificativa_indicacao": bool(
                     oficial and exige_justificativa_indicacao(oficial, vagas)

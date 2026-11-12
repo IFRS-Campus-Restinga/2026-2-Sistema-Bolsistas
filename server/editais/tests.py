@@ -1,13 +1,17 @@
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorProjeto, Usuario
+from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
 from projetos.models import Projeto
 
 from .models import AlteracaoCronograma, Edital
+from .serializers import CAMPOS_CRONOGRAMA
 
 
 class EditalAPITests(APITestCase):
@@ -36,6 +40,43 @@ class EditalAPITests(APITestCase):
         self.assertEqual(edital.nome, self.dados["nome"])
         self.assertEqual(edital.status, Edital.Status.RASCUNHO)
         self.assertEqual(response.data["id"], edital.id)
+
+    def test_administrador_consulta_a_lista_com_o_total_de_bolsas(self):
+        edital = Edital.objects.create(**self.dados)
+        coordenador_projeto = Usuario.objects.create_user(
+            username="cp", email="cp@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        projeto = Projeto.objects.create(
+            titulo="Projeto",
+            coordenador_projeto=CoordenadorProjeto.objects.create(usuario=coordenador_projeto),
+        )
+        Bolsa.objects.create(
+            projeto=projeto,
+            edital=edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+        )
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["total_bolsas"], 1)
+
+    def test_administrador_nao_cadastra_edital(self):
+        admin = Usuario.objects.create_user(
+            username="admin", email="admin@example.com", role=Usuario.Role.ADMINISTRADOR
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_cadastro_nao_permite_escolher_status(self):
         self.client.force_authenticate(user=self.coordenador)
@@ -116,8 +157,8 @@ class EditalAPITests(APITestCase):
 
         self.assertFalse(Edital.objects.exists())
 
-    def test_aluno_e_administrador_nao_podem_listar(self):
-        for perfil in [Usuario.Role.ALUNO, Usuario.Role.ADMINISTRADOR]:
+    def test_aluno_nao_pode_listar(self):
+        for perfil in [Usuario.Role.ALUNO]:
             with self.subTest(perfil=perfil):
                 usuario = Usuario.objects.create_user(
                     username=f"teste_{perfil}",
@@ -368,6 +409,8 @@ class EdicaoEditalAPITests(APITestCase):
             data_recurso_homologacao_fim="2026-09-18",
             data_resultado="2026-09-20",
             data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-07-31",
         )
         self.url = reverse(
             "editais:detalhe",
@@ -399,6 +442,40 @@ class EdicaoEditalAPITests(APITestCase):
         self.assertEqual(historico.data_nova.isoformat(), "2026-09-12")
         self.assertEqual(historico.responsavel, self.coordenador)
         self.assertIsNotNone(historico.alterado_em)
+
+    def test_vigencia_obrigatoria_em_edital_em_vigor(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": None}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fim_vigencia", response.data)
+
+    def test_vigencia_nao_comeca_antes_do_resultado(self):
+        response = self.client.patch(
+            self.url, {"data_inicio_vigencia": "2026-09-19"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_inicio_vigencia", response.data)
+
+    def test_fim_da_vigencia_depois_do_inicio(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": "2026-10-01"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("data_fim_vigencia", response.data)
+
+    def test_vigencia_pode_terminar_antes_da_entrega_dos_relatorios(self):
+        response = self.client.patch(self.url, {"data_fim_vigencia": "2026-11-30"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_alterar_vigencia_entra_no_historico(self):
+        self.client.patch(self.url, {"data_fim_vigencia": "2027-08-31"}, format="json")
+
+        self.assertTrue(
+            AlteracaoCronograma.objects.filter(
+                edital=self.edital, campo="data_fim_vigencia"
+            ).exists()
+        )
 
     def test_nao_registra_historico_para_data_igual(self):
         response = self.client.patch(
@@ -660,6 +737,8 @@ class ValoresBolsaEditalAPITests(APITestCase):
             data_recurso_homologacao_fim="2026-09-18",
             data_resultado="2026-09-20",
             data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-07-31",
         )
         publicar = reverse("editais:publicar", kwargs={"pk": self.edital.pk})
 
@@ -682,3 +761,316 @@ class ValoresBolsaEditalAPITests(APITestCase):
             valor_mensal="500.00",
             status=StatusBolsa.ABERTA,
         )
+
+
+class CronogramaConsolidadoAPITests(APITestCase):
+    def setUp(self):
+        self.url = reverse("editais:cronograma-consolidado")
+        self.hoje = timezone.localdate()
+
+        self.coord_area = Usuario.objects.create_user(
+            username="coord_area_pesquisa",
+            email="area.pesquisa@example.com",
+            role=Usuario.Role.COORDENADOR_AREA,
+        )
+        CoordenadorArea.objects.create(usuario=self.coord_area, tipo_area=TipoArea.PESQUISA)
+
+        self.coord_projeto = Usuario.objects.create_user(
+            username="coord_projeto_cronograma",
+            email="projeto.cronograma@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=self.coord_projeto)
+
+        self.admin = Usuario.objects.create_user(
+            username="admin_cronograma",
+            email="admin.cronograma@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+
+        self.em_vigor = self._cria_edital("2026-001", Edital.Status.EM_VIGOR, inicio=-5)
+        self.rascunho = Edital.objects.create(
+            nome="Edital rascunho",
+            ano_codigo="2026-002",
+            link_documento_oficial="https://example.com/rascunho.pdf",
+        )
+        self.encerrado = self._cria_edital("2025-010", Edital.Status.ENCERRADO, inicio=-200)
+
+    def _cria_edital(self, ano_codigo, status_edital, inicio):
+        datas = [
+            self.hoje + timedelta(days=inicio + passo * 3)
+            for passo in range(len(CAMPOS_CRONOGRAMA))
+        ]
+        return Edital.objects.create(
+            nome=f"Edital {ano_codigo}",
+            ano_codigo=ano_codigo,
+            link_documento_oficial="https://example.com/edital.pdf",
+            status=status_edital,
+            **dict(zip(CAMPOS_CRONOGRAMA, datas, strict=True)),
+        )
+
+    def _cria_bolsa(self, tipo, coordenador):
+        projeto = Projeto.objects.create(
+            titulo=f"Projeto {tipo}",
+            coordenador_projeto=coordenador.perfil_coordenador_projeto,
+        )
+        return Bolsa.objects.create(
+            projeto=projeto,
+            edital=self.em_vigor,
+            tipo=tipo,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal=700,
+            status=StatusBolsa.ABERTA,
+        )
+
+    def test_coordenador_area_ve_todos_os_editais_com_datas_chave(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [edital["id"] for edital in response.data],
+            [self.encerrado.id, self.rascunho.id, self.em_vigor.id],
+        )
+        edital = next(item for item in response.data if item["id"] == self.em_vigor.id)
+        self.assertEqual([etapa["campo"] for etapa in edital["etapas"]], CAMPOS_CRONOGRAMA)
+        self.assertEqual(
+            edital["etapas"][0]["data"], self.em_vigor.data_abertura_inscricoes.isoformat()
+        )
+
+    def test_coordenador_projeto_ve_apenas_editais_em_vigor(self):
+        self.client.force_authenticate(user=self.coord_projeto)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([edital["id"] for edital in response.data], [self.em_vigor.id])
+
+    def test_administrador_ve_todos_os_editais(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)
+
+    def test_aluno_e_visitante_nao_acessam(self):
+        aluno = Usuario.objects.create_user(
+            username="aluno_cronograma",
+            email="aluno.cronograma@example.com",
+            role=Usuario.Role.ALUNO,
+        )
+        self.client.force_authenticate(user=aluno)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=None)
+        self.assertIn(
+            self.client.get(self.url).status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_proxima_etapa_e_a_primeira_data_a_partir_de_hoje(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        response = self.client.get(self.url)
+
+        por_id = {edital["id"]: edital for edital in response.data}
+        # Abertura em hoje-5, fechamento em hoje-2, homologação em hoje+1.
+        proxima = por_id[self.em_vigor.id]["proxima_etapa"]
+        self.assertEqual(proxima["campo"], "data_homologacao")
+        self.assertEqual(proxima["dias"], 1)
+        self.assertIsNone(por_id[self.encerrado.id]["proxima_etapa"])
+        self.assertIsNone(por_id[self.rascunho.id]["proxima_etapa"])
+
+    def test_total_de_bolsas_segue_o_tipo_do_coordenador(self):
+        outro_projeto = Usuario.objects.create_user(
+            username="outro_coord_projeto",
+            email="outro.projeto@example.com",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro_projeto)
+        self._cria_bolsa(TipoBolsa.PESQUISA, self.coord_projeto)
+        self._cria_bolsa(TipoBolsa.INDISSOCIAVEL, outro_projeto)
+        self._cria_bolsa(TipoBolsa.ENSINO, outro_projeto)
+
+        esperado = {self.coord_area: 2, self.coord_projeto: 1, self.admin: 3}
+        for usuario, total in esperado.items():
+            with self.subTest(perfil=usuario.role):
+                self.client.force_authenticate(user=usuario)
+                response = self.client.get(self.url)
+                edital = next(item for item in response.data if item["id"] == self.em_vigor.id)
+                self.assertEqual(edital["total_bolsas"], total)
+
+    def test_fases_marcam_a_atual_para_a_barra_do_cronograma(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        response = self.client.get(self.url)
+
+        por_id = {edital["id"]: edital for edital in response.data}
+        fases = por_id[self.em_vigor.id]["fases"]
+        self.assertEqual(
+            [fase["rotulo"] for fase in fases["fases"]],
+            ["Inscrições", "Homologação", "Recursos", "Resultado", "Vigência"],
+        )
+        # As inscrições fecharam em hoje-2; a homologação (hoje+1) é a fase em andamento.
+        self.assertEqual(fases["atual"], 1)
+        self.assertEqual(por_id[self.encerrado.id]["fases"]["atual"], 5)
+
+    def test_filtra_por_status(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        response = self.client.get(self.url, {"status": Edital.Status.RASCUNHO})
+        self.assertEqual([edital["id"] for edital in response.data], [self.rascunho.id])
+
+        response = self.client.get(self.url, {"status": "INVALIDO"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class CronogramaCoordenadorSemPerfilTests(APITestCase):
+    def test_coordenador_de_area_sem_perfil_ve_editais_sem_bolsas(self):
+        Edital.objects.create(
+            nome="Edital", ano_codigo="2026-001", link_documento_oficial="https://example.com/e"
+        )
+        sem_perfil = Usuario.objects.create_user(
+            username="area_sem_perfil", email="sem@example.com", role=Usuario.Role.COORDENADOR_AREA
+        )
+        self.client.force_authenticate(sem_perfil)
+
+        response = self.client.get(reverse("editais:cronograma-consolidado"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["total_bolsas"], 0)
+
+
+class HistoricoCronogramaAPITests(APITestCase):
+    def setUp(self):
+        self.url = reverse("editais:historico-cronograma")
+        self.coord_area = Usuario.objects.create_user(
+            username="coord_area_historico",
+            email="historico@example.com",
+            nome="Coordenadora Histórico",
+            role=Usuario.Role.COORDENADOR_AREA,
+        )
+        self.edital = Edital.objects.create(
+            nome="Edital com histórico",
+            ano_codigo="2026-001",
+            link_documento_oficial="https://example.com/edital.pdf",
+            status=Edital.Status.EM_VIGOR,
+            data_abertura_inscricoes="2026-09-01",
+            data_fechamento_inscricoes="2026-09-10",
+            data_homologacao="2026-09-15",
+            data_recurso_homologacao_inicio="2026-09-16",
+            data_recurso_homologacao_fim="2026-09-18",
+            data_resultado="2026-09-20",
+            data_entrega_relatorios="2026-12-01",
+            data_inicio_vigencia="2026-10-01",
+            data_fim_vigencia="2027-06-30",
+        )
+        self.outro_edital = Edital.objects.create(
+            nome="Outro edital",
+            ano_codigo="2026-002",
+            link_documento_oficial="https://example.com/outro.pdf",
+        )
+        AlteracaoCronograma.objects.create(
+            edital=self.outro_edital,
+            campo="data_resultado",
+            data_anterior="2026-10-01",
+            data_nova="2026-10-05",
+            responsavel=self.coord_area,
+        )
+
+    def _prorroga_fechamento(self):
+        self.client.force_authenticate(user=self.coord_area)
+        response = self.client.patch(
+            reverse("editais:detalhe", kwargs={"pk": self.edital.pk}),
+            {"data_fechamento_inscricoes": "2026-09-12"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_exibe_data_anterior_nova_data_responsavel_e_quando(self):
+        self._prorroga_fechamento()
+
+        response = self.client.get(self.url, {"edital": self.edital.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        alteracao = response.data[0]
+        self.assertEqual(alteracao["edital"], self.edital.pk)
+        self.assertEqual(alteracao["campo"], "data_fechamento_inscricoes")
+        self.assertEqual(alteracao["etapa"], "Fechamento das inscrições")
+        self.assertEqual(alteracao["data_anterior"], "2026-09-10")
+        self.assertEqual(alteracao["data_nova"], "2026-09-12")
+        self.assertEqual(alteracao["responsavel_nome"], "Coordenadora Histórico")
+        self.assertEqual(alteracao["responsavel_email"], "historico@example.com")
+        self.assertIsNotNone(alteracao["alterado_em"])
+
+    def test_sem_filtro_lista_todas_as_alteracoes_mais_recentes_primeiro(self):
+        self._prorroga_fechamento()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [alteracao["edital"] for alteracao in response.data],
+            [self.edital.pk, self.outro_edital.pk],
+        )
+
+    def test_filtra_por_etapa(self):
+        self._prorroga_fechamento()
+
+        response = self.client.get(self.url, {"campo": "data_resultado"})
+        self.assertEqual([item["edital"] for item in response.data], [self.outro_edital.pk])
+
+        response = self.client.get(self.url, {"campo": "nome"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_alteracao_da_vigencia_tem_rotulo_proprio(self):
+        self.client.force_authenticate(user=self.coord_area)
+        response = self.client.patch(
+            reverse("editais:detalhe", kwargs={"pk": self.edital.pk}),
+            {"data_fim_vigencia": "2027-07-31"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.get(self.url, {"edital": self.edital.pk})
+
+        self.assertEqual(response.data[0]["etapa"], "Fim da vigência")
+
+    def test_rejeita_edital_invalido(self):
+        self.client.force_authenticate(user=self.coord_area)
+
+        for invalido in ("abc", "²", "1²"):
+            with self.subTest(edital=invalido):
+                response = self.client.get(self.url, {"edital": invalido})
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_administrador_pode_consultar(self):
+        admin = Usuario.objects.create_user(
+            username="admin_historico",
+            email="admin.historico@example.com",
+            role=Usuario.Role.ADMINISTRADOR,
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_coordenador_projeto_e_aluno_nao_podem_consultar(self):
+        for papel in (Usuario.Role.COORDENADOR_PROJETO, Usuario.Role.ALUNO):
+            with self.subTest(papel=papel):
+                usuario = Usuario.objects.create_user(
+                    username=f"sem_acesso_{papel}",
+                    email=f"{papel.lower()}@example.com",
+                    role=papel,
+                )
+                self.client.force_authenticate(user=usuario)
+
+                response = self.client.get(self.url)
+
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -11,7 +11,8 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsas.models import Bolsa, StatusBolsa
 from bolsistas.services import atualizar_status_preenchimento, vincular_por_indicacao
-from inscricoes.models import Inscricao, NotificacaoInscricao, StatusInscricao
+from inscricoes.models import Inscricao, StatusInscricao
+from notificacoes.services import Destino, Notificacao
 
 from .models import (
     DesempateClassificacao,
@@ -172,15 +173,16 @@ class PublicarResultadoView(_BolsaDoCoordenadorMixin, APIView):
         )
 
         titulo = bolsa.projeto.titulo
-        NotificacaoInscricao.objects.bulk_create(
-            NotificacaoInscricao(
-                inscricao=candidato.inscricao,
-                mensagem=(
-                    f'O resultado da seleção da bolsa do projeto "{titulo}" foi publicado. '
-                    f"Sua situação: {SituacaoClassificacao(candidato.situacao).label}"
-                    + (f" ({candidato.posicao}º lugar)." if candidato.posicao else ".")
-                ),
+        Notificacao.enviar_todas(
+            Notificacao.para(candidato.inscricao.aluno)
+            .info()
+            .titulo("Resultado da seleção publicado")
+            .mensagem(
+                f'O resultado da seleção da bolsa do projeto "{titulo}" foi publicado. '
+                f"Sua situação: {SituacaoClassificacao(candidato.situacao).label}"
+                + (f" ({candidato.posicao}º lugar)." if candidato.posicao else ".")
             )
+            .destino(Destino.ALUNO_INSCRICOES)
             for candidato in classificacao.candidatos
         )
         registrar_log(
@@ -243,12 +245,10 @@ class IndicarBolsistaView(_ResultadoPublicadoMixin, APIView):
             responsavel=request.user,
         )
         vincular_por_indicacao(indicacao)
-        NotificacaoInscricao.objects.create(
-            inscricao=inscricao,
-            mensagem=(
-                f'Você foi indicado(a) como bolsista da bolsa do projeto "{bolsa.projeto.titulo}".'
-            ),
-        )
+        Notificacao.para(inscricao.aluno).sucesso().titulo("Indicação como bolsista").mensagem(
+            f'Você foi indicado(a) como bolsista da bolsa do projeto "{bolsa.projeto.titulo}". '
+            "Preencha e assine o termo de compromisso em Minha bolsa para efetivar o vínculo."
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
         atualizar_status_preenchimento(bolsa)
         registrar_log(
             usuario=request.user,
@@ -282,13 +282,10 @@ class DesistenciaVagaView(_ResultadoPublicadoMixin, APIView):
         DesistenciaVaga.objects.create(
             bolsa=bolsa, inscricao=inscricao, motivo=dados["motivo"], responsavel=request.user
         )
-        NotificacaoInscricao.objects.create(
-            inscricao=inscricao,
-            mensagem=(
-                "Foi registrado que você não vai assumir a vaga da bolsa do projeto "
-                f'"{bolsa.projeto.titulo}". Motivo: {dados["motivo"]}'
-            ),
-        )
+        Notificacao.para(inscricao.aluno).aviso().titulo("Vaga não assumida").mensagem(
+            "Foi registrado que você não vai assumir a vaga da bolsa do projeto "
+            f'"{bolsa.projeto.titulo}". Motivo: {dados["motivo"]}'
+        ).destino(Destino.ALUNO_INSCRICOES).enviar()
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.DESISTENCIA,

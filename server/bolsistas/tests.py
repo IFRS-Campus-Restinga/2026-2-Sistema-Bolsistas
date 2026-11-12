@@ -1,9 +1,11 @@
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 from importlib import import_module
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from django.apps import apps
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import override_settings
@@ -11,11 +13,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
+from accounts.models import Aluno, CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from auditoria.models import AcaoAuditoria, EntidadeAuditoria, LogAuditoria
 from bolsas.models import Bolsa, StatusBolsa
+from bolsistas.services import alunos_com_vinculo_ativo, tem_vinculo_ativo
 from editais.models import Edital
+from frequencias.tests import CenarioFrequencia
 from inscricoes.models import Inscricao, Recurso, StatusInscricao, StatusRecurso
+from notificacoes.models import Notificacao
+from notificacoes.services import Destino
 from projetos.models import Projeto
 from selecao.models import IndicacaoBolsista, PublicacaoResultado
 from vinculo_direto.models import ConviteVinculoDireto, StatusConvite
@@ -28,8 +34,11 @@ from .models import (
     SolicitacaoDesligamento,
     StatusSolicitacaoDesligamento,
     StatusVinculo,
+    TermoCompromisso,
+    TipoTermo,
     VinculoBolsista,
 )
+from .regras import motivos_bloqueio_finalizacao, pendencias_do_coordenador
 
 migracao_vinculos = import_module("bolsistas.migrations.0002_vinculos_existentes")
 
@@ -171,6 +180,14 @@ def pdf(nome="relatorio.pdf"):
     return SimpleUploadedFile(nome, b"%PDF-1.4 teste", content_type="application/pdf")
 
 
+def docx(nome="termo.docx"):
+    return SimpleUploadedFile(
+        nome,
+        b"PK teste docx",
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
 class RelatorioFinalTests(CenarioBolsista):
     def setUp(self):
         super().setUp()
@@ -180,6 +197,27 @@ class RelatorioFinalTests(CenarioBolsista):
         return RelatorioFinal.objects.create(
             vinculo=self.vinculo_ana, solicitado_por=self.coordenador, **campos
         )
+
+    def test_excluir_relatorio_remove_tambem_o_modelo(self):
+        relatorio = self.relatorio(self.vinculo("caio"))
+        relatorio.modelo = SimpleUploadedFile("modelo.docx", b"modelo")
+        relatorio.save(update_fields=["modelo"])
+        caminho_modelo = relatorio.modelo.path
+        self.assertTrue(os.path.exists(caminho_modelo))
+
+        relatorio.delete()
+
+        self.assertFalse(os.path.exists(caminho_modelo))
+
+    def test_modelo_aceita_pdf_e_documentos_de_texto(self):
+        relatorio = self.relatorio(self.vinculo("davi"))
+        for nome in ["modelo.pdf", "modelo.doc", "modelo.docx", "modelo.odt"]:
+            relatorio.modelo = SimpleUploadedFile(nome, b"modelo")
+            relatorio.full_clean()
+
+        relatorio.modelo = SimpleUploadedFile("modelo.exe", b"modelo")
+        with self.assertRaises(ValidationError):
+            relatorio.full_clean()
 
     def test_relatorio_nasce_solicitado_sem_arquivo_e_aceita_envio(self):
         relatorio = self.criar()
@@ -282,14 +320,21 @@ class EnvioRelatorioTests(CenarioBolsista):
 
         self.assertEqual(self.enviar().status_code, 200)
 
-    def test_bloqueia_apos_o_prazo(self):
+    def test_envio_dentro_do_prazo_nao_fica_marcado(self):
+        self.assertEqual(self.enviar().status_code, 200)
+
+        self.assertFalse(RelatorioFinal.objects.get().fora_do_prazo)
+
+    def test_envio_apos_o_prazo_e_aceito_e_marcado_fora_do_prazo(self):
         self.definir_prazo(dias=-1)
 
         response = self.enviar()
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("prazo de entrega", response.data["detail"])
-        self.assertEqual(RelatorioFinal.objects.get().situacao, SituacaoRelatorio.SOLICITADO)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["fora_do_prazo"])
+        relatorio = RelatorioFinal.objects.get()
+        self.assertEqual(relatorio.situacao, SituacaoRelatorio.AGUARDANDO_AVALIACAO)
+        self.assertTrue(relatorio.fora_do_prazo)
 
     def test_bloqueia_edital_sem_prazo(self):
         self.definir_prazo(dias=None)
@@ -333,12 +378,28 @@ class EnvioRelatorioTests(CenarioBolsista):
         self.enviar(pdf("versao-1.pdf"))
         caminho_anterior = RelatorioFinal.objects.get().arquivo.path
 
-        response = self.enviar(pdf("versao-2.pdf"))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.enviar(pdf("versao-2.pdf"))
 
         self.assertEqual(response.status_code, 200)
         relatorio = RelatorioFinal.objects.get()
         self.assertEqual(relatorio.nome_original, "versao-2.pdf")
         self.assertFalse(os.path.exists(caminho_anterior))
+        self.assertTrue(os.path.exists(relatorio.arquivo.path))
+
+    def test_reenvio_que_falha_mantem_o_arquivo_anterior(self):
+        self.enviar(pdf("versao-1.pdf"))
+        relatorio = RelatorioFinal.objects.get()
+
+        with (
+            mock.patch("bolsistas.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.captureOnCommitCallbacks(execute=True),
+            self.assertRaises(RuntimeError),
+        ):
+            self.enviar(pdf("versao-2.pdf"))
+
+        relatorio.refresh_from_db()
+        self.assertEqual(relatorio.nome_original, "versao-1.pdf")
         self.assertTrue(os.path.exists(relatorio.arquivo.path))
 
     def test_reenvio_apos_reprovacao_volta_para_avaliacao(self):
@@ -393,6 +454,24 @@ class MeusVinculosTests(CenarioBolsista):
         self.vinculo("bia")
         self.client.force_authenticate(self.vinculo_ana.aluno)
 
+    def test_traz_a_sigla_da_modalidade_e_a_data_do_servidor(self):
+        item = self.client.get(self.url).data[0]
+
+        self.assertEqual(item["bolsa_modalidade"], "BICT")
+        self.assertEqual(item["hoje"], timezone.localdate())
+
+    def test_aluno_ve_o_modelo_anexado_pelo_coordenador(self):
+        relatorio = self.relatorio(self.vinculo_ana, SituacaoRelatorio.SOLICITADO)
+        relatorio.modelo = SimpleUploadedFile("modelo.docx", b"modelo")
+        relatorio.nome_original_modelo = "modelo.docx"
+        relatorio.save(update_fields=["modelo", "nome_original_modelo"])
+
+        item = self.client.get(self.url).data[0]
+
+        url_modelo = reverse("bolsistas:relatorio-final-modelo", kwargs={"pk": self.vinculo_ana.pk})
+        self.assertTrue(item["relatorio"]["modelo"].endswith(url_modelo))
+        self.assertEqual(item["relatorio"]["nome_original_modelo"], "modelo.docx")
+
     def test_lista_somente_os_vinculos_do_aluno(self):
         with self.assertNumQueries(1):
             response = self.client.get(self.url)
@@ -431,15 +510,15 @@ class MeusVinculosTests(CenarioBolsista):
         self.assertFalse(item["pode_enviar_relatorio"])
         self.assertIn("já foi aprovado", item["motivo_bloqueio"])
 
-    def test_prazo_vencido_bloqueia_envio(self):
+    def test_prazo_vencido_ainda_permite_envio_e_avisa(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.SOLICITADO)
         self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
         self.edital.save(update_fields=["data_entrega_relatorios"])
 
         item = self.client.get(self.url).data[0]
 
-        self.assertFalse(item["pode_enviar_relatorio"])
-        self.assertIn("terminou", item["motivo_bloqueio"])
+        self.assertTrue(item["pode_enviar_relatorio"])
+        self.assertTrue(item["prazo_relatorio_encerrado"])
 
     def test_somente_aluno_acessa(self):
         self.client.force_authenticate(self.coordenador)
@@ -480,6 +559,15 @@ class ParecerRelatorioTests(CenarioBolsista):
         self.assertEqual(self.relatorio_ana.situacao, SituacaoRelatorio.APROVADO)
         self.assertEqual(self.relatorio_ana.avaliado_por, self.coordenador)
         self.assertIsNotNone(self.relatorio_ana.avaliado_em)
+
+    def test_ultimo_relatorio_aprovado_avisa_o_coordenador_que_pode_finalizar(self):
+        PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
+
+        self.avaliar(SituacaoRelatorio.APROVADO)
+
+        aviso = Notificacao.objects.get(destinatario=self.coordenador)
+        self.assertEqual(aviso.titulo, "Bolsa pronta para finalizar")
+        self.assertEqual(aviso.destino, Destino.PROJETO_FINALIZACAO)
 
     def test_reprova_com_justificativa(self):
         response = self.avaliar(SituacaoRelatorio.REPROVADO, "  Faltou o cronograma.  ")
@@ -616,7 +704,7 @@ class FinalizarBolsaTests(CenarioBolsista):
         self.vinculo_bia = self.vinculo("bia")
         # Bolsistas indicados pressupõem o resultado da seleção publicado.
         PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
-        self.client.force_authenticate(self.coordenador_area)
+        self.client.force_authenticate(self.coordenador)
 
     def finalizar(self):
         return self.client.post(reverse("bolsas:finalizar", kwargs={"pk": self.bolsa.pk}))
@@ -633,7 +721,29 @@ class FinalizarBolsaTests(CenarioBolsista):
         log = LogAuditoria.objects.get()
         self.assertEqual(log.acao, AcaoAuditoria.ENCERRAMENTO)
         self.assertEqual(log.entidade, EntidadeAuditoria.BOLSA)
-        self.assertEqual(log.usuario, self.coordenador_area)
+        self.assertEqual(log.usuario, self.coordenador)
+        self.assertEqual(self.bolsa.finalizada_por, self.coordenador)
+        self.assertIsNotNone(self.bolsa.finalizada_em)
+        self.assertIsNone(self.bolsa.ciencia_finalizacao_em)
+
+    def test_finalizacao_notifica_bolsistas_e_pede_ciencia_da_area(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        self.relatorio(self.vinculo_bia, SituacaoRelatorio.APROVADO)
+
+        self.finalizar()
+
+        area = Notificacao.objects.get(destinatario=self.coordenador_area)
+        self.assertEqual(area.titulo, "Bolsa finalizada")
+        self.assertEqual(area.destino, Destino.AREA_FINALIZACAO)
+        self.assertEqual(
+            Notificacao.objects.filter(
+                destinatario__in=[self.vinculo_ana.aluno, self.vinculo_bia.aluno],
+                destino=Destino.ALUNO_MINHA_BOLSA,
+            ).count(),
+            2,
+        )
+        # Quem finalizou não é avisado da própria ação.
+        self.assertFalse(Notificacao.objects.filter(destinatario=self.coordenador).exists())
 
     def test_lista_os_relatorios_pendentes(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.AGUARDANDO_AVALIACAO)
@@ -675,7 +785,7 @@ class FinalizarBolsaTests(CenarioBolsista):
     def assert_bloqueado_por(self, trecho):
         response = self.finalizar()
         self.assertEqual(response.status_code, 400)
-        self.assertIn("processos em aberto", response.data["detail"])
+        self.assertIn("Processo em aberto", response.data["detail"])
         self.assertIn(trecho, response.data["detail"])
         self.bolsa.refresh_from_db()
         self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
@@ -730,15 +840,181 @@ class FinalizarBolsaTests(CenarioBolsista):
 
         self.assertEqual(self.finalizar().status_code, 400)
 
-    def test_coordenador_de_outra_area_nao_finaliza(self):
-        self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))
+    def test_coordenador_de_outro_projeto_nao_finaliza(self):
+        outro = Usuario.objects.create_user(
+            username="outro",
+            email="outro@example.com",
+            nome="Outro",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.aprovar_todos()
+        self.client.force_authenticate(outro)
+
+        self.assertEqual(self.finalizar().status_code, 404)
+        self.bolsa.refresh_from_db()
+        self.assertEqual(self.bolsa.status, StatusBolsa.PREENCHIDA)
+
+    def test_coordenador_de_area_nao_finaliza(self):
+        self.aprovar_todos()
+        self.client.force_authenticate(self.coordenador_area)
 
         self.assertEqual(self.finalizar().status_code, 403)
 
-    def test_coordenador_de_projeto_nao_finaliza(self):
+
+class BolsasDoCoordenadorProjetoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.vinculo_ana = self.vinculo("ana")
+        self.vinculo_bia = self.vinculo("bia")
+        PublicacaoResultado.objects.create(bolsa=self.bolsa, responsavel=self.coordenador)
         self.client.force_authenticate(self.coordenador)
 
-        self.assertEqual(self.finalizar().status_code, 403)
+    def listar(self):
+        response = self.client.get(reverse("bolsistas:bolsas-do-coordenador-projeto"))
+        self.assertEqual(response.status_code, 200, response.data)
+        return response.data
+
+    def test_lista_bolsistas_e_motivos_de_bloqueio(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        Inscricao.objects.create(
+            aluno=self.aluno("caio"), bolsa=self.bolsa, status=StatusInscricao.PENDENTE
+        )
+
+        [bolsa] = self.listar()
+
+        self.assertEqual([b["aluno_nome"] for b in bolsa["bolsistas"]], ["ana", "bia"])
+        self.assertEqual(bolsa["bolsistas"][0]["relatorio"]["situacao"], "APROVADO")
+        self.assertFalse(bolsa["pode_finalizar"])
+        self.assertEqual(
+            bolsa["motivos_bloqueio"],
+            [
+                "Processo em aberto: 1 inscrição aguardando homologação.",
+                "Relatório final de bia (não solicitado).",
+            ],
+        )
+
+    def test_bolsa_sem_pendencias_pode_ser_finalizada(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        self.relatorio(self.vinculo_bia, SituacaoRelatorio.APROVADO)
+
+        [bolsa] = self.listar()
+
+        self.assertTrue(bolsa["pode_finalizar"])
+        self.assertEqual(bolsa["motivos_bloqueio"], [])
+
+    def test_bolsa_em_andamento_sem_bolsista_ativo_nao_aparece(self):
+        VinculoBolsista.objects.update(status=StatusVinculo.DESLIGADO)
+
+        self.assertEqual(self.listar(), [])
+
+    def test_bolsista_desligado_nao_aparece(self):
+        self.vinculo_bia.status = StatusVinculo.DESLIGADO
+        self.vinculo_bia.save(update_fields=["status"])
+
+        [bolsa] = self.listar()
+
+        self.assertEqual([b["aluno_nome"] for b in bolsa["bolsistas"]], ["ana"])
+
+    def test_bolsa_finalizada_mostra_quem_finalizou_e_ciencia(self):
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.finalizada_em = timezone.now()
+        self.bolsa.finalizada_por = self.coordenador
+        self.bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
+
+        [bolsa] = self.listar()
+
+        self.assertEqual(bolsa["finalizada_por_nome"], "Coordenador")
+        self.assertIsNone(bolsa["ciencia_finalizacao_em"])
+        self.assertFalse(bolsa["pode_finalizar"])
+        self.assertEqual(bolsa["motivos_bloqueio"], [])
+
+    def test_prazo_do_relatorio_encerrado_deixa_a_bolsa_vencida(self):
+        self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+
+        [bolsa] = self.listar()
+
+        self.assertTrue(bolsa["prazo_relatorio_encerrado"])
+
+    def test_nao_lista_bolsas_de_outro_coordenador(self):
+        outro = Usuario.objects.create_user(
+            username="outro",
+            email="outro@example.com",
+            nome="Outro",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.client.force_authenticate(outro)
+
+        self.assertEqual(self.listar(), [])
+
+    def test_coordenador_de_area_nao_acessa(self):
+        self.client.force_authenticate(self.coordenador_de_area("area", TipoArea.ENSINO))
+
+        response = self.client.get(reverse("bolsistas:bolsas-do-coordenador-projeto"))
+
+        self.assertEqual(response.status_code, 403)
+
+
+class CienciaFinalizacaoTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.coordenador_area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.finalizada_em = timezone.now()
+        self.bolsa.finalizada_por = self.coordenador
+        self.bolsa.save(update_fields=["status", "finalizada_em", "finalizada_por"])
+        self.vinculo("ana")
+        self.client.force_authenticate(self.coordenador_area)
+
+    def ciencia(self):
+        return self.client.post(reverse("bolsas:ciencia-finalizacao", kwargs={"pk": self.bolsa.pk}))
+
+    def test_area_toma_ciencia_da_bolsa_finalizada(self):
+        response = self.ciencia()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.bolsa.refresh_from_db()
+        self.assertIsNotNone(self.bolsa.ciencia_finalizacao_em)
+        self.assertEqual(self.bolsa.ciencia_finalizacao_por, self.coordenador_area)
+
+    def test_ciencia_repetida_mantem_a_primeira(self):
+        self.ciencia()
+        self.bolsa.refresh_from_db()
+        primeira = self.bolsa.ciencia_finalizacao_em
+
+        self.client.force_authenticate(self.coordenador_de_area("outro", TipoArea.ENSINO))
+        self.assertEqual(self.ciencia().status_code, 200)
+
+        self.bolsa.refresh_from_db()
+        self.assertEqual(self.bolsa.ciencia_finalizacao_em, primeira)
+        self.assertEqual(self.bolsa.ciencia_finalizacao_por, self.coordenador_area)
+
+    def test_bolsa_nao_finalizada_nao_recebe_ciencia(self):
+        self.bolsa.status = StatusBolsa.PREENCHIDA
+        self.bolsa.finalizada_em = None
+        self.bolsa.save(update_fields=["status", "finalizada_em"])
+
+        self.assertEqual(self.ciencia().status_code, 404)
+
+    def test_coordenador_de_outra_area_nao_toma_ciencia(self):
+        self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))
+
+        self.assertEqual(self.ciencia().status_code, 403)
+
+    def test_coordenador_de_projeto_nao_toma_ciencia(self):
+        self.client.force_authenticate(self.coordenador)
+
+        self.assertEqual(self.ciencia().status_code, 403)
+
+    def test_lista_da_area_mostra_finalizacao_e_ciencia(self):
+        response = self.client.get(reverse("bolsistas:bolsas-para-finalizar"))
+
+        bolsa = response.data[0]
+        self.assertEqual(bolsa["finalizada_por_nome"], "Coordenador")
+        self.assertIsNotNone(bolsa["finalizada_em"])
+        self.assertIsNone(bolsa["ciencia_finalizacao_em"])
 
 
 class BolsaEncerradaTests(CenarioBolsista):
@@ -803,7 +1079,8 @@ class BolsasParaFinalizarTests(CenarioBolsista):
         self.assertEqual(item["total_bolsistas"], 2)
         self.assertEqual(item["relatorios_aprovados"], 1)
         self.assertFalse(item["pode_finalizar"])
-        self.assertIn("bia (não solicitado)", item["motivo_bloqueio"])
+        self.assertEqual(item["motivos_bloqueio"], ["Relatório final de bia (não solicitado)."])
+        self.assertEqual(item["bolsistas_nomes"], ["ana", "bia"])
 
     def test_libera_quando_tudo_aprovado(self):
         self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
@@ -813,7 +1090,18 @@ class BolsasParaFinalizarTests(CenarioBolsista):
 
         self.assertEqual(item["relatorios_aprovados"], 2)
         self.assertTrue(item["pode_finalizar"])
-        self.assertEqual(item["motivo_bloqueio"], "")
+        self.assertEqual(item["motivos_bloqueio"], [])
+
+    def test_area_ve_relatorios_entregues_fora_do_prazo(self):
+        no_prazo = self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        atrasado = self.relatorio(self.vinculo_bia, SituacaoRelatorio.APROVADO)
+        atrasado.fora_do_prazo = True
+        atrasado.save(update_fields=["fora_do_prazo"])
+        self.assertFalse(no_prazo.fora_do_prazo)
+
+        item = self.client.get(self.url).data[0]
+
+        self.assertEqual(item["relatorios_fora_do_prazo"], ["bia"])
 
     def test_bolsa_encerrada_aparece_sem_acao(self):
         self.bolsa.status = StatusBolsa.ENCERRADA
@@ -823,12 +1111,25 @@ class BolsasParaFinalizarTests(CenarioBolsista):
 
         self.assertEqual(item["status"], StatusBolsa.ENCERRADA)
         self.assertFalse(item["pode_finalizar"])
-        self.assertEqual(item["motivo_bloqueio"], "")
+        self.assertEqual(item["motivos_bloqueio"], [])
 
     def test_bolsa_sem_bolsistas_nao_aparece(self):
         VinculoBolsista.objects.all().delete()
 
         self.assertEqual(self.client.get(self.url).data, [])
+
+    def test_bolsa_em_andamento_sem_bolsista_ativo_nao_aparece(self):
+        VinculoBolsista.objects.update(status=StatusVinculo.DESLIGADO)
+
+        self.assertEqual(self.client.get(self.url).data, [])
+
+    def test_prazo_do_relatorio_encerrado_aparece_para_a_area(self):
+        self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+
+        item = self.client.get(self.url).data[0]
+
+        self.assertTrue(item["prazo_relatorio_encerrado"])
 
     def test_coordenador_de_outra_area_nao_ve(self):
         self.client.force_authenticate(self.coordenador_de_area("outra", TipoArea.PESQUISA))
@@ -863,6 +1164,70 @@ class SolicitarRelatorioTests(CenarioBolsista):
         self.assertEqual(response.data["relatorio"]["situacao"], SituacaoRelatorio.SOLICITADO)
         self.assertFalse(response.data["pode_solicitar_relatorio"])
 
+    def solicitar_com_modelo(self, arquivo):
+        return self.client.post(
+            reverse("bolsistas:solicitar-relatorio", kwargs={"pk": self.vinculo_ana.pk}),
+            {"modelo": arquivo},
+            format="multipart",
+        )
+
+    def url_modelo(self):
+        return reverse("bolsistas:relatorio-final-modelo", kwargs={"pk": self.vinculo_ana.pk})
+
+    def test_solicita_com_modelo_anexado(self):
+        response = self.solicitar_com_modelo(SimpleUploadedFile("modelo-relatorio.docx", b"modelo"))
+
+        self.assertEqual(response.status_code, 201, response.data)
+        relatorio = RelatorioFinal.objects.get(vinculo=self.vinculo_ana)
+        self.assertEqual(relatorio.nome_original_modelo, "modelo-relatorio.docx")
+        self.assertTrue(
+            relatorio.modelo.name.startswith(f"relatorios_finais/{self.vinculo_ana.pk}/modelo/")
+        )
+        self.assertTrue(response.data["relatorio"]["modelo"].endswith(self.url_modelo()))
+        self.assertEqual(
+            response.data["relatorio"]["nome_original_modelo"], "modelo-relatorio.docx"
+        )
+
+    def test_solicita_sem_modelo(self):
+        self.assertEqual(self.solicitar().status_code, 201)
+
+        relatorio = RelatorioFinal.objects.get(vinculo=self.vinculo_ana)
+        self.assertFalse(relatorio.modelo)
+        self.assertIsNone(
+            self.client.get(reverse("bolsistas:vinculos")).data[0]["relatorio"]["modelo"]
+        )
+
+    def test_modelo_com_formato_invalido_nao_cria_a_solicitacao(self):
+        response = self.solicitar_com_modelo(SimpleUploadedFile("modelo.exe", b"modelo"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("modelo", response.data)
+        self.assertFalse(RelatorioFinal.objects.exists())
+
+    def test_aluno_e_coordenador_baixam_o_modelo(self):
+        self.solicitar_com_modelo(SimpleUploadedFile("modelo.odt", b"conteudo do modelo"))
+
+        response = self.client.get(self.url_modelo())
+        response.close()
+        self.assertEqual(response.status_code, 200)
+
+        self.client.force_authenticate(self.vinculo_ana.aluno)
+        response = self.client.get(self.url_modelo())
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("modelo.odt", response["Content-Disposition"])
+        self.assertEqual(b"".join(response.streaming_content), b"conteudo do modelo")
+
+    def test_outro_aluno_nao_baixa_o_modelo(self):
+        self.solicitar_com_modelo(SimpleUploadedFile("modelo.pdf", b"modelo"))
+        self.client.force_authenticate(self.vinculo("bia").aluno)
+
+        self.assertEqual(self.client.get(self.url_modelo()).status_code, 404)
+
+    def test_relatorio_sem_modelo_responde_404_no_download(self):
+        self.solicitar()
+
+        self.assertEqual(self.client.get(self.url_modelo()).status_code, 404)
+
     def test_solicitacao_libera_o_envio_para_o_aluno(self):
         self.solicitar()
         self.client.force_authenticate(self.vinculo_ana.aluno)
@@ -883,15 +1248,15 @@ class SolicitarRelatorioTests(CenarioBolsista):
         self.assertEqual(response.status_code, 400)
         self.assertIn("já foi solicitado", response.data["detail"])
 
-    def test_nao_solicita_apos_o_prazo_do_edital(self):
+    def test_solicita_apos_o_prazo_do_edital(self):
         self.edital.data_entrega_relatorios = timezone.localdate() - timedelta(days=1)
         self.edital.save(update_fields=["data_entrega_relatorios"])
 
         response = self.solicitar()
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("terminou", response.data["detail"])
-        self.assertFalse(RelatorioFinal.objects.exists())
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["prazo_relatorio_encerrado"])
+        self.assertEqual(RelatorioFinal.objects.get().situacao, SituacaoRelatorio.SOLICITADO)
 
     def test_nao_solicita_em_bolsa_encerrada(self):
         self.bolsa.status = StatusBolsa.ENCERRADA
@@ -1075,3 +1440,437 @@ class DesligamentoECancelamentoTests(CenarioBolsista):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(CancelamentoVaga.objects.exists())
+
+
+class TermoCompromissoTests(CenarioBolsista):
+    """Vínculo provisório: o aluno informa os dados, baixa e assina o termo; o coordenador
+    revisa e envia o termo final, que efetiva o vínculo."""
+
+    def setUp(self):
+        super().setUp()
+        self.hoje = timezone.localdate()
+        self.edital.data_inicio_vigencia = date(2026, 3, 1)
+        self.edital.data_fim_vigencia = date(2026, 12, 31)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+        self.vinculo_ana = self.vinculo("ana")
+        self.vinculo_ana.status = StatusVinculo.AGUARDANDO_TERMO
+        self.vinculo_ana.save(update_fields=["status"])
+        self.aluna = self.vinculo_ana.aluno
+        self.perfil = Aluno.objects.create(
+            usuario=self.aluna,
+            matricula="2026001",
+            curso="Tecnologia em Análise e Desenvolvimento de Sistemas",
+            cpf="52998224725",
+            data_nascimento=self.hoje.replace(year=self.hoje.year - 20),
+        )
+
+    def url(self, nome):
+        return reverse(f"bolsistas:{nome}", kwargs={"pk": self.vinculo_ana.pk})
+
+    def baixar_termo(self):
+        """Baixa e fecha o arquivo (no Windows, o arquivo aberto não pode ser substituído)."""
+        self.client.force_authenticate(self.aluna)
+        response = self.client.get(self.url("termo-download"))
+        conteudo = b"".join(response.streaming_content) if response.status_code == 200 else b""
+        response.close()
+        return response, conteudo
+
+    def enviar_assinatura_aluno(self, arquivo=None):
+        self.client.force_authenticate(self.aluna)
+        return self.client.post(
+            self.url("termo-assinado"),
+            {"arquivo": arquivo or docx("termo-assinado-aluno.docx")},
+            format="multipart",
+        )
+
+    def enviar_termo_final(self, arquivo=None):
+        self.client.force_authenticate(self.coordenador)
+        return self.client.post(
+            self.url("termo-assinado"),
+            {"arquivo": arquivo or pdf("termo-final.pdf")},
+            format="multipart",
+        )
+
+    def termo(self):
+        return TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+
+    def test_aluno_informa_dados_para_o_termo(self):
+        self.client.force_authenticate(self.aluna)
+        response = self.client.patch(
+            reverse("bolsistas:meus-dados-termo"),
+            {"data_nascimento": "2010-05-10", "nome_responsavel_legal": " Responsável "},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["completos"])
+        self.assertTrue(response.data["menor_de_idade"])
+        self.perfil.refresh_from_db()
+        self.assertEqual(self.perfil.nome_responsavel_legal, "Responsável")
+
+    def test_menor_sem_responsavel_legal_nao_salva(self):
+        self.client.force_authenticate(self.aluna)
+        response = self.client.patch(
+            reverse("bolsistas:meus-dados-termo"),
+            {"data_nascimento": "2012-01-01", "nome_responsavel_legal": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nome_responsavel_legal", response.data)
+
+    def test_aluno_baixa_termo_gerado_com_a_vigencia_do_edital(self):
+        response, conteudo = self.baixar_termo()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(conteudo[:2], b"PK")
+        termo = self.termo()
+        self.assertEqual(termo.tipo, TipoTermo.MAIOR)
+        self.assertEqual(termo.gerado_por, self.aluna)
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+        documento = Document(termo.arquivo_gerado.path)
+        texto = "\n".join(paragrafo.text for paragrafo in documento.paragraphs)
+        dados_bolsa = next(
+            paragrafo for paragrafo in documento.paragraphs if paragrafo.text.startswith("Projeto:")
+        )
+        texto_cabecalho = "\n".join(
+            paragrafo.text for secao in documento.sections for paragrafo in secao.header.paragraphs
+        )
+        self.assertNotIn("CPF", texto)
+        self.assertIn("01/03/2026 a 31/12/2026", texto)
+        self.assertEqual(dados_bolsa.alignment, WD_ALIGN_PARAGRAPH.LEFT)
+        self.assertIn("Ministério da Educação", texto_cabecalho)
+        self.assertIn("Campus Restinga", texto_cabecalho)
+
+    def test_sem_dados_adicionais_o_aluno_nao_baixa_nem_envia_o_termo(self):
+        self.perfil.data_nascimento = None
+        self.perfil.save(update_fields=["data_nascimento"])
+
+        self.assertEqual(self.baixar_termo()[0].status_code, 400)
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 400)
+        self.assertFalse(TermoCompromisso.objects.exists())
+
+    def test_termo_acompanha_os_dados_ate_a_assinatura(self):
+        self.baixar_termo()
+        self.perfil.data_nascimento = self.hoje.replace(year=self.hoje.year - 15)
+        self.perfil.nome_responsavel_legal = "Responsável"
+        self.perfil.save()
+
+        self.baixar_termo()
+
+        termo = self.termo()
+        self.assertEqual(termo.tipo, TipoTermo.MENOR)
+        self.assertEqual(termo.nome_responsavel_legal, "Responsável")
+
+    def test_coordenador_nao_gera_o_termo(self):
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.get(self.url("termo-download"))
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(TermoCompromisso.objects.exists())
+
+    def test_upload_do_aluno_notifica_mas_nao_ativa_o_vinculo(self):
+        response = self.enviar_assinatura_aluno()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+        self.assertIsNone(self.vinculo_ana.data_inicio)
+        termo = self.termo()
+        self.assertTrue(termo.aluno_assinou)
+        self.assertFalse(termo.assinado)
+        self.assertTrue(response.data["arquivo_assinado_aluno_url"])
+        aviso = Notificacao.objects.get(destinatario=self.coordenador)
+        self.assertEqual(aviso.tom, "AVISO")
+        self.assertEqual(aviso.destino, Destino.PROJETO_BOLSISTAS)
+        self.assertIn("Termo de Compromisso", aviso.mensagem)
+
+    def test_coordenador_recusa_a_assinatura_e_o_aluno_envia_outra(self):
+        self.enviar_assinatura_aluno()
+        termo = self.termo()
+        anterior = termo.arquivo_assinado_aluno.name
+        storage = termo.arquivo_assinado_aluno.storage
+        self.client.force_authenticate(self.coordenador)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.url("termo-recusar"), {"motivo": "Faltou a assinatura."}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        termo.refresh_from_db()
+        self.assertFalse(termo.aluno_assinou)
+        self.assertEqual(termo.motivo_recusa_aluno, "Faltou a assinatura.")
+        self.assertFalse(storage.exists(anterior))
+        aviso = Notificacao.objects.get(destinatario=self.aluna)
+        self.assertEqual(aviso.tom, "ERRO")
+        self.assertIn("Faltou a assinatura.", aviso.mensagem)
+
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 200)
+        termo.refresh_from_db()
+        self.assertTrue(termo.aluno_assinou)
+        self.assertEqual(termo.motivo_recusa_aluno, "")
+
+    def test_coordenador_nao_finaliza_antes_da_assinatura_do_aluno(self):
+        response = self.enviar_termo_final()
+
+        self.assertEqual(response.status_code, 400)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+
+    def test_upload_final_do_coordenador_ativa_o_vinculo(self):
+        self.enviar_assinatura_aluno()
+
+        response = self.enviar_termo_final()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        termo = self.termo()
+        self.assertEqual(termo.enviado_por, self.coordenador)
+        self.assertTrue(termo.assinado)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
+        self.assertIsNotNone(self.vinculo_ana.data_inicio)
+        aviso = Notificacao.objects.filter(destinatario=self.aluna).latest("id")
+        self.assertEqual(aviso.tom, "SUCESSO")
+        self.assertEqual(aviso.destino, Destino.ALUNO_MINHA_BOLSA)
+        self.assertIn("vínculo está ativo", aviso.mensagem)
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 400)
+
+    def test_termo_aceito_de_vinculo_direto_avisa_a_area(self):
+        area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.coordenador_area = area.perfil_coordenador_area
+        self.bolsa.save(update_fields=["coordenador_area"])
+        self.vinculo_ana.origem = OrigemVinculo.VINCULO_DIRETO
+        self.vinculo_ana.indicacao = None
+        self.vinculo_ana.convite = self.convite(self.aluna, StatusConvite.APROVADO)
+        self.vinculo_ana.save(update_fields=["origem", "indicacao", "convite"])
+        self.enviar_assinatura_aluno()
+        self.assertFalse(Notificacao.objects.filter(destinatario=area).exists())
+
+        self.enviar_termo_final()
+
+        aviso = Notificacao.objects.get(destinatario=area)
+        self.assertEqual(aviso.titulo, "Vínculo direto efetivado")
+        self.assertEqual(aviso.destino, Destino.AREA_FREQUENCIAS)
+        self.assertIn("ana", aviso.mensagem)
+
+    def test_termo_aceito_de_selecao_nao_avisa_a_area(self):
+        area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.coordenador_area = area.perfil_coordenador_area
+        self.bolsa.save(update_fields=["coordenador_area"])
+        self.enviar_assinatura_aluno()
+        self.enviar_termo_final()
+        self.assertFalse(Notificacao.objects.filter(destinatario=area).exists())
+
+    def test_upload_do_aluno_rejeita_arquivo_que_nao_e_docx(self):
+        response = self.enviar_assinatura_aluno(pdf("termo.pdf"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_final_do_coordenador_rejeita_arquivo_que_nao_e_pdf(self):
+        self.enviar_assinatura_aluno()
+        response = self.enviar_termo_final(docx("termo-final.docx"))
+        self.assertEqual(response.status_code, 400)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+
+    def test_lembrete_notifica_o_aluno_uma_vez_por_dia(self):
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(self.url("termo-lembrete"))
+
+        self.assertEqual(response.status_code, 204)
+        aviso = Notificacao.objects.get(destinatario=self.aluna)
+        self.assertEqual(aviso.destino, Destino.ALUNO_MINHA_BOLSA)
+        self.assertIn("termo de compromisso", aviso.mensagem)
+        segundo = self.client.post(self.url("termo-lembrete"))
+        self.assertEqual(segundo.status_code, 400)
+        self.assertEqual(segundo.data["detail"], "Um lembrete já foi enviado hoje.")
+
+    def test_sem_lembrete_depois_que_o_aluno_assinou(self):
+        self.enviar_assinatura_aluno()
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.get(reverse("bolsistas:vinculos"))
+        [vinculo] = response.data
+        self.assertFalse(vinculo["pode_lembrar_termo"])
+        self.assertEqual(self.client.post(self.url("termo-lembrete")).status_code, 400)
+
+    def test_vinculo_aguardando_termo_impede_outra_bolsa(self):
+        self.assertTrue(tem_vinculo_ativo(self.aluna))
+
+    def test_coordenador_pode_desligar_vinculo_aguardando_termo(self):
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.post(
+            reverse("bolsistas:desligar-vinculo", kwargs={"pk": self.vinculo_ana.pk}),
+            {"motivo": "O aluno não assinou o termo."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.vinculo_ana.refresh_from_db()
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.DESLIGADO)
+
+    def test_painel_do_aluno_mostra_as_pendencias_do_termo(self):
+        from monitoramento.paineis import painel_do_aluno
+
+        painel = painel_do_aluno(self.aluna)
+        self.assertTrue(painel["termo_pendente"])
+        self.assertTrue(painel["dados_termo_completos"])
+        self.assertEqual(painel["minha_bolsa"]["status"], StatusVinculo.AGUARDANDO_TERMO)
+
+        self.enviar_assinatura_aluno()
+        self.assertFalse(painel_do_aluno(self.aluna)["termo_pendente"])
+
+    def test_termo_pendente_bloqueia_a_finalizacao(self):
+        self.assertIn(
+            "Termo de compromisso de ana não finalizado.",
+            motivos_bloqueio_finalizacao(self.bolsa),
+        )
+
+
+class PendenciasDoCoordenadorTests(CenarioBolsista):
+    def setUp(self):
+        super().setUp()
+        self.hoje = timezone.localdate()
+        self.edital.data_entrega_relatorios = self.hoje + timedelta(days=10)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+        self.bolsa.data_fim_vigencia = self.hoje + timedelta(days=30)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+        self.vinculo_ana = self.vinculo("ana")
+
+    def pendencias(self):
+        return pendencias_do_coordenador(self.coordenador)
+
+    def test_sem_pendencias(self):
+        self.assertEqual(self.pendencias(), [])
+
+    def test_bolsa_com_vigencia_encerrada_e_nao_finalizada(self):
+        self.bolsa.data_fim_vigencia = self.hoje - timedelta(days=1)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+
+        [pendencia] = self.pendencias()
+
+        self.assertIn('BICT 12h do projeto "Projeto"', pendencia)
+        self.assertIn("venceu em", pendencia)
+
+    def test_bolsa_com_prazo_do_relatorio_encerrado_fica_vencida(self):
+        self.edital.data_entrega_relatorios = self.hoje - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+
+        [pendencia] = self.pendencias()
+
+        self.assertIn("prazo dos relatórios finais", pendencia)
+
+    def test_prazo_do_relatorio_encerrado_sem_bolsista_ativo_nao_e_pendencia(self):
+        self.edital.data_entrega_relatorios = self.hoje - timedelta(days=1)
+        self.edital.save(update_fields=["data_entrega_relatorios"])
+        self.vinculo_ana.status = StatusVinculo.DESLIGADO
+        self.vinculo_ana.save(update_fields=["status"])
+
+        self.assertEqual(self.pendencias(), [])
+
+    def test_bolsa_finalizada_nao_e_pendencia(self):
+        self.bolsa.data_fim_vigencia = self.hoje - timedelta(days=1)
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.save(update_fields=["data_fim_vigencia", "status"])
+
+        self.assertEqual(self.pendencias(), [])
+
+    def test_relatorio_aguardando_parecer(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.AGUARDANDO_AVALIACAO)
+
+        [pendencia] = self.pendencias()
+
+        self.assertIn("relatório final de ana", pendencia)
+        self.assertIn("aguarda seu parecer", pendencia)
+
+    def test_relatorio_ja_avaliado_ou_so_solicitado_nao_e_pendencia(self):
+        self.relatorio(self.vinculo_ana, SituacaoRelatorio.APROVADO)
+        self.relatorio(self.vinculo("bia"), SituacaoRelatorio.SOLICITADO)
+        self.relatorio(self.vinculo("caio"), SituacaoRelatorio.REPROVADO)
+
+        self.assertEqual(self.pendencias(), [])
+
+    def test_vale_para_todos_os_projetos_do_coordenador(self):
+        outro_projeto = Projeto.objects.create(
+            titulo="Outro projeto",
+            coordenador_projeto=self.bolsa.projeto.coordenador_projeto,
+        )
+        Bolsa.objects.create(
+            projeto=outro_projeto,
+            edital=self.edital,
+            tipo="ENSINO",
+            modalidade="BICT",
+            carga_horaria_semanal=8,
+            valor_mensal=500,
+            status=StatusBolsa.ABERTA,
+            data_fim_vigencia=self.hoje - timedelta(days=3),
+        )
+
+        [pendencia] = self.pendencias()
+
+        self.assertIn('"Outro projeto"', pendencia)
+
+    def test_pendencias_de_outro_coordenador_nao_contam(self):
+        self.bolsa.data_fim_vigencia = self.hoje - timedelta(days=1)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+        outro = Usuario.objects.create_user(
+            username="outro",
+            email="outro@example.com",
+            nome="Outro",
+            role=Usuario.Role.COORDENADOR_PROJETO,
+        )
+
+        self.assertEqual(pendencias_do_coordenador(outro), [])
+
+
+class VigenciaEfetivaTests(CenarioBolsista):
+    def test_bolsa_sem_datas_proprias_usa_a_vigencia_do_edital(self):
+        self.edital.data_inicio_vigencia = timezone.localdate()
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+
+        self.assertEqual(self.bolsa.inicio_vigencia, self.edital.data_inicio_vigencia)
+        self.assertEqual(self.bolsa.fim_vigencia, self.edital.data_fim_vigencia)
+
+    def test_datas_da_bolsa_sao_excecao_ao_edital(self):
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_fim_vigencia"])
+        self.bolsa.data_fim_vigencia = timezone.localdate() + timedelta(days=100)
+        self.bolsa.save(update_fields=["data_fim_vigencia"])
+
+        self.assertEqual(self.bolsa.fim_vigencia, self.bolsa.data_fim_vigencia)
+
+    def test_vigencia_do_edital_vencida_vira_pendencia_do_coordenador(self):
+        self.vinculo("ana")
+        self.edital.data_fim_vigencia = timezone.localdate() - timedelta(days=1)
+        self.edital.save(update_fields=["data_fim_vigencia"])
+
+        [pendencia] = pendencias_do_coordenador(self.coordenador)
+
+        self.assertIn("venceu em", pendencia)
+
+    def test_aluno_ve_a_vigencia_do_edital(self):
+        vinculo = self.vinculo("ana")
+        self.edital.data_inicio_vigencia = timezone.localdate()
+        self.edital.data_fim_vigencia = timezone.localdate() + timedelta(days=300)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
+        self.client.force_authenticate(vinculo.aluno)
+
+        item = self.client.get(reverse("bolsistas:meus-vinculos")).data[0]
+
+        self.assertEqual(item["data_fim_vigencia"], self.edital.data_fim_vigencia.isoformat())
+
+
+class VinculoDeBolsaFinalizadaTests(CenarioFrequencia):
+    """Finalizar a bolsa mantém o vínculo ATIVO (histórico e relatórios), mas ele não conta
+    mais como bolsa em andamento: o aluno pode receber outra bolsa."""
+
+    def test_bolsa_encerrada_libera_o_aluno(self):
+        aluno = self.vinculo.aluno
+        self.assertTrue(tem_vinculo_ativo(aluno))
+
+        self.bolsa.status = StatusBolsa.ENCERRADA
+        self.bolsa.save(update_fields=["status"])
+
+        self.assertFalse(tem_vinculo_ativo(aluno))
+        self.assertEqual(alunos_com_vinculo_ativo([aluno.id]), set())
+        self.vinculo.refresh_from_db()
+        self.assertEqual(self.vinculo.status, StatusVinculo.ATIVO)

@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from accounts.models import Usuario
+from bolsistas.services import MOTIVO_ALUNO_JA_BOLSISTA, tem_vinculo_ativo
 from inscricoes.models import EXTENSOES_DOCUMENTO, Documento
 from server.validators import validar_upload
 
@@ -11,11 +12,30 @@ from .regras import bolsa_elegivel_para_convite
 
 class DocumentoConviteSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    decisao_display = serializers.CharField(source="get_decisao_display", read_only=True)
 
     class Meta:
         model = Documento
-        fields = ["id", "tipo", "tipo_display", "nome_original", "arquivo", "enviado_em"]
-        read_only_fields = ["id", "nome_original", "enviado_em"]
+        fields = [
+            "id",
+            "tipo",
+            "tipo_display",
+            "nome_original",
+            "arquivo",
+            "enviado_em",
+            "decisao",
+            "decisao_display",
+            "motivo_recusa",
+            "decidido_em",
+        ]
+        read_only_fields = [
+            "id",
+            "nome_original",
+            "enviado_em",
+            "decisao",
+            "motivo_recusa",
+            "decidido_em",
+        ]
 
     def validate_arquivo(self, arquivo):
         return validar_upload(arquivo, EXTENSOES_DOCUMENTO)
@@ -90,8 +110,8 @@ class ConviteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Esta bolsa não pertence a um dos seus projetos.")
         if not bolsa_elegivel_para_convite(bolsa):
             raise serializers.ValidationError(
-                "Esta bolsa não está elegível para vínculo direto: ou ainda não encerrou o "
-                "período de recursos da homologação, ou não há vaga livre."
+                "Esta bolsa não está elegível para vínculo direto: ela precisa estar aprovada "
+                "e em andamento, com o período de recursos da homologação encerrado e vaga livre."
             )
         return bolsa
 
@@ -105,6 +125,8 @@ class ConviteSerializer(serializers.ModelSerializer):
 
         if aluno.role != Usuario.Role.ALUNO:
             raise serializers.ValidationError("O convite só pode ser enviado para um aluno.")
+        if tem_vinculo_ativo(aluno):
+            raise serializers.ValidationError(MOTIVO_ALUNO_JA_BOLSISTA)
         return aluno
 
     def validate(self, attrs):

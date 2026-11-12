@@ -40,12 +40,12 @@ def meses_do_vinculo(vinculo, hoje=None):
     bolsa = vinculo.bolsa
 
     inicio = timezone.localdate(vinculo.criado_em)
-    if bolsa.data_inicio_vigencia and bolsa.data_inicio_vigencia > inicio:
-        inicio = bolsa.data_inicio_vigencia
+    if bolsa.inicio_vigencia and bolsa.inicio_vigencia > inicio:
+        inicio = bolsa.inicio_vigencia
 
     fim = hoje
-    if bolsa.data_fim_vigencia and bolsa.data_fim_vigencia < fim:
-        fim = bolsa.data_fim_vigencia
+    if bolsa.fim_vigencia and bolsa.fim_vigencia < fim:
+        fim = bolsa.fim_vigencia
     if vinculo.desligado_em and timezone.localdate(vinculo.desligado_em) < fim:
         fim = timezone.localdate(vinculo.desligado_em)
 

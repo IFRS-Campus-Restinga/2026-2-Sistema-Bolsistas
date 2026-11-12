@@ -1,28 +1,38 @@
 from django.urls import path
 
 from .views import (
+    BolsasDoCoordenadorProjetoView,
     BolsasParaFinalizarView,
     BolsistasDoCoordenadorView,
     CancelamentosRecentesAreaView,
     CancelarVagaView,
     CienciaCancelamentoVagaView,
     CienciaDesligamentoView,
+    DadosTermoAlunoView,
     DecidirDesligamentoView,
     DesligamentosRecentesAreaView,
+    LembreteTermoView,
     MeusPedidosDesligamentoView,
     MeusVinculosView,
+    ModeloRelatorioArquivoView,
     ParecerRelatorioView,
     PedidosDesligamentoPendentesView,
+    RecusarTermoAlunoView,
     RelatorioFinalArquivoView,
     RelatorioFinalView,
     SolicitarDesligamentoCoordenadorView,
     SolicitarMeuDesligamentoView,
     SolicitarRelatorioView,
+    TermoAssinadoAlunoDownloadView,
+    TermoAssinadoDownloadView,
+    TermoAssinadoView,
+    TermoDownloadView,
 )
 
 app_name = "bolsistas"
 
 urlpatterns = [
+    path("meus-dados-termo/", DadosTermoAlunoView.as_view(), name="meus-dados-termo"),
     path("meus-vinculos/", MeusVinculosView.as_view(), name="meus-vinculos"),
     path(
         "meus-desligamentos/",
@@ -35,6 +45,20 @@ urlpatterns = [
         name="solicitar-meu-desligamento",
     ),
     path("vinculos/", BolsistasDoCoordenadorView.as_view(), name="vinculos"),
+    path("vinculos/<int:pk>/termo/lembrete/", LembreteTermoView.as_view(), name="termo-lembrete"),
+    path("vinculos/<int:pk>/termo/recusar/", RecusarTermoAlunoView.as_view(), name="termo-recusar"),
+    path("vinculos/<int:pk>/termo/", TermoDownloadView.as_view(), name="termo-download"),
+    path("vinculos/<int:pk>/termo/assinado/", TermoAssinadoView.as_view(), name="termo-assinado"),
+    path(
+        "vinculos/<int:pk>/termo/aluno/arquivo/",
+        TermoAssinadoAlunoDownloadView.as_view(),
+        name="termo-aluno-download",
+    ),
+    path(
+        "vinculos/<int:pk>/termo/assinado/arquivo/",
+        TermoAssinadoDownloadView.as_view(),
+        name="termo-assinado-download",
+    ),
     path(
         "vinculos/<int:pk>/desligamento/",
         SolicitarDesligamentoCoordenadorView.as_view(),
@@ -77,6 +101,11 @@ urlpatterns = [
     ),
     path("bolsas/", BolsasParaFinalizarView.as_view(), name="bolsas-para-finalizar"),
     path(
+        "projeto/bolsas/",
+        BolsasDoCoordenadorProjetoView.as_view(),
+        name="bolsas-do-coordenador-projeto",
+    ),
+    path(
         "vinculos/<int:pk>/solicitar-relatorio/",
         SolicitarRelatorioView.as_view(),
         name="solicitar-relatorio",
@@ -90,6 +119,11 @@ urlpatterns = [
         "vinculos/<int:pk>/relatorio-final/arquivo/",
         RelatorioFinalArquivoView.as_view(),
         name="relatorio-final-arquivo",
+    ),
+    path(
+        "vinculos/<int:pk>/relatorio-final/modelo/",
+        ModeloRelatorioArquivoView.as_view(),
+        name="relatorio-final-modelo",
     ),
     path("vinculos/<int:pk>/parecer/", ParecerRelatorioView.as_view(), name="parecer"),
 ]

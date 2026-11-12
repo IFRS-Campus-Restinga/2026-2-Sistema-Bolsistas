@@ -49,6 +49,8 @@ class Aluno(models.Model):
         blank=True,
         unique=True,
     )
+    data_nascimento = models.DateField(null=True, blank=True)
+    nome_responsavel_legal = models.CharField(max_length=150, blank=True, default="")
 
     def __str__(self):
         return self.usuario.nome

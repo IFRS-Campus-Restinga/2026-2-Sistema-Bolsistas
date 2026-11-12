@@ -1,9 +1,14 @@
+from datetime import timedelta
+from unittest import mock
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import CoordenadorArea, CoordenadorProjeto, TipoArea, Usuario
 from editais.models import Edital
+from inscricoes.models import Inscricao, StatusInscricao
 from projetos.models import Projeto
 
 from .models import Bolsa, EditalValorBolsa, StatusBolsa, TipoBolsa, TipoBolsaModalidade
@@ -71,6 +76,17 @@ class SolicitarBolsaAPITests(APITestCase):
         self.assertEqual(bolsa.status, StatusBolsa.SOLICITADA)
         self.assertEqual(bolsa.projeto_id, self.projeto.id)
 
+    def test_falha_no_aviso_desfaz_a_solicitacao(self):
+        self.client.force_authenticate(user=self.coordenador)
+
+        with (
+            mock.patch("bolsas.views.Notificacao.enviar", side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(self.url, self.dados, format="json")
+
+        self.assertFalse(Bolsa.objects.exists())
+
     def test_valor_mensal_vem_da_tabela_do_edital(self):
         self.client.force_authenticate(user=self.coordenador)
 
@@ -121,6 +137,91 @@ class SolicitarBolsaAPITests(APITestCase):
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("edital", resposta.data)
         self.assertFalse(Bolsa.objects.exists())
+
+    def bolsa_vencida(self):
+        return Bolsa.objects.create(
+            projeto=Projeto.objects.create(
+                titulo="Projeto antigo",
+                coordenador_projeto=self.coordenador.perfil_coordenador_projeto,
+            ),
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.PREENCHIDA,
+            data_fim_vigencia=timezone.localdate() - timedelta(days=1),
+        )
+
+    def test_pendencia_em_outro_projeto_bloqueia_a_solicitacao(self):
+        self.bolsa_vencida()
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Resolva as pendências", resposta.data["detail"])
+        [pendencia] = resposta.data["pendencias"]
+        self.assertIn('"Projeto antigo"', pendencia)
+        self.assertEqual(Bolsa.objects.count(), 1)
+
+    def test_bolsa_vencida_ja_finalizada_nao_bloqueia(self):
+        vencida = self.bolsa_vencida()
+        vencida.status = StatusBolsa.ENCERRADA
+        vencida.save(update_fields=["status"])
+        self.client.force_authenticate(user=self.coordenador)
+
+        resposta = self.client.post(self.url, self.dados, format="json")
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED, resposta.data)
+
+    def test_lista_as_pendencias_do_coordenador(self):
+        self.client.force_authenticate(user=self.coordenador)
+        url = reverse("bolsas:pendencias")
+
+        self.assertEqual(self.client.get(url).data, {"pendencias": []})
+
+        self.bolsa_vencida()
+        [pendencia] = self.client.get(url).data["pendencias"]
+        self.assertIn('"Projeto antigo"', pendencia)
+
+    def test_somente_coordenador_de_projeto_consulta_pendencias(self):
+        coordenador_area = cria_coordenador_area("ca2", "ca2@test.com", TipoArea.PESQUISA)
+        self.client.force_authenticate(user=coordenador_area)
+
+        self.assertEqual(self.client.get(reverse("bolsas:pendencias")).status_code, 403)
+
+    def test_lista_traz_codigo_do_edital_e_contagem_de_inscricoes(self):
+        bolsa = Bolsa.objects.create(
+            projeto=self.projeto,
+            edital=self.edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.ABERTA,
+        )
+        for indice, situacao in enumerate(
+            [
+                StatusInscricao.PENDENTE,
+                StatusInscricao.PENDENTE,
+                StatusInscricao.HOMOLOGADA,
+                StatusInscricao.RASCUNHO,
+                StatusInscricao.CANCELADA,
+            ]
+        ):
+            Inscricao.objects.create(
+                aluno=cria_usuario(f"aluno{indice}", f"a{indice}@test.com", Usuario.Role.ALUNO),
+                bolsa=bolsa,
+                status=situacao,
+            )
+        self.client.force_authenticate(user=self.coordenador)
+
+        [item] = self.client.get(self.url).data
+
+        self.assertEqual(item["edital_ano_codigo"], "2026-001")
+        self.assertEqual(item["total_inscritos"], 3)
+        self.assertEqual(item["inscricoes_pendentes"], 2)
 
     def test_coordenador_area_nao_pode_solicitar_bolsa(self):
         coordenador_area = cria_coordenador_area("ca", "ca@test.com", TipoArea.PESQUISA)
@@ -346,3 +447,91 @@ class BolsasDisponiveisPermissaoTests(APITestCase):
                     ).status_code,
                     status.HTTP_403_FORBIDDEN,
                 )
+
+
+class EdicaoSoNaBolsaSolicitadaTests(APITestCase):
+    """Só a bolsa solicitada é editada; depois da aprovação, só as etapas (até o fim das
+    inscrições)."""
+
+    def setUp(self):
+        self.coordenador = cria_coordenador_projeto("coord_projeto", "cp@test.com")
+        projeto = Projeto.objects.create(
+            titulo="Projeto A", coordenador_projeto=self.coordenador.perfil_coordenador_projeto
+        )
+        edital = cria_edital()
+        edital.data_fechamento_inscricoes = timezone.localdate() + timedelta(days=10)
+        edital.save()
+        define_valor_no_edital(edital)
+        self.bolsa = Bolsa.objects.create(
+            projeto=projeto,
+            edital=edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.SOLICITADA,
+        )
+        self.client.force_authenticate(user=self.coordenador)
+
+    def editar(self):
+        url = reverse("bolsas:detalhe", args=[self.bolsa.id])
+        return self.client.patch(url, {"quantidade_vagas": 2}, format="json")
+
+    def nova_etapa(self):
+        url = reverse("bolsas:etapas", kwargs={"bolsa_pk": self.bolsa.id})
+        return self.client.post(url, {"nome": "Entrevista"}, format="json")
+
+    def test_bolsa_solicitada_pode_ser_editada_mas_sem_etapas(self):
+        self.assertEqual(self.editar().status_code, status.HTTP_200_OK)
+        self.assertEqual(self.nova_etapa().status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bolsa_aberta_nao_pode_ser_editada_mas_recebe_etapas(self):
+        self.bolsa.status = StatusBolsa.ABERTA
+        self.bolsa.save(update_fields=["status"])
+
+        resposta = self.editar()
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("solicitada", str(resposta.data))
+        self.assertEqual(self.nova_etapa().status_code, status.HTTP_201_CREATED)
+
+
+class BolsasDisponiveisCardTests(APITestCase):
+    """O que o card e o painel de Bolsas disponíveis do aluno usam (US93)."""
+
+    def test_traz_coordenador_ementa_prazo_e_cronograma(self):
+        coordenador = cria_coordenador_projeto("coord_projeto", "cp@test.com")
+        coordenador.nome = "Joana Freitas"
+        coordenador.save(update_fields=["nome"])
+        projeto = Projeto.objects.create(
+            titulo="Projeto A",
+            coordenador_projeto=coordenador.perfil_coordenador_projeto,
+            ementa_html="<p>Sobre</p>",
+        )
+        hoje = timezone.localdate()
+        edital = cria_edital()
+        edital.data_abertura_inscricoes = hoje - timedelta(days=2)
+        edital.data_fechamento_inscricoes = hoje + timedelta(days=5)
+        edital.data_homologacao = hoje + timedelta(days=8)
+        edital.save()
+        Bolsa.objects.create(
+            projeto=projeto,
+            edital=edital,
+            tipo=TipoBolsa.PESQUISA,
+            modalidade="BICT",
+            carga_horaria_semanal=12,
+            valor_mensal="500.00",
+            status=StatusBolsa.ABERTA,
+        )
+        aluno = cria_usuario("aluno", "aluno@test.com", Usuario.Role.ALUNO)
+        self.client.force_authenticate(user=aluno)
+
+        (bolsa,) = self.client.get(reverse("bolsas:disponiveis")).data
+
+        self.assertEqual(bolsa["coordenador_projeto_nome"], "Joana Freitas")
+        self.assertEqual(bolsa["projeto_ementa_html"], "<p>Sobre</p>")
+        self.assertEqual(bolsa["dias_para_encerrar_inscricoes"], 5)
+        cronograma = bolsa["cronograma"]
+        self.assertEqual(
+            [f["rotulo"] for f in cronograma["fases"]][:2], ["Inscrições", "Homologação"]
+        )
+        self.assertEqual(cronograma["atual"], 0)  # ainda nas inscrições

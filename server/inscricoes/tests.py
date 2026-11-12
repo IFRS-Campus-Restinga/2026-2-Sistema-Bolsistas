@@ -1,8 +1,10 @@
 from datetime import timedelta
+from importlib import import_module
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from django.apps import apps as django_apps
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import override_settings
@@ -10,22 +12,27 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from accounts.models import CoordenadorProjeto, Usuario
+from accounts.models import Aluno, CoordenadorProjeto, Usuario
 from auditoria.models import LogAuditoria
 from bolsas.models import Bolsa
 from editais.models import Edital
+from notificacoes.models import Notificacao
 from projetos.models import Projeto
 
 from .models import (
     AnexoRecurso,
+    DecisaoDocumento,
     Documento,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
     TipoDocumento,
 )
+
+
+def _notificacoes(usuario):
+    return Notificacao.objects.filter(destinatario=usuario)
 
 
 class CandidatoListTests(APITestCase):
@@ -64,6 +71,36 @@ class CandidatoListTests(APITestCase):
         }
         dados.update(kwargs)
         return Inscricao.objects.create(aluno=self.usuario(nome), **dados)
+
+    def test_traz_o_curso_do_aluno(self):
+        inscricao = self.inscricao("com_curso")
+        Aluno.objects.create(usuario=inscricao.aluno, curso="Análise e Desenvolvimento de Sistemas")
+        self.inscricao("sem_perfil")
+
+        dados = {item["id"]: item for item in self.client.get(self.url).data}
+
+        self.assertEqual(
+            dados[inscricao.id]["aluno_curso"], "Análise e Desenvolvimento de Sistemas"
+        )
+        self.assertEqual(len(dados), 2)
+
+    def test_traz_matricula_e_decisao_de_cada_documento(self):
+        inscricao = self.inscricao("beatriz")
+        Aluno.objects.create(usuario=inscricao.aluno, matricula="2026001")
+        historico = Documento.objects.create(
+            inscricao=inscricao, tipo=TipoDocumento.HISTORICO_ESCOLAR, arquivo="h.pdf"
+        )
+        historico.decidir(DecisaoDocumento.APROVADO, "", self.coordenador)
+        Documento.objects.create(
+            inscricao=inscricao, tipo=TipoDocumento.COMPROVANTE_MATRICULA, arquivo="c.pdf"
+        )
+
+        (dados,) = self.client.get(self.url).data
+
+        self.assertEqual(dados["aluno_matricula"], "2026001")
+        self.assertEqual(
+            [d["decisao"] for d in dados["decisoes_documentos"]], ["APROVADO", "PENDENTE"]
+        )
 
     def test_lista_apenas_enviadas_da_bolsa_solicitada(self):
         enviada = self.inscricao("enviada")
@@ -161,11 +198,42 @@ class HomologacaoTests(APITestCase):
             termos_aceitos=True,
         )
         for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
-            Documento.objects.create(inscricao=self.inscricao, tipo=tipo, arquivo="teste.pdf")
+            Documento.objects.create(
+                inscricao=self.inscricao,
+                tipo=tipo,
+                arquivo="teste.pdf",
+                decisao=DecisaoDocumento.APROVADO,
+                decidido_em=timezone.now(),
+            )
         self.client.force_authenticate(self.coordenador)
 
     def url(self, acao):
         return reverse(f"inscricoes:{acao}", kwargs={"pk": self.inscricao.pk})
+
+    def test_nao_homologa_com_documento_pendente_ou_recusado(self):
+        historico, comprovante = self.inscricao.documentos.order_by("tipo")
+        historico.decidir(DecisaoDocumento.REJEITADO, "Ilegível.", self.coordenador)
+        Documento.objects.filter(pk=comprovante.pk).update(
+            decisao=DecisaoDocumento.PENDENTE, decidido_em=None
+        )
+
+        response = self.client.post(self.url("homologar"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["detail"],
+            "Não é possível homologar. Todos os documentos precisam estar aprovados: "
+            "1 pendente de análise e 1 recusado.",
+        )
+        self.inscricao.refresh_from_db()
+        self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
+
+    def test_indeferir_nao_depende_dos_documentos(self):
+        Documento.objects.filter(inscricao=self.inscricao).update(
+            decisao=DecisaoDocumento.PENDENTE, decidido_em=None
+        )
+        response = self.client.post(self.url("indeferir"), {"justificativa": "Fora do perfil."})
+        self.assertEqual(response.status_code, 200)
 
     def test_decisao_sobre_inscricao_nao_gera_log_de_auditoria(self):
         self.client.post(self.url("homologar"))
@@ -180,8 +248,8 @@ class HomologacaoTests(APITestCase):
         self.assertEqual(self.inscricao.responsavel_decisao, self.coordenador)
         self.assertIsNotNone(self.inscricao.data_decisao)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "")
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
-        self.assertIn("homologada", NotificacaoInscricao.objects.get().mensagem)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
+        self.assertIn("homologada", _notificacoes(self.aluno).get().mensagem)
 
     def test_indefere_com_motivo_visivel_somente_ao_aluno(self):
         response = self.client.post(
@@ -191,12 +259,12 @@ class HomologacaoTests(APITestCase):
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.INDEFERIDA)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "Documento ilegível.")
-        self.assertIn("Documento ilegível.", NotificacaoInscricao.objects.get().mensagem)
+        self.assertIn("Documento ilegível.", _notificacoes(self.aluno).get().mensagem)
         self.client.force_authenticate(self.aluno)
         response = self.client.get(self.url("detalhe"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["justificativa_indeferimento"], "Documento ilegível.")
-        self.assertEqual(len(response.data["notificacoes"]), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
         outro = Usuario.objects.create_user(
             username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
         )
@@ -217,7 +285,7 @@ class HomologacaoTests(APITestCase):
                 )
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_bloqueia_decisoes_em_estados_invalidos(self):
         for estado in [
@@ -234,7 +302,7 @@ class HomologacaoTests(APITestCase):
                         self.client.post(self.url(acao), {"justificativa": "Motivo"}).status_code,
                         400,
                     )
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_repeticao_nao_duplica_notificacao(self):
         self.assertEqual(self.client.post(self.url("homologar")).status_code, 200)
@@ -243,7 +311,7 @@ class HomologacaoTests(APITestCase):
             self.client.post(self.url("indeferir"), {"justificativa": "Outra decisão"}).status_code,
             400,
         )
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
 
     def test_outro_coordenador_nao_consulta_nem_decide(self):
         outro = Usuario.objects.create_user(
@@ -277,7 +345,7 @@ class HomologacaoTests(APITestCase):
             inscricao=self.inscricao, tipo=TipoDocumento.HISTORICO_ESCOLAR
         ).update(tipo=TipoDocumento.ADICIONAL)
         self.assertEqual(self.client.post(self.url("homologar")).status_code, 400)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_nao_decide_inscricao_sem_envio(self):
         self.inscricao.data_envio = None
@@ -298,7 +366,7 @@ class HomologacaoTests(APITestCase):
 
     def test_falha_na_notificacao_reverte_decisao(self):
         with patch(
-            "inscricoes.views.NotificacaoInscricao.objects.create",
+            "inscricoes.views.Notificacao.enviar",
             side_effect=RuntimeError("falha"),
         ):
             with self.assertRaises(RuntimeError):
@@ -306,7 +374,7 @@ class HomologacaoTests(APITestCase):
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
         self.assertIsNone(self.inscricao.data_decisao)
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_aluno_nao_edita_inscricao_ou_documentos_apos_decisao(self):
         for acao in ["homologar", "indeferir"]:
@@ -344,8 +412,8 @@ class HomologacaoTests(APITestCase):
 
     def test_notificacao_so_pode_ser_lida_pelo_destinatario(self):
         self.client.post(self.url("homologar"))
-        notificacao = NotificacaoInscricao.objects.get()
-        url = reverse("inscricoes:notificacao-ler", kwargs={"pk": notificacao.pk})
+        notificacao = _notificacoes(self.aluno).get()
+        url = reverse("notificacoes:ler", kwargs={"pk": notificacao.pk})
         outro = Usuario.objects.create_user(
             username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
         )
@@ -414,9 +482,90 @@ class HomologacaoTests(APITestCase):
                         self.client.post(self.url(acao), {"justificativa": "Motivo"}).status_code,
                         400,
                     )
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
         self.inscricao.refresh_from_db()
         self.assertEqual(self.inscricao.status, StatusInscricao.PENDENTE)
+
+
+class DecidirDocumentoTests(APITestCase):
+    def setUp(self):
+        HomologacaoTests.setUp(self)
+        self.inscricao.documentos.update(decisao=DecisaoDocumento.PENDENTE, decidido_em=None)
+
+    def decidir(self, documento, **dados):
+        url = reverse("inscricoes:documento-decisao", kwargs={"pk": documento.pk})
+        return self.client.post(url, dados)
+
+    def documento(self):
+        return self.inscricao.documentos.get(tipo=TipoDocumento.HISTORICO_ESCOLAR)
+
+    def test_aprova_e_registra_quem_decidiu(self):
+        resposta = self.decidir(self.documento(), decisao="APROVADO")
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        documento = self.documento()
+        self.assertEqual(documento.decisao, DecisaoDocumento.APROVADO)
+        self.assertEqual(documento.decidido_por, self.coordenador)
+        self.assertIsNotNone(documento.decidido_em)
+        decisoes = {d["id"]: d["decisao"] for d in resposta.data["documentos"]}
+        self.assertEqual(decisoes[documento.pk], "APROVADO")
+
+    def test_recusa_exige_motivo(self):
+        resposta = self.decidir(self.documento(), decisao="REJEITADO", motivo_recusa="   ")
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("motivo_recusa", resposta.data)
+        self.assertEqual(self.documento().decisao, DecisaoDocumento.PENDENTE)
+
+        resposta = self.decidir(
+            self.documento(), decisao="REJEITADO", motivo_recusa=" Arquivo ilegível. "
+        )
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(self.documento().motivo_recusa, "Arquivo ilegível.")
+
+    def test_pode_mudar_a_decisao_e_aprovar_limpa_o_motivo(self):
+        self.decidir(self.documento(), decisao="REJEITADO", motivo_recusa="Ilegível.")
+        self.decidir(self.documento(), decisao="APROVADO", motivo_recusa="Ilegível.")
+        documento = self.documento()
+        self.assertEqual(documento.decisao, DecisaoDocumento.APROVADO)
+        self.assertEqual(documento.motivo_recusa, "")
+
+    def test_nao_aceita_voltar_para_pendente(self):
+        resposta = self.decidir(self.documento(), decisao="PENDENTE")
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_bloqueia_fora_da_analise(self):
+        casos = [
+            ("inscricao homologada", lambda: setattr(self.inscricao, "status", "HOMOLOGADA")),
+            (
+                "inscrições abertas",
+                lambda: setattr(
+                    self.edital, "data_fechamento_inscricoes", timezone.localdate() + timedelta(1)
+                ),
+            ),
+        ]
+        for nome, alterar in casos:
+            with self.subTest(nome):
+                alterar()
+                self.inscricao.save()
+                self.edital.save()
+                resposta = self.decidir(self.documento(), decisao="APROVADO")
+                self.assertEqual(resposta.status_code, 400)
+                self.assertEqual(self.documento().decisao, DecisaoDocumento.PENDENTE)
+                self.inscricao.status = StatusInscricao.PENDENTE
+                self.edital.data_fechamento_inscricoes = timezone.localdate() - timedelta(1)
+
+    def test_coordenador_de_outro_projeto_nao_decide(self):
+        outro = Usuario.objects.create_user(
+            username="outro", email="outro@example.com", role=Usuario.Role.COORDENADOR_PROJETO
+        )
+        CoordenadorProjeto.objects.create(usuario=outro)
+        self.client.force_authenticate(outro)
+        resposta = self.decidir(self.documento(), decisao="APROVADO")
+        self.assertEqual(resposta.status_code, 404)
+
+    def test_aluno_nao_decide(self):
+        self.client.force_authenticate(self.aluno)
+        resposta = self.decidir(self.documento(), decisao="APROVADO")
+        self.assertEqual(resposta.status_code, 403)
 
 
 class RecursosTests(APITestCase):
@@ -651,7 +800,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.inscricao.status, StatusInscricao.HOMOLOGADA)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "")
         self.assertEqual(self.inscricao.responsavel_decisao, self.coordenador)
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
         self.client.force_authenticate(self.aluno)
         self.assertEqual(self.enviar().status_code, 400)
         self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "DEFERIDO")
@@ -670,7 +819,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.inscricao.status, "INDEFERIDA")
         self.assertEqual(self.inscricao.data_decisao, data_anterior)
         self.assertEqual(self.inscricao.justificativa_indeferimento, "Comprovante ilegível")
-        self.assertIn("Mantido por motivo técnico.", NotificacaoInscricao.objects.get().mensagem)
+        self.assertIn("Mantido por motivo técnico.", _notificacoes(self.aluno).get().mensagem)
 
     def test_julgamento_apenas_responsavel_e_sem_repeticao(self):
         self.enviar()
@@ -686,7 +835,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.client.post(url, {"decisao": "DEFERIDO"}).status_code, 401)
         self.assertEqual(self.julgar(recurso).status_code, 200)
         self.assertEqual(self.julgar(recurso, "INDEFERIDO", "Motivo").status_code, 400)
-        self.assertEqual(NotificacaoInscricao.objects.count(), 1)
+        self.assertEqual(_notificacoes(self.aluno).count(), 1)
 
     def test_julgamento_permitido_apos_fim_do_envio(self):
         self.enviar()
@@ -709,7 +858,7 @@ class RecursosTests(APITestCase):
         recurso = Recurso.objects.get()
         with (
             patch(
-                "inscricoes.views.NotificacaoInscricao.objects.create",
+                "inscricoes.views.Notificacao.enviar",
                 side_effect=RuntimeError("falha"),
             ),
             self.assertRaises(RuntimeError),
@@ -720,7 +869,7 @@ class RecursosTests(APITestCase):
         self.assertEqual(recurso.status, "PENDENTE")
         self.assertIsNone(recurso.julgado_em)
         self.assertEqual(self.inscricao.status, "INDEFERIDA")
-        self.assertFalse(NotificacaoInscricao.objects.exists())
+        self.assertFalse(_notificacoes(self.aluno).exists())
 
     def test_download_privado_e_conteudo(self):
         resposta = self.enviar(1)
@@ -773,6 +922,15 @@ class RecursosTests(APITestCase):
         self.assertEqual(self.inscricao.status, "HOMOLOGADA")
         self.assertEqual(self.client.get(self.url).data["recursos"][0]["status"], "DEFERIDO")
 
+    def test_coordenador_filtra_recursos_por_bolsa(self):
+        self.enviar()
+        self.client.force_authenticate(self.coordenador)
+        url = reverse("inscricoes:recursos-lista")
+
+        self.assertEqual(len(self.client.get(url, {"bolsa": self.bolsa.pk}).data), 1)
+        self.assertEqual(self.client.get(url, {"bolsa": self.bolsa.pk + 100}).data, [])
+        self.assertEqual(self.client.get(url, {"bolsa": "abc"}).status_code, 400)
+
     def test_historico_privado_e_disponivel_fora_do_prazo(self):
         self.enviar()
         self.edital.data_recurso_homologacao_fim = timezone.localdate() - timedelta(days=1)
@@ -811,21 +969,10 @@ class RecursosTests(APITestCase):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(url).status_code, 401)
 
-    def test_mensagens_sem_ids_preservam_justificativa(self):
-        from .serializers import NotificacaoInscricaoSerializer
-
-        antiga = NotificacaoInscricao.objects.create(
-            inscricao=self.inscricao,
-            mensagem="Seu recurso #2 de homologação, na bolsa #6, foi indeferido. Justificativa: Rever item #7.",
-        )
-        texto = NotificacaoInscricaoSerializer(antiga).data["mensagem"]
-        self.assertNotIn("#2", texto)
-        self.assertNotIn("#6", texto)
-        self.assertIn('projeto "Projeto"', texto)
-        self.assertIn("item #7", texto)
+    def test_mensagem_do_julgamento_nao_expoe_ids(self):
         self.enviar()
         self.julgar(Recurso.objects.get())
-        texto = NotificacaoInscricao.objects.order_by("-id").first().mensagem
+        texto = _notificacoes(self.aluno).first().mensagem
         self.assertNotIn("#", texto)
 
 
@@ -892,6 +1039,69 @@ class UploadDocumentoTests(APITestCase):
         self.assertIn("10 MB", str(resposta.data))
         self.assertFalse(Documento.objects.exists())
 
+    def test_documento_enviado_aguarda_decisao(self):
+        resposta = self.enviar(SimpleUploadedFile("historico.pdf", b"conteudo"))
+        self.assertEqual(resposta.data["decisao"], DecisaoDocumento.PENDENTE)
+        self.assertEqual(resposta.data["motivo_recusa"], "")
+        self.assertIsNone(resposta.data["decidido_em"])
+
+
+class DecisaoDocumentoTests(APITestCase):
+    """Cobre as regras do banco para a decisão por documento e o ajuste dos dados antigos."""
+
+    setUp = UploadDocumentoTests.setUp
+
+    def criar_documento(self, **campos):
+        return Documento.objects.create(
+            inscricao=self.inscricao,
+            tipo="ADICIONAL",
+            arquivo=SimpleUploadedFile("historico.pdf", b"conteudo"),
+            nome_original="historico.pdf",
+            **campos,
+        )
+
+    def test_recusa_exige_motivo(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.criar_documento(decisao=DecisaoDocumento.REJEITADO, decidido_em=timezone.now())
+        documento = self.criar_documento(
+            decisao=DecisaoDocumento.REJEITADO,
+            motivo_recusa="Arquivo ilegível.",
+            decidido_em=timezone.now(),
+        )
+        self.assertEqual(documento.get_decisao_display(), "Recusado")
+
+    def test_data_da_decisao_acompanha_a_decisao(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.criar_documento(decisao=DecisaoDocumento.APROVADO)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.criar_documento(decidido_em=timezone.now())
+
+    def test_dados_antigos_de_inscricao_homologada_ficam_aprovados(self):
+        migracao = import_module("inscricoes.migrations.0005_decisao_por_documento")
+        pendente = self.criar_documento()
+        outra = Inscricao.objects.create(
+            aluno=Usuario.objects.create_user(
+                username="aluno2", email="aluno2@example.com", role=Usuario.Role.ALUNO
+            ),
+            bolsa=self.inscricao.bolsa,
+            status=StatusInscricao.HOMOLOGADA,
+            data_decisao=timezone.now() - timedelta(days=2),
+        )
+        homologado = Documento.objects.create(
+            inscricao=outra,
+            tipo="ADICIONAL",
+            arquivo=SimpleUploadedFile("historico.pdf", b"conteudo"),
+            nome_original="historico.pdf",
+        )
+
+        migracao.aprovar_documentos_ja_aceitos(django_apps, None)
+
+        pendente.refresh_from_db()
+        homologado.refresh_from_db()
+        self.assertEqual(pendente.decisao, DecisaoDocumento.PENDENTE)
+        self.assertEqual(homologado.decisao, DecisaoDocumento.APROVADO)
+        self.assertEqual(homologado.decidido_em, outra.data_decisao)
+
 
 class PrazoSemDataDefinidaTests(APITestCase):
     """Edital sem data de fechamento não deve derrubar os endpoints (antes dava 500)."""
@@ -954,3 +1164,61 @@ class PrazoSemDataDefinidaTests(APITestCase):
             reverse("inscricoes:lista-criacao"), {"bolsa": self.bolsa.pk}, format="json"
         )
         self.assertEqual(resposta.status_code, 400)
+
+
+class ComprovanteInscricaoTests(APITestCase):
+    """Comprovante de inscrição (US91): protocolo, dados e PDF para download."""
+
+    setUp = UploadDocumentoTests.setUp
+
+    def enviar(self):
+        Aluno.objects.create(usuario=self.aluno, matricula="2023002")
+        for tipo in [TipoDocumento.HISTORICO_ESCOLAR, TipoDocumento.COMPROVANTE_MATRICULA]:
+            Documento.objects.create(
+                inscricao=self.inscricao, tipo=tipo, arquivo="h.pdf", nome_original=f"{tipo}.pdf"
+            )
+        self.inscricao.termos_aceitos = True
+        self.inscricao.save(update_fields=["termos_aceitos"])
+        url = reverse("inscricoes:enviar", kwargs={"pk": self.inscricao.pk})
+        return self.client.post(url)
+
+    def test_rascunho_nao_tem_protocolo_nem_comprovante(self):
+        dados = self.client.get(
+            reverse("inscricoes:detalhe", kwargs={"pk": self.inscricao.pk})
+        ).data
+        self.assertEqual(dados["protocolo"], "")
+        self.assertIsNone(dados["comprovante"])
+        url = reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_envio_gera_protocolo_e_comprovante(self):
+        dados = self.enviar().data
+        enviada = timezone.localtime(Inscricao.objects.get().data_envio)
+        protocolo = f"INS-{enviada:%Y%m%d}-{self.inscricao.pk:03d}"
+        self.assertEqual(dados["protocolo"], protocolo)
+        comprovante = dados["comprovante"]
+        self.assertEqual(comprovante["protocolo"], protocolo)
+        self.assertEqual(comprovante["situacao"]["rotulo"], "Aguardando homologação")
+        valores = {linha["rotulo"]: linha["valor"] for linha in comprovante["linhas"]}
+        self.assertEqual(valores["Matrícula"], "2023002")
+        self.assertEqual(valores["Bolsa"], "BICT · 12h")
+        self.assertEqual(len(comprovante["documentos"]), 2)
+
+    def test_baixa_o_pdf(self):
+        protocolo = self.enviar().data["protocolo"]
+        resposta = self.client.get(
+            reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta["Content-Type"], "application/pdf")
+        self.assertIn(protocolo, resposta["Content-Disposition"])
+        self.assertTrue(resposta.content.startswith(b"%PDF"))
+
+    def test_outro_aluno_nao_baixa(self):
+        self.enviar()
+        outro = Usuario.objects.create_user(
+            username="outro", email="outro@example.com", role=Usuario.Role.ALUNO
+        )
+        self.client.force_authenticate(outro)
+        url = reverse("inscricoes:comprovante", kwargs={"pk": self.inscricao.pk})
+        self.assertEqual(self.client.get(url).status_code, 404)

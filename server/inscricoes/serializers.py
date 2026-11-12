@@ -1,5 +1,3 @@
-import re
-
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -7,12 +5,13 @@ from bolsas.models import StatusBolsa
 from selecao.models import DesistenciaVaga, IndicacaoBolsista, PublicacaoResultado
 from server.validators import validar_upload
 
+from .comprovantes import dados_do_comprovante, protocolo_da_inscricao
 from .models import (
     EXTENSOES_DOCUMENTO,
     AnexoRecurso,
+    DecisaoDocumento,
     Documento,
     Inscricao,
-    NotificacaoInscricao,
     Recurso,
     StatusInscricao,
     StatusRecurso,
@@ -24,11 +23,30 @@ MAX_INSCRICOES_ATIVAS_POR_EDITAL = 3
 
 class DocumentoSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source="get_tipo_display", read_only=True)
+    decisao_display = serializers.CharField(source="get_decisao_display", read_only=True)
 
     class Meta:
         model = Documento
-        fields = ["id", "tipo", "tipo_display", "nome_original", "arquivo", "enviado_em"]
-        read_only_fields = ["id", "nome_original", "enviado_em"]
+        fields = [
+            "id",
+            "tipo",
+            "tipo_display",
+            "nome_original",
+            "arquivo",
+            "enviado_em",
+            "decisao",
+            "decisao_display",
+            "motivo_recusa",
+            "decidido_em",
+        ]
+        read_only_fields = [
+            "id",
+            "nome_original",
+            "enviado_em",
+            "decisao",
+            "motivo_recusa",
+            "decidido_em",
+        ]
 
     def validate_arquivo(self, arquivo):
         return validar_upload(arquivo, EXTENSOES_DOCUMENTO)
@@ -41,39 +59,16 @@ class DocumentoSerializer(serializers.ModelSerializer):
         return dados
 
 
-class NotificacaoInscricaoSerializer(serializers.ModelSerializer):
-    mensagem = serializers.SerializerMethodField()
-
-    def get_mensagem(self, notificacao):
-        # Compatibilidade com notificações antigas, sem modificar o motivo escrito.
-        mensagem = notificacao.mensagem
-        mensagem = re.sub(
-            r"^Seu recurso #\d+ de homologação", "Seu recurso de homologação", mensagem
-        )
-        prefixo, separador, restante = mensagem.partition(" foi ")
-        prefixo = re.sub(r" \(bolsa #\d+\)", "", prefixo)
-        prefixo = re.sub(
-            r", na bolsa #\d+,",
-            lambda _: f', na bolsa do projeto "{notificacao.inscricao.bolsa.projeto.titulo}",',
-            prefixo,
-        )
-        return prefixo + separador + restante
-
-    class Meta:
-        model = NotificacaoInscricao
-        fields = ["id", "mensagem", "criada_em", "lida_em"]
-        read_only_fields = fields
-
-
 class InscricaoSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     bolsa_tipo_display = serializers.CharField(source="bolsa.get_tipo_display", read_only=True)
     projeto_titulo = serializers.CharField(source="bolsa.projeto.titulo", read_only=True)
     edital_nome = serializers.CharField(source="bolsa.edital.nome", read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
-    notificacoes = NotificacaoInscricaoSerializer(many=True, read_only=True)
     prazo_inscricao_encerrado = serializers.SerializerMethodField()
     resultado_selecao = serializers.SerializerMethodField()
+    protocolo = serializers.SerializerMethodField()
+    comprovante = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -93,9 +88,10 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "documentos",
             "justificativa_indeferimento",
             "data_decisao",
-            "notificacoes",
             "prazo_inscricao_encerrado",
             "resultado_selecao",
+            "protocolo",
+            "comprovante",
         ]
         read_only_fields = [
             "id",
@@ -106,6 +102,13 @@ class InscricaoSerializer(serializers.ModelSerializer):
             "justificativa_indeferimento",
             "data_decisao",
         ]
+
+    def get_protocolo(self, inscricao):
+        return protocolo_da_inscricao(inscricao)
+
+    def get_comprovante(self, inscricao):
+        """Dados do comprovante (US91), os mesmos do PDF; só depois do envio."""
+        return dados_do_comprovante(inscricao) if inscricao.data_envio else None
 
     def get_prazo_inscricao_encerrado(self, inscricao):
         return inscricao.bolsa.edital.inscricoes_encerradas()
@@ -167,6 +170,9 @@ class CandidatoSerializer(serializers.ModelSerializer):
     aluno_email = serializers.EmailField(source="aluno.email", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     documentacao_completa = serializers.SerializerMethodField()
+    aluno_curso = serializers.SerializerMethodField()
+    aluno_matricula = serializers.SerializerMethodField()
+    decisoes_documentos = serializers.SerializerMethodField()
 
     class Meta:
         model = Inscricao
@@ -174,15 +180,33 @@ class CandidatoSerializer(serializers.ModelSerializer):
             "id",
             "aluno_nome",
             "aluno_email",
+            "aluno_curso",
+            "aluno_matricula",
             "status",
             "status_display",
             "data_envio",
             "documentacao_completa",
+            "decisoes_documentos",
         ]
         read_only_fields = fields
 
     def get_aluno_nome(self, obj):
         return obj.aluno.nome or obj.aluno.get_full_name() or obj.aluno.username
+
+    def get_aluno_curso(self, obj):
+        perfil = getattr(obj.aluno, "perfil_aluno", None)
+        return perfil.curso if perfil else ""
+
+    def get_aluno_matricula(self, obj):
+        perfil = getattr(obj.aluno, "perfil_aluno", None)
+        return perfil.matricula if perfil else ""
+
+    def get_decisoes_documentos(self, obj):
+        """Resumo para a lista de candidatos: a decisão de cada documento, na ordem de envio."""
+        return [
+            {"id": d.id, "tipo_display": d.get_tipo_display(), "decisao": d.decisao}
+            for d in sorted(obj.documentos.all(), key=lambda d: (d.enviado_em, d.id))
+        ]
 
     def get_documentacao_completa(self, obj):
         obrigatorios = {
@@ -208,6 +232,22 @@ class CandidatoDetalheSerializer(CandidatoSerializer):
 
 class IndeferimentoSerializer(serializers.Serializer):
     justificativa = serializers.CharField(allow_blank=False, max_length=5000, trim_whitespace=True)
+
+
+class DecisaoDocumentoSerializer(serializers.Serializer):
+    decisao = serializers.ChoiceField(
+        choices=[DecisaoDocumento.APROVADO, DecisaoDocumento.REJEITADO]
+    )
+    motivo_recusa = serializers.CharField(
+        max_length=5000, required=False, allow_blank=True, default="", trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        if attrs["decisao"] == DecisaoDocumento.REJEITADO and not attrs["motivo_recusa"]:
+            raise serializers.ValidationError(
+                {"motivo_recusa": "Informe o motivo da recusa do documento."}
+            )
+        return attrs
 
 
 MAX_ANEXOS_RECURSO = 5

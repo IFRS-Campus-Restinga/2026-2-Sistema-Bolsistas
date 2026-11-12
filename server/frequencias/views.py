@@ -15,6 +15,7 @@ from auditoria.models import AcaoAuditoria, EntidadeAuditoria
 from auditoria.services import registrar_log
 from bolsistas.models import VinculoBolsista
 from bolsistas.regras import MOTIVO_BOLSA_ENCERRADA, bolsa_aceita_acompanhamento
+from notificacoes.services import Destino, Notificacao, coordenador_do_projeto
 
 from .models import Frequencia, SolicitacaoFrequencia, StatusPagamento
 from .regras import frequencia_pendente, meses_do_vinculo, motivo_bloqueio_lancamento
@@ -138,6 +139,13 @@ class LancarFrequenciaView(APIView):
             descricao=f"{_descricao(vinculo, mes)} {'lançada' if criada else 'corrigida'} como "
             f"{situacao}.{atraso}",
         )
+        Notificacao.para(vinculo.aluno).info().titulo(
+            "Frequência lançada" if criada else "Frequência corrigida"
+        ).mensagem(
+            f"Sua frequência de {mes:%m/%Y} na bolsa do projeto "
+            f'"{vinculo.bolsa.projeto.titulo}" foi {"lançada" if criada else "corrigida"} '
+            f"como {situacao}."
+        ).destino(Destino.ALUNO_FREQUENCIA).enviar()
         return Response(
             FrequenciaSerializer(frequencia).data,
             status=status.HTTP_201_CREATED if criada else status.HTTP_200_OK,
@@ -204,6 +212,18 @@ class DecidirPagamentoView(APIView):
                 else f"{alvo} negado. Justificativa: {frequencia.justificativa_pagamento}"
             ),
         )
+        mes = f"{frequencia.mes_referencia:%m/%Y}"
+        projeto = vinculo.bolsa.projeto.titulo
+        aviso = Notificacao.para(vinculo.aluno).destino(Destino.ALUNO_FREQUENCIA)
+        if autorizar:
+            aviso.sucesso().titulo("Pagamento autorizado").mensagem(
+                f'O pagamento de {mes} da bolsa do projeto "{projeto}" foi autorizado.'
+            ).enviar()
+        else:
+            aviso.erro().titulo("Pagamento negado").mensagem(
+                f'O pagamento de {mes} da bolsa do projeto "{projeto}" foi negado. '
+                f"Justificativa: {frequencia.justificativa_pagamento}"
+            ).enviar()
         return Response(FrequenciaSerializer(frequencia).data)
 
 
@@ -328,6 +348,14 @@ class SolicitarFrequenciaView(APIView):
             entidade_id=solicitacao.pk,
             descricao=f"Lançamento solicitado ao coordenador do projeto: {_descricao(vinculo, mes)}.",
         )
+        complemento = f" Mensagem: {solicitacao.mensagem}" if solicitacao.mensagem else ""
+        Notificacao.para(coordenador_do_projeto(vinculo.bolsa)).aviso().titulo(
+            "Frequência em atraso"
+        ).mensagem(
+            f"A coordenação de área solicitou o lançamento da frequência de {mes:%m/%Y} de "
+            f'{vinculo.aluno.nome} na bolsa do projeto "{vinculo.bolsa.projeto.titulo}".'
+            f"{complemento}"
+        ).destino(Destino.PROJETO_FREQUENCIAS).enviar()
         return Response(
             SolicitacaoFrequenciaSerializer(solicitacao).data, status=status.HTTP_201_CREATED
         )

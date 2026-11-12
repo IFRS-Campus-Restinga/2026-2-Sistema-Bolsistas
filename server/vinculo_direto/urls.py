@@ -9,13 +9,12 @@ from .views import (
     ConviteCoordenadorDetailView,
     ConviteDetailView,
     ConviteListCreateView,
+    DecidirDocumentoConviteView,
     DocumentoConviteArquivoView,
     DocumentoConviteDeleteView,
     DocumentoConviteListCreateView,
     EnviarConviteView,
-    LerNotificacaoConviteView,
     MeusConvitesView,
-    NotificacaoConviteListView,
     RecusarConviteView,
     RejeitarConviteView,
 )
@@ -25,12 +24,15 @@ app_name = "vinculo_direto"
 urlpatterns = [
     path("bolsas-elegiveis/", BolsasElegiveisView.as_view(), name="bolsas-elegiveis"),
     path("alunos-busca/", BuscaAlunoView.as_view(), name="alunos-busca"),
-    path("notificacoes/", NotificacaoConviteListView.as_view(), name="notificacoes"),
-    path("notificacoes/<int:pk>/ler/", LerNotificacaoConviteView.as_view(), name="notificacao-ler"),
     path(
         "documentos/<int:pk>/arquivo/",
         DocumentoConviteArquivoView.as_view(),
         name="documento-arquivo",
+    ),
+    path(
+        "documentos/<int:pk>/decisao/",
+        DecidirDocumentoConviteView.as_view(),
+        name="documento-decisao",
     ),
     path("documentos/<int:pk>/", DocumentoConviteDeleteView.as_view(), name="documento-detalhe"),
     path("meus-convites/", MeusConvitesView.as_view(), name="meus-convites"),

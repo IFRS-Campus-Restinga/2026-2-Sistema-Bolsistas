@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { bolsasFetch, vinculoDiretoFetch } from '../api'
+import { bolsasFetch } from '../api'
 import {
   AcoesCell,
   Alert,
@@ -29,7 +29,6 @@ export default function SolicitacoesBolsaPage() {
   const [bolsas, setBolsas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [notificacoes, setNotificacoes] = useState([])
 
   const [modalRejeitar, setModalRejeitar] = useState(null)
   const [justificativa, setJustificativa] = useState('')
@@ -54,13 +53,6 @@ export default function SolicitacoesBolsaPage() {
 
     carregarBolsas()
 
-    vinculoDiretoFetch('/notificacoes/')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((dados) => {
-        if (ativo) setNotificacoes(Array.isArray(dados) ? dados.filter((n) => !n.lida_em) : [])
-      })
-      .catch(() => {})
-
     return () => {
       ativo = false
     }
@@ -68,13 +60,6 @@ export default function SolicitacoesBolsaPage() {
 
   function atualizarBolsa(atualizada) {
     setBolsas((atuais) => atuais.map((item) => (item.id === atualizada.id ? atualizada : item)))
-  }
-
-  async function marcarNotificacaoLida(notificacao) {
-    setNotificacoes((atuais) => atuais.filter((item) => item.id !== notificacao.id))
-    await vinculoDiretoFetch(`/notificacoes/${notificacao.id}/ler/`, { method: 'POST' }).catch(
-      () => null
-    )
   }
 
   function confirmarAprovar(bolsa) {
@@ -146,15 +131,6 @@ export default function SolicitacoesBolsaPage() {
   return (
     <>
       <PageHeader title="Solicitações de Bolsa" />
-
-      {notificacoes.map((notificacao) => (
-        <Alert key={notificacao.id} tone="success">
-          {notificacao.mensagem}{' '}
-          <Button size="sm" variant="outline" onClick={() => marcarNotificacaoLida(notificacao)}>
-            Marcar como lida
-          </Button>
-        </Alert>
-      ))}
 
       {erro && <Alert tone="error">{erro}</Alert>}
 
