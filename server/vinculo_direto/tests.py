@@ -394,12 +394,10 @@ class DecisaoCoordenadorTests(VinculoDiretoTestBase):
         self.assertEqual(log.entidade_id, str(self.bolsa.pk))
         self.assertEqual(log.usuario, self.coordenador)
 
-    def test_aprovar_notifica_coordenador_de_area(self):
+    def test_aprovar_so_avisa_a_area_quando_o_termo_for_aceito(self):
+        # O vínculo nasce provisório; a área é avisada quando o coordenador aceita o termo.
         self.client.post(self.url("convite-aprovar"))
-        notificacao = Notificacao.objects.get(destinatario=self.coordenador_area)
-        self.assertEqual(notificacao.destino, "frequencias")
-        self.assertIn(self.projeto.titulo, notificacao.mensagem)
-        self.assertIn(self.aluno.nome, notificacao.mensagem)
+        self.assertFalse(Notificacao.objects.filter(destinatario=self.coordenador_area).exists())
 
     def test_aprovar_bloqueia_sem_documentos_obrigatorios(self):
         self.convite.documentos.all().delete()
