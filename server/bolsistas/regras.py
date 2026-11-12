@@ -43,10 +43,28 @@ def fora_do_prazo(edital):
     return prazo is not None and timezone.localdate() > prazo
 
 
+def _motivo_vinculo_inativo(vinculo, de_quem):
+    if vinculo.status == StatusVinculo.AGUARDANDO_TERMO:
+        return f"O vínculo {de_quem} aguarda o termo de compromisso."
+    return f"O vínculo {de_quem} foi desligado."
+
+
+def motivo_bloqueio_lembrete_termo(vinculo, termo):
+    """Por que o coordenador não pode lembrar o aluno do termo agora; vazio quando pode."""
+    if vinculo.status != StatusVinculo.AGUARDANDO_TERMO:
+        return "Este vínculo não está aguardando o termo."
+    if termo is not None and termo.aluno_assinou:
+        return "O aluno já enviou o termo assinado; falta a sua revisão."
+    ultimo = vinculo.lembrete_termo_em
+    if ultimo and timezone.localdate(ultimo) == timezone.localdate():
+        return "Um lembrete já foi enviado hoje."
+    return ""
+
+
 def motivo_bloqueio_solicitacao(vinculo):
     """Por que o coordenador não pode solicitar o relatório agora; vazio quando pode."""
     if vinculo.status != StatusVinculo.ATIVO:
-        return "O vínculo deste bolsista ainda não está ativo."
+        return _motivo_vinculo_inativo(vinculo, "deste bolsista")
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
     if relatorio_do_vinculo(vinculo):
@@ -57,7 +75,7 @@ def motivo_bloqueio_solicitacao(vinculo):
 def motivo_bloqueio_envio(vinculo):
     """Por que o aluno não pode enviar o relatório agora; vazio quando pode."""
     if vinculo.status != StatusVinculo.ATIVO:
-        return "O vínculo desta bolsa ainda não está ativo."
+        return _motivo_vinculo_inativo(vinculo, "desta bolsa")
     if not bolsa_aceita_acompanhamento(vinculo.bolsa):
         return MOTIVO_BOLSA_ENCERRADA
 
@@ -134,10 +152,16 @@ def motivos_bloqueio_finalizacao(bolsa):
         return [
             f'Esta bolsa está com status "{bolsa.get_status_display()}" e não pode ser finalizada.'
         ]
-    if not bolsa.vinculos.filter(status=StatusVinculo.ATIVO).exists():
+    if not bolsa.vinculos.exclude(status=StatusVinculo.DESLIGADO).exists():
         return ["A bolsa não tem bolsistas vinculados."]
 
     motivos = [f"Processo em aberto: {processo}." for processo in processos_em_aberto(bolsa)]
+    motivos += [
+        f"Termo de compromisso de {vinculo.aluno.nome} não finalizado."
+        for vinculo in bolsa.vinculos.filter(status=StatusVinculo.AGUARDANDO_TERMO).select_related(
+            "aluno"
+        )
+    ]
     motivos += [f"Relatório final de {pendente}." for pendente in pendencias_para_finalizar(bolsa)]
     return motivos
 

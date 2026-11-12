@@ -2,6 +2,8 @@ from html import unescape
 from io import BytesIO
 from pathlib import Path
 
+from django.core.files.base import ContentFile
+from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.html import strip_tags
@@ -10,7 +12,7 @@ from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
 
-from .models import TipoTermo
+from .models import TermoCompromisso, TipoTermo
 
 BRASAO_REPUBLICA = Path(__file__).resolve().parent / "assets" / "brasao_republica.jpg"
 
@@ -22,6 +24,19 @@ def calcular_idade(data_nascimento, referencia=None):
         - data_nascimento.year
         - ((referencia.month, referencia.day) < (data_nascimento.month, data_nascimento.day))
     )
+
+
+def menor_de_idade(perfil):
+    return bool(perfil and perfil.data_nascimento) and calcular_idade(perfil.data_nascimento) < 18
+
+
+def motivo_dados_termo_incompletos(perfil):
+    """O termo depende da idade do aluno (modelo de maior ou de menor); vazio quando completo."""
+    if perfil is None or not perfil.data_nascimento:
+        return "Informe sua data de nascimento para preencher o termo de compromisso."
+    if menor_de_idade(perfil) and not perfil.nome_responsavel_legal.strip():
+        return "Informe o nome do responsável legal para preencher o termo de compromisso."
+    return ""
 
 
 def contexto_termo(vinculo, perfil):
@@ -36,8 +51,8 @@ def contexto_termo(vinculo, perfil):
         "coordenador_nome": bolsa.projeto.coordenador_projeto.usuario.nome,
         "edital": f"{bolsa.edital.ano_codigo} - {bolsa.edital.nome}",
         "vigencia": (
-            f"{bolsa.data_inicio_vigencia:%d/%m/%Y} a {bolsa.data_fim_vigencia:%d/%m/%Y}"
-            if bolsa.data_inicio_vigencia and bolsa.data_fim_vigencia
+            f"{bolsa.inicio_vigencia:%d/%m/%Y} a {bolsa.fim_vigencia:%d/%m/%Y}"
+            if bolsa.inicio_vigencia and bolsa.fim_vigencia
             else "conforme o edital"
         ),
         "carga_horaria": bolsa.carga_horaria_semanal,
@@ -138,3 +153,40 @@ def gerar_docx_termo(vinculo, perfil):
 
     documento.save(buffer)
     return tipo, buffer.getvalue()
+
+
+def termo_atual_do_aluno(vinculo, perfil, usuario):
+    """Termo que o aluno baixa e assina, gerado com os dados atuais do perfil.
+
+    Enquanto o aluno não envia a assinatura, o termo acompanha os dados: se a data de
+    nascimento ou o responsável mudarem, o arquivo é gerado de novo. Depois do envio, o
+    termo fica como foi assinado.
+    """
+    termo = TermoCompromisso.objects.filter(vinculo=vinculo).first()
+    if termo and (termo.aluno_assinou or termo.assinado):
+        return termo
+    responsavel = perfil.nome_responsavel_legal.strip()
+    tipo = TipoTermo.MENOR if menor_de_idade(perfil) else TipoTermo.MAIOR
+    if (
+        termo
+        and termo.arquivo_gerado
+        and termo.tipo == tipo
+        and termo.data_nascimento == perfil.data_nascimento
+        and termo.nome_responsavel_legal == responsavel
+    ):
+        return termo
+
+    tipo, conteudo = gerar_docx_termo(vinculo, perfil)
+    termo = termo or TermoCompromisso(vinculo=vinculo)
+    anterior = termo.arquivo_gerado.name if termo.arquivo_gerado else ""
+    termo.tipo = tipo
+    termo.data_nascimento = perfil.data_nascimento
+    termo.nome_responsavel_legal = responsavel
+    termo.gerado_por = usuario
+    termo.gerado_em = timezone.now()
+    termo.arquivo_gerado.save(f"termo_vinculo_{vinculo.pk}.docx", ContentFile(conteudo), save=False)
+    termo.save()
+    if anterior and anterior != termo.arquivo_gerado.name:
+        storage = termo.arquivo_gerado.storage
+        transaction.on_commit(lambda: storage.delete(anterior))
+    return termo

@@ -113,7 +113,22 @@ export default function InicioAlunoPage({ nome, onNav }) {
   }
 
   const bolsa = painel.minha_bolsa
+  const vinculoProvisorio = bolsa?.status === 'AGUARDANDO_TERMO'
   const passos = [
+    ...(vinculoProvisorio
+      ? [
+          {
+            feito: painel.dados_termo_completos,
+            label: 'Preencher dados adicionais',
+            acao: () => onNav('minha-bolsa'),
+          },
+          {
+            feito: !painel.termo_pendente,
+            label: 'Enviar termo de compromisso assinado',
+            acao: () => onNav('minha-bolsa'),
+          },
+        ]
+      : []),
     {
       feito: painel.dados_bancarios_completos,
       label: 'Cadastrar dados bancários',
@@ -129,7 +144,23 @@ export default function InicioAlunoPage({ nome, onNav }) {
   return (
     <>
       <PageHeader title={titulo} description={painel.curso || undefined} />
-      {!painel.dados_bancarios_completos && bolsa && (
+      {painel.termo_pendente && (
+        <Banner
+          tone="warning"
+          title="Aguardando preenchimento do termo de compromisso"
+          description={
+            painel.termo_motivo_recusa
+              ? `O coordenador recusou o termo enviado: ${painel.termo_motivo_recusa}`
+              : 'Seu vínculo só é efetivado depois que você envia o termo assinado e o coordenador do projeto aprova.'
+          }
+          action={
+            <Button variant="primary" onClick={() => onNav('minha-bolsa')}>
+              Preencher termo
+            </Button>
+          }
+        />
+      )}
+      {!painel.termo_pendente && !painel.dados_bancarios_completos && bolsa && (
         <Banner
           tone="warning"
           title="Cadastre seus dados bancários"
@@ -177,7 +208,7 @@ export default function InicioAlunoPage({ nome, onNav }) {
           <Card className="lg:col-span-3" onClick={() => onNav('minha-bolsa')}>
             <div className="mb-3 flex items-center justify-between">
               <span className="text-xs text-gray-500">Minha bolsa</span>
-              <StatusPill status="ATIVO" size="sm" />
+              <StatusPill status={bolsa.status} size="sm" />
             </div>
             <div className="text-lg font-semibold text-gray-900">
               {bolsa.modalidade} · {bolsa.carga_horaria_semanal}h ·{' '}

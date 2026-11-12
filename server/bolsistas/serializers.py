@@ -24,24 +24,65 @@ from .models import (
 from .regras import (
     fora_do_prazo,
     motivo_bloqueio_envio,
+    motivo_bloqueio_lembrete_termo,
     motivo_bloqueio_solicitacao,
     motivos_bloqueio_finalizacao,
     prazo_relatorio_encerrado,
     relatorio_do_vinculo,
 )
+from .termos import calcular_idade, menor_de_idade, motivo_dados_termo_incompletos
 
 
 class DadosTermoAlunoSerializer(serializers.ModelSerializer):
+    """Dados que definem o modelo do termo. `hoje` vem do servidor para a tela saber, enquanto
+    o aluno digita, se ele é menor de idade."""
+
+    completos = serializers.SerializerMethodField()
+    menor_de_idade = serializers.SerializerMethodField()
+    hoje = serializers.SerializerMethodField()
+
     class Meta:
         model = Aluno
-        fields = ["data_nascimento", "nome_responsavel_legal"]
+        fields = [
+            "data_nascimento",
+            "nome_responsavel_legal",
+            "completos",
+            "menor_de_idade",
+            "hoje",
+        ]
+
+    def get_completos(self, perfil):
+        return not motivo_dados_termo_incompletos(perfil)
+
+    def get_menor_de_idade(self, perfil):
+        return menor_de_idade(perfil)
+
+    def get_hoje(self, perfil):
+        return timezone.localdate()
 
     def validate_data_nascimento(self, valor):
-        from django.utils import timezone
-
+        if valor is None:
+            raise serializers.ValidationError("Informe a data de nascimento.")
         if valor > timezone.localdate():
             raise serializers.ValidationError("A data de nascimento não pode estar no futuro.")
         return valor
+
+    def validate(self, attrs):
+        nascimento = attrs.get("data_nascimento", getattr(self.instance, "data_nascimento", None))
+        responsavel = attrs.get(
+            "nome_responsavel_legal", getattr(self.instance, "nome_responsavel_legal", "")
+        ).strip()
+        if nascimento and calcular_idade(nascimento) < 18 and not responsavel:
+            raise serializers.ValidationError(
+                {
+                    "nome_responsavel_legal": [
+                        "Informe o responsável legal: você é menor de 18 anos."
+                    ]
+                }
+            )
+        if "nome_responsavel_legal" in attrs:
+            attrs["nome_responsavel_legal"] = responsavel
+        return attrs
 
 
 class EnvioTermoAlunoSerializer(serializers.Serializer):
@@ -76,6 +117,7 @@ class TermoCompromissoSerializer(serializers.ModelSerializer):
             "aluno_assinou",
             "nome_original_assinado_aluno",
             "enviado_aluno_em",
+            "motivo_recusa_aluno",
             "assinado",
             "nome_original_assinado",
             "enviado_em",
@@ -294,6 +336,7 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
     prazo_relatorio_encerrado = serializers.SerializerMethodField()
     relatorio = serializers.SerializerMethodField()
     termo = serializers.SerializerMethodField()
+    termo_para_assinar_url = serializers.SerializerMethodField()
     pode_enviar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio = serializers.SerializerMethodField()
 
@@ -324,6 +367,7 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
             "prazo_relatorio_encerrado",
             "relatorio",
             "termo",
+            "termo_para_assinar_url",
             "pode_enviar_relatorio",
             "motivo_bloqueio",
         ]
@@ -331,6 +375,14 @@ class MeuVinculoSerializer(serializers.ModelSerializer):
     def get_termo(self, vinculo):
         termo = termo_do_vinculo(vinculo)
         return TermoCompromissoSerializer(termo, context=self.context).data if termo else None
+
+    def get_termo_para_assinar_url(self, vinculo):
+        """O termo é gerado na hora do download, com os dados atuais do aluno."""
+        if vinculo.status != StatusVinculo.AGUARDANDO_TERMO:
+            return None
+        caminho = reverse("bolsistas:termo-download", kwargs={"pk": vinculo.pk})
+        request = self.context.get("request")
+        return request.build_absolute_uri(caminho) if request else caminho
 
     def get_hoje(self, vinculo):
         """Data do servidor, para a tela contar os dias da vigência sem usar o relógio local."""
@@ -370,8 +422,8 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
     prazo_relatorio_encerrado = serializers.SerializerMethodField()
     relatorio = serializers.SerializerMethodField()
     termo = serializers.SerializerMethodField()
-    pode_gerar_termo = serializers.SerializerMethodField()
-    motivo_bloqueio_termo = serializers.SerializerMethodField()
+    pode_lembrar_termo = serializers.SerializerMethodField()
+    motivo_bloqueio_lembrete = serializers.SerializerMethodField()
     pode_solicitar_relatorio = serializers.SerializerMethodField()
     motivo_bloqueio_solicitacao = serializers.SerializerMethodField()
     vaga_cancelada = serializers.SerializerMethodField()
@@ -396,8 +448,9 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
             "prazo_relatorio_encerrado",
             "relatorio",
             "termo",
-            "pode_gerar_termo",
-            "motivo_bloqueio_termo",
+            "lembrete_termo_em",
+            "pode_lembrar_termo",
+            "motivo_bloqueio_lembrete",
             "pode_solicitar_relatorio",
             "motivo_bloqueio_solicitacao",
             "vaga_cancelada",
@@ -407,28 +460,11 @@ class VinculoDoCoordenadorSerializer(serializers.ModelSerializer):
         termo = termo_do_vinculo(vinculo)
         return TermoCompromissoSerializer(termo, context=self.context).data if termo else None
 
-    def get_motivo_bloqueio_termo(self, vinculo):
-        try:
-            perfil = vinculo.aluno.perfil_aluno
-        except Aluno.DoesNotExist:
-            return "O aluno precisa informar a data de nascimento."
-        if not perfil.data_nascimento:
-            return "O aluno precisa informar a data de nascimento."
-        from .termos import calcular_idade
+    def get_motivo_bloqueio_lembrete(self, vinculo):
+        return motivo_bloqueio_lembrete_termo(vinculo, termo_do_vinculo(vinculo))
 
-        if (
-            calcular_idade(perfil.data_nascimento) < 18
-            and not perfil.nome_responsavel_legal.strip()
-        ):
-            return "O aluno precisa informar o nome do responsável legal."
-        if vinculo.status == "DESLIGADO":
-            return "O vínculo está desligado."
-        if getattr(vinculo, "termo_compromisso", None) and vinculo.termo_compromisso.assinado:
-            return "O termo assinado já foi enviado."
-        return ""
-
-    def get_pode_gerar_termo(self, vinculo):
-        return not self.get_motivo_bloqueio_termo(vinculo)
+    def get_pode_lembrar_termo(self, vinculo):
+        return not self.get_motivo_bloqueio_lembrete(vinculo)
 
     def get_relatorio(self, vinculo):
         relatorio = relatorio_do_vinculo(vinculo)

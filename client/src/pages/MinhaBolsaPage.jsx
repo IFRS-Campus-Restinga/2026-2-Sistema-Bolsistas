@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { bolsistasFetch, dadosBancariosFetch, frequenciasFetch } from '../api'
 import {
   Alert,
+  Banner,
   Button,
   Card,
   Carregando,
@@ -9,8 +10,11 @@ import {
   FileField,
   FormField,
   IconAward,
+  IconCheckCircle,
+  IconClock,
   IconDownload,
   IconFileText,
+  IconUpload,
   KeyValue,
   PageHeader,
   SectionTitle,
@@ -24,7 +28,6 @@ import { formatarMoeda } from '../utils/formatarMoeda'
 import { formatarMesCurto } from '../utils/mesReferencia'
 import { mensagemDeErro } from '../utils/mensagemDeErro'
 import MotivoModal from './MotivoModal'
-import TermoAssinadoModal from './TermoAssinadoModal'
 
 const UM_DIA = 24 * 60 * 60 * 1000
 
@@ -33,16 +36,12 @@ function diasEntre(inicio, fim) {
   return Math.round((new Date(`${fim}T00:00:00`) - new Date(`${inicio}T00:00:00`)) / UM_DIA)
 }
 
-function menorDeIdade(dataNascimento) {
-  if (!dataNascimento) return false
-  const nascimento = new Date(`${dataNascimento}T12:00:00`)
-  if (Number.isNaN(nascimento.getTime())) return false
-  const hoje = new Date()
-  let idade = hoje.getFullYear() - nascimento.getFullYear()
-  const aniversarioAindaNaoOcorreu =
-    hoje.getMonth() < nascimento.getMonth() ||
-    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() < nascimento.getDate())
-  if (aniversarioAindaNaoOcorreu) idade -= 1
+// Idade a partir de datas "AAAA-MM-DD"; `hoje` vem do servidor.
+function menorDeIdadeEm(nascimento, hoje) {
+  if (!nascimento || !hoje) return false
+  const [anoN, mesN, diaN] = nascimento.split('-').map(Number)
+  const [anoH, mesH, diaH] = hoje.split('-').map(Number)
+  const idade = anoH - anoN - (mesH < mesN || (mesH === mesN && diaH < diaN) ? 1 : 0)
   return idade < 18
 }
 
@@ -66,91 +65,296 @@ function VigenciaBar({ inicio, fim, hoje }) {
   )
 }
 
-function CartaoTermo({ vinculo, onEnviar }) {
-  const termo = vinculo.termo
-  const rotulo = termo?.assinado
-    ? 'Termo finalizado'
-    : termo?.aluno_assinou
-      ? 'Aguardando coordenador'
-      : termo
-        ? 'Aguardando sua assinatura'
-        : 'Aguardando geração'
+const abrir = (url) => window.open(url, '_blank', 'noopener')
+
+function ErroDoCampo({ erros }) {
+  return erros?.[0] ? <p className="text-xs text-red-600">{erros[0]}</p> : null
+}
+
+/** Data de nascimento e responsável legal: definem o modelo do termo. */
+function DadosAdicionais({ dados, onSalvo, onCancelar }) {
+  const toast = useToast()
+  const [valores, setValores] = useState({
+    data_nascimento: dados?.data_nascimento || '',
+    nome_responsavel_legal: dados?.nome_responsavel_legal || '',
+  })
+  const [erros, setErros] = useState({})
+  const [salvando, setSalvando] = useState(false)
+  const menor = menorDeIdadeEm(valores.data_nascimento, dados?.hoje)
+
+  function alterar(campo, valor) {
+    setValores((atuais) => ({ ...atuais, [campo]: valor }))
+    setErros((atuais) => ({ ...atuais, [campo]: undefined }))
+  }
+
+  async function salvar(event) {
+    event.preventDefault()
+    setSalvando(true)
+    try {
+      const response = await bolsistasFetch('/meus-dados-termo/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...valores,
+          nome_responsavel_legal: menor ? valores.nome_responsavel_legal : '',
+        }),
+      })
+      const resposta = await response.json().catch(() => null)
+      if (!response.ok) {
+        setErros(resposta ?? {})
+        throw new Error(mensagemDeErro(resposta, 'Não foi possível salvar os dados.'))
+      }
+      toast({ message: 'Dados adicionais salvos.', tone: 'success' })
+      onSalvo()
+    } catch (error) {
+      toast({ message: error.message, tone: 'error' })
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   return (
-    <Card>
-      <SectionTitle
-        title="Termo de compromisso"
-        action={<StatusPill status={termo?.assinado ? 'ATIVO' : vinculo.status} label={rotulo} />}
+    <form onSubmit={salvar} className="flex flex-col gap-3">
+      <p className="text-sm text-gray-500">
+        Sua idade define o modelo do termo. Menores de 18 anos assinam junto com o responsável
+        legal.
+      </p>
+      <FormField label="Data de nascimento" className="mb-0">
+        <TextInput
+          type="date"
+          required
+          max={dados?.hoje}
+          value={valores.data_nascimento}
+          onChange={(event) => alterar('data_nascimento', event.target.value)}
+        />
+        <ErroDoCampo erros={erros.data_nascimento} />
+      </FormField>
+      {menor && (
+        <FormField label="Nome completo do responsável legal" className="mb-0">
+          <TextInput
+            required
+            value={valores.nome_responsavel_legal}
+            onChange={(event) => alterar('nome_responsavel_legal', event.target.value)}
+          />
+          <ErroDoCampo erros={erros.nome_responsavel_legal} />
+        </FormField>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" variant="primary" loading={salvando}>
+          Salvar dados
+        </Button>
+        {onCancelar && (
+          <Button type="button" size="sm" onClick={onCancelar}>
+            Cancelar
+          </Button>
+        )}
+      </div>
+    </form>
+  )
+}
+
+function EnvioDoTermo({ vinculo, onEnviado }) {
+  const toast = useToast()
+  const [arquivo, setArquivo] = useState(null)
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+  const reenvio = vinculo.termo?.aluno_assinou
+
+  async function enviar() {
+    setEnviando(true)
+    setErro('')
+    try {
+      const body = new FormData()
+      body.append('arquivo', arquivo)
+      const response = await bolsistasFetch(`/vinculos/${vinculo.id}/termo/assinado/`, {
+        method: 'POST',
+        body,
+      })
+      const dados = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(mensagemDeErro(dados, 'Não foi possível enviar o termo.'))
+      setArquivo(null)
+      toast({ message: 'Termo enviado para revisão do coordenador.', tone: 'success' })
+      onEnviado()
+    } catch (error) {
+      setErro(error.message)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <p className="text-xs text-gray-500">
+        {reenvio ? 'Para trocar o arquivo enviado, ' : ''}
+        Envie o termo assinado em DOCX, com até 10 MB.
+      </p>
+      {erro && <Alert tone="error">{erro}</Alert>}
+      <FileField
+        value={arquivo?.name || ''}
+        onChange={setArquivo}
+        accept=".docx"
+        disabled={enviando}
       />
-      {!termo ? (
-        <p className="text-sm text-gray-500">O coordenador ainda não gerou o termo.</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
+      <div>
+        <Button size="sm" variant="primary" onClick={enviar} disabled={!arquivo} loading={enviando}>
+          <IconUpload size={14} /> {reenvio ? 'Substituir termo assinado' : 'Enviar assinado'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function CartaoTermo({ vinculo, dadosTermo, onAtualizado }) {
+  const [editandoDados, setEditandoDados] = useState(false)
+  const termo = vinculo.termo
+  const pendente = vinculo.status === 'AGUARDANDO_TERMO'
+  const precisaDosDados = pendente && !termo?.aluno_assinou && !dadosTermo?.completos
+
+  let conteudo
+  if (termo?.assinado) {
+    conteudo = (
+      <>
+        <div className="flex items-center gap-2.5 rounded-lg bg-emerald-50/70 px-3 py-2.5 text-[13px] text-emerald-800">
+          <IconCheckCircle size={16} /> Termo assinado enviado
+        </div>
+        <Button size="sm" className="mt-3" onClick={() => abrir(termo.arquivo_assinado_url)}>
+          <IconDownload size={14} /> Baixar termo final
+        </Button>
+      </>
+    )
+  } else if (!pendente) {
+    conteudo = (
+      <p className="text-sm text-gray-500">Nenhum termo foi enviado pelo sistema neste vínculo.</p>
+    )
+  } else if (precisaDosDados || editandoDados) {
+    conteudo = (
+      <DadosAdicionais
+        dados={dadosTermo}
+        onCancelar={dadosTermo?.completos ? () => setEditandoDados(false) : undefined}
+        onSalvo={() => {
+          setEditandoDados(false)
+          onAtualizado()
+        }}
+      />
+    )
+  } else {
+    conteudo = (
+      <>
+        {termo?.aluno_assinou ? (
+          <div className="flex items-center gap-2.5 rounded-lg bg-blue-50/70 px-3 py-2.5 text-[13px] text-blue-800">
+            <IconClock size={16} /> Aguardando a revisão do coordenador
+          </div>
+        ) : termo?.motivo_recusa_aluno ? (
+          <Alert tone="error" title="O coordenador recusou o termo enviado">
+            {termo.motivo_recusa_aluno}
+          </Alert>
+        ) : (
+          <p className="text-sm text-gray-500">
+            Baixe o termo, assine e envie para efetivar o seu vínculo.
+          </p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             onClick={() =>
-              window.open(
-                termo.assinado
-                  ? termo.arquivo_assinado_url
-                  : termo.aluno_assinou
-                    ? termo.arquivo_assinado_aluno_url
-                    : termo.arquivo_gerado_url,
-                '_blank',
-                'noopener'
+              abrir(
+                termo?.aluno_assinou
+                  ? termo.arquivo_assinado_aluno_url
+                  : vinculo.termo_para_assinar_url
               )
             }
           >
-            {termo.assinado
-              ? 'Baixar termo final'
-              : termo.aluno_assinou
-                ? 'Baixar minha versão'
-                : 'Baixar termo em DOCX'}
+            <IconDownload size={14} /> {termo?.aluno_assinou ? 'Ver termo enviado' : 'Baixar termo'}
           </Button>
-          {!termo.assinado && (
-            <Button variant="primary" size="sm" onClick={() => onEnviar(vinculo)}>
-              {termo.aluno_assinou ? 'Substituir minha assinatura' : 'Enviar minha assinatura'}
-            </Button>
-          )}
         </div>
-      )}
+        <EnvioDoTermo vinculo={vinculo} onEnviado={onAtualizado} />
+        {!termo?.aluno_assinou && (
+          <p className="mt-3 text-xs text-gray-500">
+            Nascimento: {formatarData(dadosTermo.data_nascimento)}
+            {dadosTermo.menor_de_idade && ` · Responsável: ${dadosTermo.nome_responsavel_legal}`}
+            {' · '}
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 text-xs font-medium text-gray-700 underline"
+              onClick={() => setEditandoDados(true)}
+            >
+              Alterar
+            </button>
+          </p>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <Card>
+      <SectionTitle title="Termo de compromisso" />
+      {conteudo}
     </Card>
   )
 }
 
+/** Pendências do vínculo provisório, no topo da página. */
+function PendenciasDoTermo({ vinculo, dadosTermo }) {
+  if (vinculo.status !== 'AGUARDANDO_TERMO' || vinculo.termo?.aluno_assinou) return null
+  if (!dadosTermo?.completos) {
+    return (
+      <Banner
+        tone="warning"
+        title="Preencha os dados adicionais"
+        description="Informe sua data de nascimento no card do termo de compromisso para liberar o termo."
+      />
+    )
+  }
+  return (
+    <Banner
+      tone="warning"
+      title="Aguardando preenchimento do termo de compromisso"
+      description="Baixe, assine e envie o termo. O vínculo é efetivado depois da revisão do coordenador do projeto."
+    />
+  )
+}
+
 function BolsasFinalizadas({ vinculos }) {
+  const [aberto, setAberto] = useState(false)
   if (vinculos.length === 0) return null
   return (
-    <details className="mt-6 rounded-card border border-gray-200 bg-white">
-      <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-700">
-        Bolsas finalizadas ({vinculos.length})
-      </summary>
-      <div className="grid gap-3 border-t border-gray-100 p-4 md:grid-cols-2">
-        {vinculos.map((item) => (
-          <Card key={item.id} className="p-4!">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium text-gray-900">{item.projeto_titulo}</div>
-                <div className="text-xs text-gray-500">
-                  {item.edital_ano_codigo} · {item.bolsa_modalidade_display}
+    <div className="mt-8">
+      <SectionTitle
+        title={`Bolsas finalizadas (${vinculos.length})`}
+        action={
+          <Button variant="ghost" size="sm" onClick={() => setAberto((atual) => !atual)}>
+            {aberto ? 'Ocultar' : 'Mostrar'}
+          </Button>
+        }
+      />
+      {aberto && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {vinculos.map((item) => (
+            <Card key={item.id} className="p-4!">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium text-gray-900">{item.projeto_titulo}</div>
+                  <div className="text-xs text-gray-500">
+                    {item.edital_ano_codigo} · {item.bolsa_modalidade_display}
+                  </div>
                 </div>
+                <StatusPill status={item.status} size="sm" />
               </div>
-              <StatusPill status={item.status} size="sm" />
-            </div>
-            {item.termo?.assinado && (
-              <Button
-                className="mt-3"
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(item.termo.arquivo_assinado_url, '_blank', 'noopener')}
-              >
-                Baixar termo final
-              </Button>
-            )}
-          </Card>
-        ))}
-      </div>
-    </details>
+              {item.termo?.assinado && (
+                <Button
+                  className="mt-3"
+                  size="sm"
+                  onClick={() => abrir(item.termo.arquivo_assinado_url)}
+                >
+                  <IconDownload size={14} /> Baixar termo final
+                </Button>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -357,9 +561,6 @@ export default function MinhaBolsaPage({ onNav }) {
   const [erro, setErro] = useState('')
   const [versao, setVersao] = useState(0)
   const [desligando, setDesligando] = useState(false)
-  const [enviandoTermo, setEnviandoTermo] = useState(null)
-  const [dadosTermo, setDadosTermo] = useState({ data_nascimento: '', nome_responsavel_legal: '' })
-  const [salvandoDados, setSalvandoDados] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -397,13 +598,8 @@ export default function MinhaBolsaPage({ onNav }) {
             pedidos: Array.isArray(pedidos) ? pedidos : [],
             banco: rBanco.ok ? banco : null,
             historico: Array.isArray(historico) ? historico : [],
+            dadosTermo: rDadosTermo.ok ? dadosDoTermo : null,
           })
-          if (rDadosTermo.ok && dadosDoTermo) {
-            setDadosTermo({
-              data_nascimento: dadosDoTermo.data_nascimento || '',
-              nome_responsavel_legal: dadosDoTermo.nome_responsavel_legal || '',
-            })
-          }
           setErro('')
         }
       } catch (error) {
@@ -418,28 +614,6 @@ export default function MinhaBolsaPage({ onNav }) {
   }, [versao])
 
   const recarregar = () => setVersao((atual) => atual + 1)
-
-  async function salvarDadosTermo(event) {
-    event.preventDefault()
-    setSalvandoDados(true)
-    try {
-      const response = await bolsistasFetch('/meus-dados-termo/', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosTermo),
-      })
-      const resposta = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(mensagemDeErro(resposta, 'Não foi possível salvar os dados.'))
-      }
-      toast({ message: 'Dados do Termo de Compromisso salvos.', tone: 'success' })
-      recarregar()
-    } catch (error) {
-      toast({ message: error.message, tone: 'error' })
-    } finally {
-      setSalvandoDados(false)
-    }
-  }
 
   if (erro) {
     return (
@@ -493,49 +667,7 @@ export default function MinhaBolsaPage({ onNav }) {
     <>
       <PageHeader title="Minha bolsa" badge={<StatusPill status={vinculo.status} />} />
 
-      <form onSubmit={salvarDadosTermo} className="mb-4">
-        <Card>
-          <SectionTitle title="Dados para o Termo de Compromisso" />
-          {menorDeIdade(dadosTermo.data_nascimento) &&
-            !dadosTermo.nome_responsavel_legal.trim() && (
-              <Alert tone="warning">
-                Para gerar o termo de um estudante menor de idade, informe o nome completo do
-                responsável legal.
-              </Alert>
-            )}
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Data de nascimento" className="mb-0">
-              <TextInput
-                type="date"
-                required
-                value={dadosTermo.data_nascimento}
-                onChange={(event) =>
-                  setDadosTermo((atual) => ({ ...atual, data_nascimento: event.target.value }))
-                }
-              />
-            </FormField>
-            <FormField
-              label="Nome completo do responsável legal, se menor de 18 anos"
-              className="mb-0"
-            >
-              <TextInput
-                value={dadosTermo.nome_responsavel_legal}
-                onChange={(event) =>
-                  setDadosTermo((atual) => ({
-                    ...atual,
-                    nome_responsavel_legal: event.target.value,
-                  }))
-                }
-              />
-            </FormField>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button type="submit" variant="primary" loading={salvandoDados}>
-              Salvar dados
-            </Button>
-          </div>
-        </Card>
-      </form>
+      <PendenciasDoTermo vinculo={vinculo} dadosTermo={dados.dadosTermo} />
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -570,7 +702,7 @@ export default function MinhaBolsaPage({ onNav }) {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <CartaoTermo vinculo={vinculo} onEnviar={setEnviandoTermo} />
+        <CartaoTermo vinculo={vinculo} dadosTermo={dados.dadosTermo} onAtualizado={recarregar} />
         <CartaoDadosBancarios dados={dados.banco} onNav={onNav} />
         <CartaoRelatorio vinculo={vinculo} onEnviado={recarregar} />
       </div>
@@ -580,21 +712,6 @@ export default function MinhaBolsaPage({ onNav }) {
       <Desligamento pedido={pedido} onPedir={() => setDesligando(true)} />
 
       <BolsasFinalizadas vinculos={dados.finalizados ?? []} />
-
-      {enviandoTermo && (
-        <TermoAssinadoModal
-          vinculo={enviandoTermo}
-          onFechar={() => setEnviandoTermo(null)}
-          onEnviado={() => {
-            setEnviandoTermo(null)
-            toast({
-              message: 'Sua assinatura foi enviada para revisão do coordenador.',
-              tone: 'success',
-            })
-            recarregar()
-          }}
-        />
-      )}
 
       {desligando && (
         <MotivoModal

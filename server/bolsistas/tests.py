@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 from importlib import import_module
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -38,7 +38,7 @@ from .models import (
     TipoTermo,
     VinculoBolsista,
 )
-from .regras import pendencias_do_coordenador
+from .regras import motivos_bloqueio_finalizacao, pendencias_do_coordenador
 
 migracao_vinculos = import_module("bolsistas.migrations.0002_vinculos_existentes")
 
@@ -1443,51 +1443,88 @@ class DesligamentoECancelamentoTests(CenarioBolsista):
 
 
 class TermoCompromissoTests(CenarioBolsista):
+    """Vínculo provisório: o aluno informa os dados, baixa e assina o termo; o coordenador
+    revisa e envia o termo final, que efetiva o vínculo."""
+
     def setUp(self):
         super().setUp()
+        self.hoje = timezone.localdate()
+        self.edital.data_inicio_vigencia = date(2026, 3, 1)
+        self.edital.data_fim_vigencia = date(2026, 12, 31)
+        self.edital.save(update_fields=["data_inicio_vigencia", "data_fim_vigencia"])
         self.vinculo_ana = self.vinculo("ana")
         self.vinculo_ana.status = StatusVinculo.AGUARDANDO_TERMO
         self.vinculo_ana.save(update_fields=["status"])
+        self.aluna = self.vinculo_ana.aluno
         self.perfil = Aluno.objects.create(
-            usuario=self.vinculo_ana.aluno,
+            usuario=self.aluna,
             matricula="2026001",
             curso="Tecnologia em Análise e Desenvolvimento de Sistemas",
             cpf="52998224725",
-            data_nascimento=timezone.localdate().replace(year=timezone.localdate().year - 20),
+            data_nascimento=self.hoje.replace(year=self.hoje.year - 20),
         )
 
-    def gerar(self):
-        self.client.force_authenticate(self.coordenador)
-        return self.client.post(
-            reverse("bolsistas:termo-gerar", kwargs={"pk": self.vinculo_ana.pk})
-        )
+    def url(self, nome):
+        return reverse(f"bolsistas:{nome}", kwargs={"pk": self.vinculo_ana.pk})
 
-    def enviar_assinatura_aluno(self):
-        self.client.force_authenticate(self.vinculo_ana.aluno)
+    def baixar_termo(self):
+        """Baixa e fecha o arquivo (no Windows, o arquivo aberto não pode ser substituído)."""
+        self.client.force_authenticate(self.aluna)
+        response = self.client.get(self.url("termo-download"))
+        conteudo = b"".join(response.streaming_content) if response.status_code == 200 else b""
+        response.close()
+        return response, conteudo
+
+    def enviar_assinatura_aluno(self, arquivo=None):
+        self.client.force_authenticate(self.aluna)
         return self.client.post(
-            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
-            {"arquivo": docx("termo-assinado-aluno.docx")},
+            self.url("termo-assinado"),
+            {"arquivo": arquivo or docx("termo-assinado-aluno.docx")},
             format="multipart",
         )
 
+    def enviar_termo_final(self, arquivo=None):
+        self.client.force_authenticate(self.coordenador)
+        return self.client.post(
+            self.url("termo-assinado"),
+            {"arquivo": arquivo or pdf("termo-final.pdf")},
+            format="multipart",
+        )
+
+    def termo(self):
+        return TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+
     def test_aluno_informa_dados_para_o_termo(self):
-        self.client.force_authenticate(self.vinculo_ana.aluno)
+        self.client.force_authenticate(self.aluna)
         response = self.client.patch(
             reverse("bolsistas:meus-dados-termo"),
-            {"data_nascimento": "2010-05-10", "nome_responsavel_legal": "Responsável"},
+            {"data_nascimento": "2010-05-10", "nome_responsavel_legal": " Responsável "},
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["completos"])
+        self.assertTrue(response.data["menor_de_idade"])
         self.perfil.refresh_from_db()
         self.assertEqual(self.perfil.nome_responsavel_legal, "Responsável")
 
-    def test_gera_docx_de_maior_de_idade_sem_cpf(self):
-        response = self.gerar()
-        self.assertEqual(response.status_code, 201, response.data)
-        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+    def test_menor_sem_responsavel_legal_nao_salva(self):
+        self.client.force_authenticate(self.aluna)
+        response = self.client.patch(
+            reverse("bolsistas:meus-dados-termo"),
+            {"data_nascimento": "2012-01-01", "nome_responsavel_legal": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nome_responsavel_legal", response.data)
+
+    def test_aluno_baixa_termo_gerado_com_a_vigencia_do_edital(self):
+        response, conteudo = self.baixar_termo()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(conteudo[:2], b"PK")
+        termo = self.termo()
         self.assertEqual(termo.tipo, TipoTermo.MAIOR)
-        with termo.arquivo_gerado.open("rb") as arquivo:
-            self.assertEqual(arquivo.read(2), b"PK")
+        self.assertEqual(termo.gerado_por, self.aluna)
         from docx import Document
         from docx.enum.text import WD_ALIGN_PARAGRAPH
 
@@ -1500,113 +1537,192 @@ class TermoCompromissoTests(CenarioBolsista):
             paragrafo.text for secao in documento.sections for paragrafo in secao.header.paragraphs
         )
         self.assertNotIn("CPF", texto)
+        self.assertIn("01/03/2026 a 31/12/2026", texto)
         self.assertEqual(dados_bolsa.alignment, WD_ALIGN_PARAGRAPH.LEFT)
         self.assertIn("Ministério da Educação", texto_cabecalho)
         self.assertIn("Campus Restinga", texto_cabecalho)
 
-    def test_menor_exige_responsavel_legal(self):
-        hoje = timezone.localdate()
-        self.perfil.data_nascimento = hoje.replace(year=hoje.year - 15)
-        self.perfil.nome_responsavel_legal = ""
+    def test_sem_dados_adicionais_o_aluno_nao_baixa_nem_envia_o_termo(self):
+        self.perfil.data_nascimento = None
+        self.perfil.save(update_fields=["data_nascimento"])
+
+        self.assertEqual(self.baixar_termo()[0].status_code, 400)
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 400)
+        self.assertFalse(TermoCompromisso.objects.exists())
+
+    def test_termo_acompanha_os_dados_ate_a_assinatura(self):
+        self.baixar_termo()
+        self.perfil.data_nascimento = self.hoje.replace(year=self.hoje.year - 15)
+        self.perfil.nome_responsavel_legal = "Responsável"
         self.perfil.save()
-        response = self.gerar()
-        self.assertEqual(response.status_code, 400)
+
+        self.baixar_termo()
+
+        termo = self.termo()
+        self.assertEqual(termo.tipo, TipoTermo.MENOR)
+        self.assertEqual(termo.nome_responsavel_legal, "Responsável")
+
+    def test_coordenador_nao_gera_o_termo(self):
+        self.client.force_authenticate(self.coordenador)
+        response = self.client.get(self.url("termo-download"))
+        self.assertEqual(response.status_code, 404)
         self.assertFalse(TermoCompromisso.objects.exists())
 
     def test_upload_do_aluno_notifica_mas_nao_ativa_o_vinculo(self):
-        self.gerar()
         response = self.enviar_assinatura_aluno()
+
         self.assertEqual(response.status_code, 200, response.data)
         self.vinculo_ana.refresh_from_db()
         self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
         self.assertIsNone(self.vinculo_ana.data_inicio)
-        termo = TermoCompromisso.objects.get()
+        termo = self.termo()
         self.assertTrue(termo.aluno_assinou)
         self.assertFalse(termo.assinado)
         self.assertTrue(response.data["arquivo_assinado_aluno_url"])
         aviso = Notificacao.objects.get(destinatario=self.coordenador)
         self.assertEqual(aviso.tom, "AVISO")
         self.assertEqual(aviso.destino, Destino.PROJETO_BOLSISTAS)
-        self.assertIn("ana", aviso.mensagem)
         self.assertIn("Termo de Compromisso", aviso.mensagem)
 
-    def test_gerar_novo_termo_invalida_assinatura_anterior_do_aluno(self):
-        self.gerar()
+    def test_coordenador_recusa_a_assinatura_e_o_aluno_envia_outra(self):
         self.enviar_assinatura_aluno()
-        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
-        nome_assinatura_anterior = termo.arquivo_assinado_aluno.name
+        termo = self.termo()
+        anterior = termo.arquivo_assinado_aluno.name
         storage = termo.arquivo_assinado_aluno.storage
+        self.client.force_authenticate(self.coordenador)
 
-        response = self.gerar()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.url("termo-recusar"), {"motivo": "Faltou a assinatura."}, format="json"
+            )
 
         self.assertEqual(response.status_code, 200, response.data)
         termo.refresh_from_db()
         self.assertFalse(termo.aluno_assinou)
-        self.assertEqual(termo.nome_original_assinado_aluno, "")
-        self.assertIsNone(termo.enviado_aluno_em)
-        self.assertFalse(storage.exists(nome_assinatura_anterior))
-        self.vinculo_ana.refresh_from_db()
-        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+        self.assertEqual(termo.motivo_recusa_aluno, "Faltou a assinatura.")
+        self.assertFalse(storage.exists(anterior))
+        aviso = Notificacao.objects.get(destinatario=self.aluna)
+        self.assertEqual(aviso.tom, "ERRO")
+        self.assertIn("Faltou a assinatura.", aviso.mensagem)
+
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 200)
+        termo.refresh_from_db()
+        self.assertTrue(termo.aluno_assinou)
+        self.assertEqual(termo.motivo_recusa_aluno, "")
 
     def test_coordenador_nao_finaliza_antes_da_assinatura_do_aluno(self):
-        self.gerar()
-        self.client.force_authenticate(self.coordenador)
-        response = self.client.post(
-            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
-            {"arquivo": pdf("termo-assinado.pdf")},
-            format="multipart",
-        )
+        response = self.enviar_termo_final()
+
         self.assertEqual(response.status_code, 400)
         self.vinculo_ana.refresh_from_db()
         self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
 
     def test_upload_final_do_coordenador_ativa_o_vinculo(self):
-        self.gerar()
         self.enviar_assinatura_aluno()
-        self.client.force_authenticate(self.coordenador)
-        response = self.client.post(
-            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
-            {"arquivo": pdf("termo-final.pdf")},
-            format="multipart",
-        )
+
+        response = self.enviar_termo_final()
+
         self.assertEqual(response.status_code, 200, response.data)
-        termo = TermoCompromisso.objects.get(vinculo=self.vinculo_ana)
+        termo = self.termo()
         self.assertEqual(termo.enviado_por, self.coordenador)
-        self.assertTrue(termo.aluno_assinou)
         self.assertTrue(termo.assinado)
         self.vinculo_ana.refresh_from_db()
         self.assertEqual(self.vinculo_ana.status, StatusVinculo.ATIVO)
         self.assertIsNotNone(self.vinculo_ana.data_inicio)
-        aviso = Notificacao.objects.get(destinatario=self.vinculo_ana.aluno)
+        aviso = Notificacao.objects.filter(destinatario=self.aluna).latest("id")
         self.assertEqual(aviso.tom, "SUCESSO")
         self.assertEqual(aviso.destino, Destino.ALUNO_MINHA_BOLSA)
         self.assertIn("vínculo está ativo", aviso.mensagem)
+        self.assertEqual(self.enviar_assinatura_aluno().status_code, 400)
+
+    def test_termo_aceito_de_vinculo_direto_avisa_a_area(self):
+        area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.coordenador_area = area.perfil_coordenador_area
+        self.bolsa.save(update_fields=["coordenador_area"])
+        self.vinculo_ana.origem = OrigemVinculo.VINCULO_DIRETO
+        self.vinculo_ana.indicacao = None
+        self.vinculo_ana.convite = self.convite(self.aluna, StatusConvite.APROVADO)
+        self.vinculo_ana.save(update_fields=["origem", "indicacao", "convite"])
+        self.enviar_assinatura_aluno()
+        self.assertFalse(Notificacao.objects.filter(destinatario=area).exists())
+
+        self.enviar_termo_final()
+
+        aviso = Notificacao.objects.get(destinatario=area)
+        self.assertEqual(aviso.titulo, "Vínculo direto efetivado")
+        self.assertEqual(aviso.destino, Destino.AREA_FREQUENCIAS)
+        self.assertIn("ana", aviso.mensagem)
+
+    def test_termo_aceito_de_selecao_nao_avisa_a_area(self):
+        area = self.coordenador_de_area("area", TipoArea.ENSINO)
+        self.bolsa.coordenador_area = area.perfil_coordenador_area
+        self.bolsa.save(update_fields=["coordenador_area"])
+        self.enviar_assinatura_aluno()
+        self.enviar_termo_final()
+        self.assertFalse(Notificacao.objects.filter(destinatario=area).exists())
 
     def test_upload_do_aluno_rejeita_arquivo_que_nao_e_docx(self):
-        self.gerar()
-        self.client.force_authenticate(self.vinculo_ana.aluno)
-        arquivo = pdf("termo.pdf")
-        response = self.client.post(
-            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
-            {"arquivo": arquivo},
-            format="multipart",
-        )
+        response = self.enviar_assinatura_aluno(pdf("termo.pdf"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_final_do_coordenador_rejeita_arquivo_que_nao_e_pdf(self):
+        self.enviar_assinatura_aluno()
+        response = self.enviar_termo_final(docx("termo-final.docx"))
         self.assertEqual(response.status_code, 400)
         self.vinculo_ana.refresh_from_db()
         self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
 
-    def test_upload_final_do_coordenador_rejeita_arquivo_que_nao_e_pdf(self):
-        self.gerar()
+    def test_lembrete_notifica_o_aluno_uma_vez_por_dia(self):
+        self.client.force_authenticate(self.coordenador)
+
+        response = self.client.post(self.url("termo-lembrete"))
+
+        self.assertEqual(response.status_code, 204)
+        aviso = Notificacao.objects.get(destinatario=self.aluna)
+        self.assertEqual(aviso.destino, Destino.ALUNO_MINHA_BOLSA)
+        self.assertIn("termo de compromisso", aviso.mensagem)
+        segundo = self.client.post(self.url("termo-lembrete"))
+        self.assertEqual(segundo.status_code, 400)
+        self.assertEqual(segundo.data["detail"], "Um lembrete já foi enviado hoje.")
+
+    def test_sem_lembrete_depois_que_o_aluno_assinou(self):
         self.enviar_assinatura_aluno()
         self.client.force_authenticate(self.coordenador)
+        response = self.client.get(reverse("bolsistas:vinculos"))
+        [vinculo] = response.data
+        self.assertFalse(vinculo["pode_lembrar_termo"])
+        self.assertEqual(self.client.post(self.url("termo-lembrete")).status_code, 400)
+
+    def test_vinculo_aguardando_termo_impede_outra_bolsa(self):
+        self.assertTrue(tem_vinculo_ativo(self.aluna))
+
+    def test_coordenador_pode_desligar_vinculo_aguardando_termo(self):
+        self.client.force_authenticate(self.coordenador)
         response = self.client.post(
-            reverse("bolsistas:termo-assinado", kwargs={"pk": self.vinculo_ana.pk}),
-            {"arquivo": docx("termo-final.docx")},
-            format="multipart",
+            reverse("bolsistas:desligar-vinculo", kwargs={"pk": self.vinculo_ana.pk}),
+            {"motivo": "O aluno não assinou o termo."},
+            format="json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 201, response.data)
         self.vinculo_ana.refresh_from_db()
-        self.assertEqual(self.vinculo_ana.status, StatusVinculo.AGUARDANDO_TERMO)
+        self.assertEqual(self.vinculo_ana.status, StatusVinculo.DESLIGADO)
+
+    def test_painel_do_aluno_mostra_as_pendencias_do_termo(self):
+        from monitoramento.paineis import painel_do_aluno
+
+        painel = painel_do_aluno(self.aluna)
+        self.assertTrue(painel["termo_pendente"])
+        self.assertTrue(painel["dados_termo_completos"])
+        self.assertEqual(painel["minha_bolsa"]["status"], StatusVinculo.AGUARDANDO_TERMO)
+
+        self.enviar_assinatura_aluno()
+        self.assertFalse(painel_do_aluno(self.aluna)["termo_pendente"])
+
+    def test_termo_pendente_bloqueia_a_finalizacao(self):
+        self.assertIn(
+            "Termo de compromisso de ana não finalizado.",
+            motivos_bloqueio_finalizacao(self.bolsa),
+        )
 
 
 class PendenciasDoCoordenadorTests(CenarioBolsista):

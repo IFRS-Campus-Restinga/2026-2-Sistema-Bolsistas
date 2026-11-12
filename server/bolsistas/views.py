@@ -1,4 +1,3 @@
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, Http404
@@ -26,6 +25,7 @@ from notificacoes.services import (
 from .models import (
     CancelamentoVaga,
     OrigemDesligamento,
+    OrigemVinculo,
     RelatorioFinal,
     SituacaoRelatorio,
     SolicitacaoDesligamento,
@@ -40,6 +40,7 @@ from .regras import (
     fora_do_prazo,
     motivo_bloqueio_envio,
     motivo_bloqueio_finalizacao,
+    motivo_bloqueio_lembrete_termo,
     motivo_bloqueio_solicitacao,
     relatorio_do_vinculo,
 )
@@ -62,7 +63,7 @@ from .serializers import (
     VinculoDoCoordenadorSerializer,
 )
 from .services import atualizar_status_preenchimento, efetivar_desligamento
-from .termos import calcular_idade, gerar_docx_termo
+from .termos import motivo_dados_termo_incompletos, termo_atual_do_aluno
 
 
 def _vinculo_do_coordenador(usuario, pk, travar=False):
@@ -79,7 +80,7 @@ def _vinculo_do_coordenador(usuario, pk, travar=False):
 
 
 def _garantir_vinculo_ativo(vinculo):
-    if vinculo.status != StatusVinculo.ATIVO:
+    if vinculo.status == StatusVinculo.DESLIGADO:
         raise ValidationError({"detail": "Este vínculo já foi desligado."})
     if vinculo.solicitacoes_desligamento.filter(
         status=StatusSolicitacaoDesligamento.PENDENTE
@@ -108,6 +109,8 @@ class MeusVinculosView(generics.ListAPIView):
 
 
 class DadosTermoAlunoView(APIView):
+    """Data de nascimento e responsável legal: definem qual modelo de termo o aluno assina."""
+
     permission_classes = [IsAuthenticated, IsAluno]
 
     def _perfil(self, request):
@@ -130,7 +133,6 @@ def _vinculo_acessivel_para_termo(usuario, pk, travar=False):
         "aluno__perfil_aluno",
         "bolsa__edital",
         "bolsa__projeto__coordenador_projeto__usuario",
-        "termo_compromisso",
     )
     if travar:
         queryset = queryset.select_for_update()
@@ -143,69 +145,43 @@ def _vinculo_acessivel_para_termo(usuario, pk, travar=False):
     raise Http404
 
 
-class GerarTermoView(APIView):
-    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+def _perfil_completo_para_termo(aluno):
+    """Sem a data de nascimento (e o responsável, se menor) o aluno não assina o termo."""
+    perfil = getattr(aluno, "perfil_aluno", None)
+    motivo = motivo_dados_termo_incompletos(perfil)
+    if motivo:
+        raise ValidationError({"detail": motivo})
+    return perfil
 
-    @transaction.atomic
-    def post(self, request, pk):
-        vinculo = _vinculo_do_coordenador(request.user, pk, travar=True)
-        if vinculo.status == StatusVinculo.DESLIGADO:
-            raise ValidationError({"detail": "Não é possível gerar termo para vínculo desligado."})
-        try:
-            perfil = vinculo.aluno.perfil_aluno
-        except Aluno.DoesNotExist:
-            raise ValidationError(
-                {"detail": "O aluno precisa informar a data de nascimento."}
-            ) from None
-        if not perfil.data_nascimento:
-            raise ValidationError({"detail": "O aluno precisa informar a data de nascimento."})
-        if (
-            calcular_idade(perfil.data_nascimento) < 18
-            and not perfil.nome_responsavel_legal.strip()
-        ):
-            raise ValidationError(
-                {"detail": "O aluno precisa informar o nome do responsável legal."}
-            )
 
-        termo = TermoCompromisso.objects.filter(vinculo=vinculo).first()
-        if termo and termo.assinado:
-            raise ValidationError({"detail": "O termo assinado já foi enviado."})
-        tipo, conteudo = gerar_docx_termo(vinculo, perfil)
-        criado = termo is None
-        if termo is None:
-            termo = TermoCompromisso(vinculo=vinculo, gerado_por=request.user)
-        arquivo_anterior = termo.arquivo_gerado.name if termo.arquivo_gerado else ""
-        assinatura_aluno_anterior = (
-            termo.arquivo_assinado_aluno.name if termo.arquivo_assinado_aluno else ""
-        )
-        termo.tipo = tipo
-        termo.data_nascimento = perfil.data_nascimento
-        termo.nome_responsavel_legal = perfil.nome_responsavel_legal.strip()
-        termo.gerado_por = request.user
-        termo.gerado_em = timezone.now()
-        termo.arquivo_assinado_aluno = ""
-        termo.nome_original_assinado_aluno = ""
-        termo.enviado_aluno_em = None
-        termo.arquivo_gerado.save(
-            f"termo_vinculo_{vinculo.pk}.docx", ContentFile(conteudo), save=False
-        )
-        termo.save()
-        if arquivo_anterior and arquivo_anterior != termo.arquivo_gerado.name:
-            termo.arquivo_gerado.storage.delete(arquivo_anterior)
-        if assinatura_aluno_anterior:
-            termo.arquivo_assinado_aluno.storage.delete(assinatura_aluno_anterior)
-        return Response(
-            TermoCompromissoSerializer(termo, context={"request": request}).data,
-            status=status.HTTP_201_CREATED if criado else status.HTTP_200_OK,
-        )
+def _apagar_depois_do_commit(storage, nome):
+    transaction.on_commit(lambda: storage.delete(nome))
+
+
+def _termo_pendente_do_coordenador(request, pk):
+    """Vínculo provisório do projeto do coordenador, com o termo travado para a decisão."""
+    vinculo = _vinculo_do_coordenador(request.user, pk, travar=True)
+    if vinculo.status != StatusVinculo.AGUARDANDO_TERMO:
+        raise ValidationError({"detail": "Este vínculo não está aguardando o termo."})
+    termo = TermoCompromisso.objects.select_for_update().filter(vinculo=vinculo).first()
+    return vinculo, termo
 
 
 class TermoDownloadView(APIView):
+    """Termo para assinar. O aluno recebe o termo gerado com os dados atuais do perfil."""
+
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def get(self, request, pk):
         vinculo = _vinculo_acessivel_para_termo(request.user, pk)
-        termo = get_object_or_404(TermoCompromisso, vinculo=vinculo)
+        if request.user.role == Usuario.Role.ALUNO:
+            if vinculo.status != StatusVinculo.AGUARDANDO_TERMO:
+                raise Http404
+            perfil = _perfil_completo_para_termo(vinculo.aluno)
+            termo = termo_atual_do_aluno(vinculo, perfil, request.user)
+        else:
+            termo = get_object_or_404(TermoCompromisso, vinculo=vinculo)
         if not termo.arquivo_gerado:
             raise Http404
         return FileResponse(
@@ -219,72 +195,80 @@ class TermoDownloadView(APIView):
 
 
 class TermoAssinadoView(APIView):
+    """O aluno envia a parte assinada; o coordenador revisa e envia o termo final, que efetiva
+    o vínculo."""
+
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic
     def post(self, request, pk):
         vinculo = _vinculo_acessivel_para_termo(request.user, pk, travar=True)
-        if vinculo.status == StatusVinculo.DESLIGADO:
-            raise ValidationError({"detail": "O vínculo está desligado."})
-        termo = get_object_or_404(TermoCompromisso.objects.select_for_update(), vinculo=vinculo)
-        serializer_class = (
-            EnvioTermoAlunoSerializer
-            if request.user.role == Usuario.Role.ALUNO
-            else EnvioTermoFinalSerializer
-        )
+        if vinculo.status != StatusVinculo.AGUARDANDO_TERMO:
+            raise ValidationError({"detail": "Este vínculo não está aguardando o termo."})
+        aluno = request.user.role == Usuario.Role.ALUNO
+        serializer_class = EnvioTermoAlunoSerializer if aluno else EnvioTermoFinalSerializer
         serializer = serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         arquivo = serializer.validated_data["arquivo"]
+        if aluno:
+            return self._envio_do_aluno(request, vinculo, arquivo)
+        return self._envio_final(request, vinculo, arquivo)
 
+    def _envio_do_aluno(self, request, vinculo, arquivo):
+        perfil = _perfil_completo_para_termo(vinculo.aluno)
+        termo = termo_atual_do_aluno(vinculo, perfil, request.user)
+        termo = TermoCompromisso.objects.select_for_update().get(pk=termo.pk)
         if termo.assinado:
             raise ValidationError({"detail": "O termo final já foi enviado."})
 
-        if request.user.role == Usuario.Role.ALUNO:
-            anterior = termo.arquivo_assinado_aluno.name if termo.arquivo_assinado_aluno else ""
-            termo.arquivo_assinado_aluno = arquivo
-            termo.nome_original_assinado_aluno = arquivo.name
-            termo.enviado_aluno_em = timezone.now()
-            termo.save(
-                update_fields=[
-                    "arquivo_assinado_aluno",
-                    "nome_original_assinado_aluno",
-                    "enviado_aluno_em",
-                ]
-            )
-            if anterior and anterior != termo.arquivo_assinado_aluno.name:
-                termo.arquivo_assinado_aluno.storage.delete(anterior)
-            Notificacao.para(coordenador_do_projeto(vinculo.bolsa)).aviso().titulo(
-                "Termo aguardando revisão"
-            ).mensagem(
-                f"{vinculo.aluno.nome} enviou sua parte assinada do Termo de Compromisso "
-                f'do projeto "{vinculo.bolsa.projeto.titulo}".'
-            ).destino(Destino.PROJETO_BOLSISTAS).enviar()
-            registrar_log(
-                usuario=request.user,
-                acao=AcaoAuditoria.ATUALIZACAO,
-                entidade=EntidadeAuditoria.BOLSA,
-                entidade_id=vinculo.bolsa_id,
-                descricao=(
-                    f"{vinculo.aluno.nome} enviou sua parte assinada do termo do projeto "
-                    f'"{vinculo.bolsa.projeto.titulo}" para revisão do coordenador.'
-                ),
-            )
-            return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
+        anterior = termo.arquivo_assinado_aluno.name if termo.arquivo_assinado_aluno else ""
+        termo.arquivo_assinado_aluno = arquivo
+        termo.nome_original_assinado_aluno = arquivo.name
+        termo.enviado_aluno_em = timezone.now()
+        termo.motivo_recusa_aluno = ""
+        termo.save(
+            update_fields=[
+                "arquivo_assinado_aluno",
+                "nome_original_assinado_aluno",
+                "enviado_aluno_em",
+                "motivo_recusa_aluno",
+            ]
+        )
+        if anterior and anterior != termo.arquivo_assinado_aluno.name:
+            _apagar_depois_do_commit(termo.arquivo_assinado_aluno.storage, anterior)
+        Notificacao.para(coordenador_do_projeto(vinculo.bolsa)).aviso().titulo(
+            "Termo aguardando revisão"
+        ).mensagem(
+            f"{vinculo.aluno.nome} enviou sua parte assinada do Termo de Compromisso "
+            f'do projeto "{vinculo.bolsa.projeto.titulo}".'
+        ).destino(Destino.PROJETO_BOLSISTAS).enviar()
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=vinculo.bolsa_id,
+            descricao=(
+                f"{vinculo.aluno.nome} enviou sua parte assinada do termo do projeto "
+                f'"{vinculo.bolsa.projeto.titulo}" para revisão do coordenador.'
+            ),
+        )
+        return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
 
-        if not termo.aluno_assinou:
+    def _envio_final(self, request, vinculo, arquivo):
+        termo = TermoCompromisso.objects.select_for_update().filter(vinculo=vinculo).first()
+        if termo is None or not termo.aluno_assinou:
             raise ValidationError(
                 {"detail": "O aluno ainda não enviou sua parte assinada do termo."}
             )
+        if termo.assinado:
+            raise ValidationError({"detail": "O termo final já foi enviado."})
 
-        anterior = termo.arquivo_assinado.name if termo.arquivo_assinado else ""
         termo.arquivo_assinado = arquivo
         termo.nome_original_assinado = arquivo.name
         termo.enviado_por = request.user
         termo.enviado_em = timezone.now()
         termo.save()
-        if anterior and anterior != termo.arquivo_assinado.name:
-            termo.arquivo_assinado.storage.delete(anterior)
 
         vinculo.status = StatusVinculo.ATIVO
         if vinculo.data_inicio is None:
@@ -297,14 +281,92 @@ class TermoAssinadoView(APIView):
             f'O Termo de Compromisso do projeto "{vinculo.bolsa.projeto.titulo}" foi '
             "finalizado e seu vínculo está ativo."
         ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+        bolsa = vinculo.bolsa
+        if vinculo.origem == OrigemVinculo.VINCULO_DIRETO:
+            # Frequências é onde a área acompanha cada bolsista, inclusive o recém-efetivado.
+            Notificacao.para(bolsa.coordenador_area).info().titulo(
+                "Vínculo direto efetivado"
+            ).mensagem(
+                f"{vinculo.aluno.nome} passou a ser bolsista da bolsa do projeto "
+                f'"{bolsa.projeto.titulo}" (edital {bolsa.edital.nome}) por vínculo direto.'
+            ).destino(Destino.AREA_FREQUENCIAS).enviar()
         registrar_log(
             usuario=request.user,
             acao=AcaoAuditoria.ATIVACAO,
             entidade=EntidadeAuditoria.BOLSA,
             entidade_id=vinculo.bolsa_id,
-            descricao=f'Termo assinado enviado para {vinculo.aluno.nome} no projeto "{vinculo.bolsa.projeto.titulo}".',
+            descricao=(
+                f"Termo assinado enviado para {vinculo.aluno.nome} no projeto "
+                f'"{vinculo.bolsa.projeto.titulo}".'
+            ),
         )
         return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
+
+
+class RecusarTermoAlunoView(APIView):
+    """O coordenador devolve a assinatura do aluno com o motivo; o aluno envia outra."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo, termo = _termo_pendente_do_coordenador(request, pk)
+        if termo is None or not termo.aluno_assinou:
+            raise ValidationError({"detail": "O aluno ainda não enviou sua parte assinada."})
+        serializer = MotivoDesligamentoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        motivo = serializer.validated_data["motivo"]
+
+        anterior = termo.arquivo_assinado_aluno.name
+        storage = termo.arquivo_assinado_aluno.storage
+        termo.arquivo_assinado_aluno = ""
+        termo.nome_original_assinado_aluno = ""
+        termo.enviado_aluno_em = None
+        termo.motivo_recusa_aluno = motivo
+        termo.save(
+            update_fields=[
+                "arquivo_assinado_aluno",
+                "nome_original_assinado_aluno",
+                "enviado_aluno_em",
+                "motivo_recusa_aluno",
+            ]
+        )
+        _apagar_depois_do_commit(storage, anterior)
+        Notificacao.para(vinculo.aluno).erro().titulo("Termo de compromisso recusado").mensagem(
+            f'O coordenador do projeto "{vinculo.bolsa.projeto.titulo}" recusou o termo '
+            f"enviado. Motivo: {motivo}"
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+        registrar_log(
+            usuario=request.user,
+            acao=AcaoAuditoria.ATUALIZACAO,
+            entidade=EntidadeAuditoria.BOLSA,
+            entidade_id=vinculo.bolsa_id,
+            descricao=(
+                f"Termo de {vinculo.aluno.nome} recusado no projeto "
+                f'"{vinculo.bolsa.projeto.titulo}". Motivo: {motivo}'
+            ),
+        )
+        return Response(TermoCompromissoSerializer(termo, context={"request": request}).data)
+
+
+class LembreteTermoView(APIView):
+    """Lembrete ao aluno que ainda não enviou o termo; no máximo um por dia."""
+
+    permission_classes = [IsAuthenticated, IsCoordenadorProjeto]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        vinculo, termo = _termo_pendente_do_coordenador(request, pk)
+        motivo = motivo_bloqueio_lembrete_termo(vinculo, termo)
+        if motivo:
+            raise ValidationError({"detail": motivo})
+        vinculo.lembrete_termo_em = timezone.now()
+        vinculo.save(update_fields=["lembrete_termo_em"])
+        Notificacao.para(vinculo.aluno).aviso().titulo("Preencha o termo de compromisso").mensagem(
+            f'O coordenador do projeto "{vinculo.bolsa.projeto.titulo}" lembra que o termo de '
+            "compromisso precisa ser preenchido e assinado para efetivar o seu vínculo."
+        ).destino(Destino.ALUNO_MINHA_BOLSA).enviar()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class TermoAssinadoAlunoDownloadView(APIView):
@@ -458,7 +520,7 @@ class DecidirDesligamentoView(APIView):
         aprovar = serializer.validated_data["aprovar"]
 
         if aprovar:
-            if solicitacao.vinculo.status != StatusVinculo.ATIVO:
+            if solicitacao.vinculo.status == StatusVinculo.DESLIGADO:
                 raise ValidationError({"detail": "Este vínculo já foi desligado."})
             efetivar_desligamento(solicitacao, request.user)
         else:

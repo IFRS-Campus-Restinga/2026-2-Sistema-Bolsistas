@@ -48,6 +48,7 @@ class VinculoBolsista(models.Model):
         default=StatusVinculo.ATIVO,
     )
     data_inicio = models.DateField(null=True, blank=True)
+    lembrete_termo_em = models.DateTimeField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     desligado_em = models.DateTimeField(null=True, blank=True)
 
@@ -114,6 +115,7 @@ class TermoCompromisso(models.Model):
     )
     nome_original_assinado_aluno = models.CharField(max_length=255, blank=True, default="")
     enviado_aluno_em = models.DateTimeField(null=True, blank=True)
+    motivo_recusa_aluno = models.TextField(blank=True, default="")
     arquivo_assinado = models.FileField(upload_to=caminho_termo_assinado, blank=True)
     nome_original_assinado = models.CharField(max_length=255, blank=True, default="")
     enviado_por = models.ForeignKey(

@@ -26,12 +26,27 @@ def vinculos_vigentes():
     )
 
 
+# O vínculo aguardando o termo de compromisso é provisório, mas já reserva a vaga.
+STATUS_VINCULO_OCUPA_VAGA = [
+    StatusVinculo.AGUARDANDO_TERMO,
+    StatusVinculo.ATIVO,
+]
+
+
+def vinculos_em_andamento():
+    """Vínculos vigentes mais os provisórios (aguardando termo): é o que impede o aluno de
+    assumir outra bolsa."""
+    return VinculoBolsista.objects.filter(status__in=STATUS_VINCULO_OCUPA_VAGA).exclude(
+        bolsa__status=StatusBolsa.ENCERRADA
+    )
+
+
 def tem_vinculo_ativo(aluno):
-    return vinculos_vigentes().filter(aluno=aluno).exists()
+    return vinculos_em_andamento().filter(aluno=aluno).exists()
 
 
 def alunos_com_vinculo_ativo(alunos):
-    return set(vinculos_vigentes().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
+    return set(vinculos_em_andamento().filter(aluno__in=alunos).values_list("aluno_id", flat=True))
 
 
 def _garantir_sem_vinculo_ativo(aluno):
@@ -68,12 +83,6 @@ def capacidade_efetiva(bolsa):
     """Quantidade de vagas que continuam válidas após cancelamentos individuais."""
     canceladas = CancelamentoVaga.objects.filter(vinculo__bolsa=bolsa).count()
     return max(bolsa.quantidade_vagas - canceladas, 0)
-
-
-STATUS_VINCULO_OCUPA_VAGA = [
-    StatusVinculo.AGUARDANDO_TERMO,
-    StatusVinculo.ATIVO,
-]
 
 
 def quantidade_vinculos_ocupantes(bolsa):
